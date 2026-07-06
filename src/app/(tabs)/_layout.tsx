@@ -45,7 +45,7 @@ export default function TabLayout() {
           <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon
             sf={{ default: "gearshape", selected: "gearshape.fill" }}
-            md={{ default: "person", selected: "person" }}
+            md={{ default: "settings", selected: "settings" }}
           />
         </NativeTabs.Trigger>
       </NativeTabs>
