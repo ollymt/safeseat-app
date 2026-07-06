@@ -11,6 +11,7 @@ export const Themes = {
   light: {
     text: "#000000",
     background: "#F2F2F6",
+    element: "#FFFFFF",
     backgroundElement: "#D6D6D6",
     backgroundSelected: "#BDBDBD",
     textSecondary: "#60646C",
@@ -27,6 +28,7 @@ export const Themes = {
   dark: {
     text: "#ffffff",
     background: "#000000",
+    element: "#181818",
     backgroundElement: "#212225",
     backgroundSelected: "#2E3135",
     textSecondary: "#B0B4BA",
