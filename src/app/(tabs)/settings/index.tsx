@@ -1,6 +1,7 @@
 import { Themes } from "@/constants/theme";
 import { useRouter } from "expo-router";
 import {
+	Alert,
 	Dimensions,
 	ScrollView,
 	StyleSheet,
@@ -13,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Icon } from "@expo/ui";
 import { useEffect, useState } from "react";
 
+import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store";
 
 import SettingDatePickerItem from "@/components/setting-date-picker";
@@ -180,7 +182,7 @@ export default function Settings() {
 										// Open your allergy layout dialog or sheet directly here
 										console.log("Opening email editor freely...");
 									});
-								}}/>
+								}} />
 
 								<SettingPageItem name="Phone Number" iconName={Icon.select({
 									ios: "phone.fill",
@@ -191,7 +193,7 @@ export default function Settings() {
 										// Open your allergy layout dialog or sheet directly here
 										console.log("Opening phone editor freely...");
 									});
-								}}/>
+								}} />
 
 								<SettingPageItem name="Password" iconName={Icon.select({
 									ios: "asterisk",
@@ -207,7 +209,7 @@ export default function Settings() {
 										// Open your allergy layout dialog or sheet directly here
 										console.log("Opening econ editor freely...");
 									});
-								}}/>
+								}} />
 
 							</View>
 						</View>
@@ -272,7 +274,7 @@ export default function Settings() {
 										// Open your allergy layout dialog or sheet directly here
 										console.log("Opening allergies editor freely...");
 									});
-								}}/>
+								}} />
 							</View>
 						</View>
 
@@ -334,7 +336,7 @@ export default function Settings() {
 										<SettingPageItem name="Dark Theme" iconName={Icon.select({
 											ios: "moon.fill",
 											android: import("@expo/material-symbols/dark_mode.xml"),
-										})} enabled={false} isLast={true}/>
+										})} enabled={false} isLast={true} />
 									</View>
 									<View style={{ paddingHorizontal: 10, paddingVertical: 0 }}>
 										<Text style={[styles.caption, { color: currentTheme.textSecondary }]}>You can change your theme in the Settings app.</Text>
@@ -342,10 +344,45 @@ export default function Settings() {
 								</View>
 								<View style={{ gap: 6 }}>
 									<View style={{ borderRadius: 12, overflow: "hidden" }}>
-										<SettingPageItem name="Log-out" iconName={Icon.select({
-											ios: "power",
-											android: import("@expo/material-symbols/power_settings_new.xml")
-										})} isLast={false} />
+										<SettingPageItem
+											name="Sign-out"
+											iconName={Icon.select({
+												ios: "power",
+												android: import("@expo/material-symbols/power_settings_new.xml")
+											})}
+											isLast={false}
+											onPress={() => {
+												Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
+												Alert.alert("Are you sure you want to sign out?", "You will have to sign in again next time.", [
+													{
+														text: "No",
+														style: "cancel"
+													},
+													{
+														text: "Yes",
+														style: "destructive",
+														onPress: async () => {
+															try {
+																// 1. Clear your local storage session flag
+																await SecureStore.deleteItemAsync("is_logged_in");
+
+																// 2. Clear your security check timeout token if you use one
+																await SecureStore.deleteItemAsync("security_session_token");
+
+																// 3. Optional: Trigger satisfying physical click feedback
+																Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+																// 4. Kick them straight out to the login flow screen
+																router.replace("/(auth)/login");
+															} catch (error) {
+																Alert.alert("Error", "Could not complete sign out process safely.");
+																console.error(error);
+															}
+														}
+													}
+												])
+											}}
+										/>
 										<SettingPageItem name="Delete Account" iconName={Icon.select({
 											ios: "trash.fill",
 											android: import("@expo/material-symbols/delete.xml")

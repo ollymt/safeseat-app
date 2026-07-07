@@ -1,6 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApps, initializeApp } from "firebase/app";
-import * as firebaseAuth from "firebase/auth";
+import { 
+  getAuth, 
+  initializeAuth, 
+  browserLocalPersistence,
+  // @ts-expect-error - getReactNativePersistence exists in the RN bundle but isn't typed in the Firebase web SDK definitions
+  getReactNativePersistence 
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { Platform } from "react-native";
 
@@ -14,25 +20,26 @@ const firebaseConfig = {
   measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-const app =
-  getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+// 1. Safe instance initialization
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
-let auth: firebaseAuth.Auth;
+// 2. Safe, crash-resistant Auth instance generation 
+const getClientAuth = () => {
+  // Check if an Auth instance already exists to prevent duplication crashes
+  const existingAuth = getApps().length > 0 ? getAuth(app) : null;
+  if (existingAuth) return existingAuth;
 
-if (Platform.OS === "web") {
-  // Web: use browser's built-in persistence
-  auth = firebaseAuth.initializeAuth(app, {
-    persistence: firebaseAuth.browserLocalPersistence,
-  });
-} else {
-  // iOS/Android: use AsyncStorage-based persistence
-  const getReactNativePersistence = (firebaseAuth as any)
-    .getReactNativePersistence;
-  auth = firebaseAuth.initializeAuth(app, {
-    persistence: getReactNativePersistence(AsyncStorage),
-  });
-}
+  if (Platform.OS === "web") {
+    return initializeAuth(app, {
+      persistence: browserLocalPersistence,
+    });
+  } else {
+    return initializeAuth(app, {
+      persistence: getReactNativePersistence(AsyncStorage),
+    });
+  }
+};
 
-export { auth };
+export const auth = getClientAuth();
 export const db = getFirestore(app);
 export default app;

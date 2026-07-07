@@ -8,6 +8,7 @@
     "@expo-google-fonts/roboto-slab": "^0.4.2",
     "@expo/material-symbols": "^0.1.1",
     "@expo/ui": "~57.0.3",
+    "@react-native-community/datetimepicker": "^9.1.0",
     "date-fns": "^4.4.0",
     "expo": "~57.0.2",
     "expo-constants": "~57.0.3",

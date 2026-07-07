@@ -160,7 +160,7 @@ export default function SettingPicker({
 }
 
 const setitem = StyleSheet.create({
-    setItemBase: { width: "100%", height: 56, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16 },
+    setItemBase: { width: "100%", height: 56, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 },
     leftContainer: { flexDirection: "row", alignItems: "center", gap: 12 },
     rightContainer: { justifyContent: "flex-end", alignItems: "center" },
     iconWrapper: { justifyContent: "center", alignItems: "center" },

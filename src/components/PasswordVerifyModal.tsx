@@ -106,7 +106,7 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
                         textAlign="center"
                         onSubmitEditing={handleVerify}
                     />
-
+                    <Text textStyle={{ fontSize: 13, color: currentTheme.textSecondary, textAlign: "center" }}>We require a password to change important settings. Once you enter your password, you can change any setting you want for 15 minutes.</Text>
                     <Spacer />
                 </Column>
             </BottomSheet>
@@ -123,5 +123,5 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: "#fff",
         marginBottom: 8
-    },
+    }
 });

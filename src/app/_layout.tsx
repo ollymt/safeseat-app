@@ -1,6 +1,7 @@
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
+export { ErrorBoundary } from "expo-router";
 
 import {
   Roboto_400Regular,

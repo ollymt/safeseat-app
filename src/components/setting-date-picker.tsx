@@ -1,10 +1,8 @@
 import { Themes } from "@/constants/theme";
 import { Host, Icon } from "@expo/ui";
-// 1. FIX: Import the drop-in replacement picker directly from @expo/ui
-import DateTimePicker from "@expo/ui/community/datetime-picker";
-import { useState } from "react";
+import { DatePicker } from "@expo/ui/swift-ui";
+import { useState, useEffect, useRef } from "react";
 import {
-    Platform,
     Pressable,
     StyleSheet,
     Text,
@@ -35,41 +33,84 @@ export default function SettingDatePickerItem({
     const activeScheme = colorScheme === "dark" ? "dark" : "light";
     const currentTheme = Themes[activeScheme];
 
-    // Initialize with the prop value if it exists, otherwise fall back to today
-    const [selectedBirthday, setSelectedBirthday] = useState(value ? new Date(value) : new Date());
-    const [showPicker, setShowPicker] = useState(false);
+    // Micro-debounce handler ref to avoid multiple writes while scrolling native wheel/month calendars
+    const saveTimeout = useRef<NodeJS.Timeout | null>(null);
 
-    const formattedDate = selectedBirthday.toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
+    // Initialize with the parent storage value if valid, fallback to current Date
+    const [selectedBirthday, setSelectedBirthday] = useState(() => {
+        if (value) {
+            const parsed = new Date(value);
+            if (!isNaN(parsed.getTime())) return parsed;
+        }
+        return new Date();
     });
+
+    // Keep state in sync if parent state updates over asynchronous loading bounds
+    useEffect(() => {
+        if (value) {
+            const parsed = new Date(value);
+            if (!isNaN(parsed.getTime())) {
+                // Ensure we don't force a reset if the timestamp values are fundamentally equal
+                setSelectedBirthday((prev) =>
+                    prev.getTime() === parsed.getTime() ? prev : parsed
+                );
+            }
+        }
+    }, [value]);
+
+    // Cleanup active auto-save timers if the component unmounts mid-gesture
+    useEffect(() => {
+        return () => {
+            if (saveTimeout.current) clearTimeout(saveTimeout.current);
+        };
+    }, []);
+
+    // Handle date selection, format it, and pass it back up to the saver wrapper
+    const handleDateChange = (newDate: Date) => {
+        console.log("date change triggered")
+        setSelectedBirthday(newDate);
+
+        if (onValueChange) {
+            // Clear any pending save action if the user is actively flipping months/years
+            console.log("value changed")
+            if (saveTimeout.current) {
+                clearTimeout(saveTimeout.current);
+            }
+
+            // Store as ISO (YYYY-MM-DD). This is the only string format that
+            // `new Date(str)` is spec-guaranteed to parse reliably across JS
+            // engines (including Hermes on React Native). Locale-formatted
+            // strings like "Jul 07, 2026" can silently fail to re-parse on
+            // mount (isNaN(parsed.getTime()) === true), which falls back to
+            // `new Date()` (today) — that's what made the birthday look like
+            // it "wasn't saving": it was saved fine, but couldn't be read back.
+            const isoDate = newDate.toISOString().slice(0, 10);
+
+            // Delay the parent storage commit by 400ms to settle interaction cycles cleanly
+            saveTimeout.current = setTimeout(() => {
+                if (isoDate !== value) {
+                    onValueChange(isoDate);
+                }
+            }, 400);
+        }
+    };
 
     return (
         <Pressable
             onPress={enabled ? onPress : undefined}
             disabled={!enabled}
-            style={({ pressed }) => [
+            style={[
                 setitem.setItemBase,
                 {
                     backgroundColor: currentTheme.element,
                     borderBottomWidth: isLast ? 0 : 1,
-                    borderBottomColor: currentTheme.backgroundSelected,
-                },
+                    borderBottomColor: currentTheme.border,
+                }
             ]}
         >
-            <View style={setitem.leftContainer}>
+            <View style={setitem.leftContainer} pointerEvents="none">
                 {iconName && (
-                    <View
-                        style={[
-                            setitem.iconWrapper,
-                            {
-                                backgroundColor: currentTheme.primaryBttn,
-                                padding: 6,
-                                borderRadius: 8,
-                            },
-                        ]}
-                    >
+                    <View style={[setitem.iconWrapper, { backgroundColor: currentTheme.primaryBttn, padding: 6, borderRadius: 8 }]}>
                         <Host style={{ width: 22, height: 22 }}>
                             <Icon name={iconName} color={currentTheme.primaryBttnText} />
                         </Host>
@@ -83,40 +124,14 @@ export default function SettingDatePickerItem({
                 </View>
             </View>
 
-            <View
-                style={{
-                    flexDirection: "row",
-                    flex: 1,
-                    justifyContent: "flex-end",
-                    gap: 6,
-                }}
-            >
-                {/* Tappable value display section toggle */}
-                <Pressable onPress={() => setShowPicker(true)}>
-                    <Text style={[setitem.settingValue, { color: currentTheme.textSecondary || "#888" }]}>
-                        {formattedDate}
-                    </Text>
-                </Pressable>
-
-                {showPicker && (
-                    <DateTimePicker
-                        value={selectedBirthday}
-                        mode="date"
-                        // iOS supports "spinner", "compact", and "inline". Android handles this via presentation dialog strings.
-                        display={Platform.OS === "ios" ? "spinner" : "default"}
-                        onValueChange={(event, date) => {
-                            // iOS spinners stick around inline, whereas Android modal pickers close immediately on selection
-                            setShowPicker(Platform.OS === "ios");
-                            if (date) {
-                                setSelectedBirthday(date);
-                                if (onValueChange) {
-                                    // Pass the structured ISO string format back to the parent save handler
-                                    onValueChange(date.toISOString().split('T')[0]);
-                                }
-                            }
-                        }}
+            <View style={{ flexDirection: "row", flex: 1, justifyContent: "flex-end", gap: 6 }}>
+                <Host matchContents>
+                    <DatePicker
+                        selection={selectedBirthday}
+                        displayedComponents={["date"]}
+                        onDateChange={handleDateChange}
                     />
-                )}
+                </Host>
             </View>
         </Pressable>
     );
@@ -142,8 +157,5 @@ const setitem = StyleSheet.create({
     settingName: {
         fontSize: 18,
         fontFamily: "Body-Medium",
-    },
-    settingValue: {
-        fontSize: 16,
     }
 });
