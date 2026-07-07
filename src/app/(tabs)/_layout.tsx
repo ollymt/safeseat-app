@@ -12,10 +12,8 @@ export default function TabLayout() {
     // ThemeProvider is required to prevent visual flashes during tab switching
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <NativeTabs
-        screenOptions={{
           // Tints the active tab icons
-          tintColor: activeScheme == "dark" ? "#BBFFB3" : "#25601D",
-        }}
+          tintColor={activeScheme == "dark" ? "#BBFFB3" : "#25601D"}
       >
         {/* Main Home Tab */}
         <NativeTabs.Trigger name="home">
@@ -47,7 +45,7 @@ export default function TabLayout() {
           <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon
             sf={{ default: "gearshape", selected: "gearshape.fill" }}
-            md={{ default: "person", selected: "person" }}
+            md={{ default: "settings", selected: "settings" }}
           />
         </NativeTabs.Trigger>
       </NativeTabs>

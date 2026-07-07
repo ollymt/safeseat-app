@@ -34,6 +34,7 @@ export default function HomeScreen() {
         flex: 1,
         backgroundColor: currentTheme.background,
       }}
+      edges={['left', 'right']}
     >
       <View style={[styles.container, { marginTop: 40 }]}>
         <Text style={[styles.pageHeader, { color: currentTheme.text }]}>

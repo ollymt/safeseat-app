@@ -11,6 +11,7 @@ export const Themes = {
   light: {
     text: "#000000",
     background: "#F2F2F6",
+    element: "#FFFFFF",
     backgroundElement: "#D6D6D6",
     backgroundSelected: "#BDBDBD",
     textSecondary: "#60646C",
@@ -21,10 +22,13 @@ export const Themes = {
     warnBttn: "#F00C31",
     warnBttnText: "#ffffff",
     yellow: "#66613E",
+    blue: "#0167FA",
+    purple: "#761BE0"
   },
   dark: {
     text: "#ffffff",
     background: "#000000",
+    element: "#181818",
     backgroundElement: "#212225",
     backgroundSelected: "#2E3135",
     textSecondary: "#B0B4BA",
@@ -35,6 +39,8 @@ export const Themes = {
     warnBttn: "#FF9EAE",
     warnBttnText: "#000000",
     yellow: "#FFF197",
+    blue: "#96C1FF",
+    purple: "#C8A5F0"
   },
 } as const;
 
