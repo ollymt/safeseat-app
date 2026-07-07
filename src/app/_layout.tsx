@@ -10,18 +10,19 @@ import {
   useFonts,
 } from "@expo-google-fonts/roboto";
 import {
-  RobotoSlab_700Bold,
-  RobotoSlab_900Black,
-} from "@expo-google-fonts/roboto-slab";
-import {
   RobotoCondensed_400Regular,
   RobotoCondensed_400Regular_Italic,
   RobotoCondensed_500Medium,
   RobotoCondensed_700Bold,
   RobotoCondensed_900Black,
 } from "@expo-google-fonts/roboto-condensed";
+import {
+  RobotoSlab_700Bold,
+  RobotoSlab_900Black,
+} from "@expo-google-fonts/roboto-slab";
 
 import * as SplashScreen from "expo-splash-screen";
+import { db } from "../firebase";
 
 // Keep the splash screen visible while fonts and auth initialize
 SplashScreen.preventAutoHideAsync();
@@ -46,6 +47,11 @@ export default function RootLayout() {
 
   const [authLoading, setAuthLoading] = useState(true);
   const [hasSession, setHasSession] = useState(false);
+
+  // Test Firebase connection on mount
+  useEffect(() => {
+    console.log("Firebase connected:", db.app.name);
+  }, []);
 
   // 1. Check local secure storage on boot to see if user has an active session flag
   useEffect(() => {
