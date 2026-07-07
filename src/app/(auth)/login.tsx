@@ -81,7 +81,7 @@ export default function Login() {
           // Save an active login flag
           await SecureStore.setItemAsync("is_logged_in", "true");
 
-          router.replace("/(tabs)/home/home");
+          router.replace("/(tabs)/home");
         }
         {
           /*Alert.alert("Success", `Welcome back, ${savedUser.name}!`, [

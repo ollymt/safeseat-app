@@ -4,8 +4,7 @@ export default function TabsLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       {/* Points to the index folder */}
-      <Stack.Screen name="index" options={{ title: "Home" }} />
-      <Stack.Screen name="settings" options={{ title: "Settings" }} />
+      <Stack.Screen name="home" options={{ title: "Home" }} />
     </Stack>
   );
 }

@@ -35,7 +35,7 @@ export default function AssignCard({
       onPress={onPress}
       style={[
         assigncard.baseCard,
-        { backgroundColor: currentTheme.backgroundElement, borderColor: currentTheme.textSecondary },
+        { backgroundColor: currentTheme.element, borderColor: currentTheme.textSecondary },
       ]}
     >
       {/* 3. Fixed nested ternary layout syntax */}

@@ -6,7 +6,6 @@ import {
   View,
   Dimensions,
   ScrollView,
-  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -17,11 +16,10 @@ import { BottomTabInset, MaxContentWidth, Spacing } from "@/constants/theme";
 
 import * as Haptics from "expo-haptics"
 import SeatCard from "@/components/seat-card";
-import AssignCard from "@/components/assign-card";
 
 const { width: screenWidth } = Dimensions.get("window");
 
-export default function HomeScreen() {
+export default function Home() {
   const colorScheme = useColorScheme();
   const activeScheme = colorScheme === "dark" ? "dark" : "light";
   const currentTheme = Themes[activeScheme];
@@ -38,28 +36,14 @@ export default function HomeScreen() {
     >
       <View style={[styles.container, { marginTop: 40 }]}>
         <Text style={[styles.pageHeader, { color: currentTheme.text }]}>
-          Assign
+          Home
         </Text>
-        <View
-          style={{
-            gap: 10,
-            marginTop: 10,
-            width: "100%",
-            borderWidth: 0,
-            borderColor: currentTheme.secondaryBttn,
-            
-            borderRadius: 10,
-          }}
-        >
-          <View style={{ gap: 10, flexDirection: "row", height: 230 }}>
-            <AssignCard seatNo={1} onPress={() => {}} seatCode="driver" />
-            <AssignCard seatNo={2} onPress={() => {}} seatCode="passenger" />
-          </View>
-          <View style={{ gap: 10, flexDirection: "row", height: 230 }}>
-            <AssignCard seatNo={3} onPress={() => {}} seatCode="l backseat" />
-            <AssignCard seatNo={4} onPress={() => {}} seatCode="c backseat" />
-            <AssignCard seatNo={5} onPress={() => {}} seatCode="r backseat" />
-          </View>
+        <View style={{ gap: 10, marginTop: 10 }}>
+          <SeatCard seatNo={1} name="Spruce" state="safe" onPress={() => {}} />
+          <SeatCard seatNo={2} name="Jack" state="warning" onPress={() => {}} />
+          <SeatCard seatNo={3} name="Maverick" state="emergency" onPress={() => {}} />
+          <SeatCard seatNo={4} state="empty" onPress={() => {}} />
+          <SeatCard seatNo={5} state="empty" onPress={() => {}} />
         </View>
       </View>
     </SafeAreaView>

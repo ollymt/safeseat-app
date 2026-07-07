@@ -8,6 +8,7 @@
     "@expo-google-fonts/roboto-slab": "^0.4.2",
     "@expo/material-symbols": "^0.1.1",
     "@expo/ui": "~57.0.3",
+    "date-fns": "^4.4.0",
     "expo": "~57.0.2",
     "expo-constants": "~57.0.3",
     "expo-device": "~57.0.0",
@@ -42,8 +43,8 @@
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint"
   },

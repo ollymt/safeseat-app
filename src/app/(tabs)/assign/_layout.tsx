@@ -5,7 +5,6 @@ export default function TabsLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       {/* Points to the index folder */}
       <Stack.Screen name="assign" options={{ title: "Assign" }} />
-      <Stack.Screen name="settings" options={{ title: "Settings" }} />
     </Stack>
   );
 }

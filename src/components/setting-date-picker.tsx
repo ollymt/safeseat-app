@@ -1,7 +1,7 @@
 import { Themes } from "@/constants/theme";
 import { Host, Icon } from "@expo/ui";
 import { DatePicker } from "@expo/ui/swift-ui";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
     Pressable,
     StyleSheet,
@@ -13,10 +13,11 @@ import {
 type SettingDatePickerProps = {
     iconName?: Parameters<typeof Icon>[0]["name"];
     name: string;
-    value?: string;
+    value?: string; // ISO date string, e.g. "2026-07-07"
     enabled?: boolean;
     isLast?: boolean;
     onPress?: () => void;
+    onValueChange?: (isoDateString: string) => void;
 };
 
 export default function SettingDatePickerItem({
@@ -26,28 +27,88 @@ export default function SettingDatePickerItem({
     isLast = false,
     enabled = true,
     onPress,
+    onValueChange,
 }: SettingDatePickerProps) {
     const colorScheme = useColorScheme();
     const activeScheme = colorScheme === "dark" ? "dark" : "light";
     const currentTheme = Themes[activeScheme];
 
-    const [ selectedBirthday, setSelectedBirthday ] = useState(new Date())
+    // Micro-debounce handler ref to avoid multiple writes while scrolling native wheel/month calendars
+    const saveTimeout = useRef<NodeJS.Timeout | null>(null);
+
+    // Initialize with the parent storage value if valid, fallback to current Date
+    const [selectedBirthday, setSelectedBirthday] = useState(() => {
+        if (value) {
+            const parsed = new Date(value);
+            if (!isNaN(parsed.getTime())) return parsed;
+        }
+        return new Date();
+    });
+
+    // Keep state in sync if parent state updates over asynchronous loading bounds
+    useEffect(() => {
+        if (value) {
+            const parsed = new Date(value);
+            if (!isNaN(parsed.getTime())) {
+                // Ensure we don't force a reset if the timestamp values are fundamentally equal
+                setSelectedBirthday((prev) =>
+                    prev.getTime() === parsed.getTime() ? prev : parsed
+                );
+            }
+        }
+    }, [value]);
+
+    // Cleanup active auto-save timers if the component unmounts mid-gesture
+    useEffect(() => {
+        return () => {
+            if (saveTimeout.current) clearTimeout(saveTimeout.current);
+        };
+    }, []);
+
+    // Handle date selection, format it, and pass it back up to the saver wrapper
+    const handleDateChange = (newDate: Date) => {
+        console.log("date change triggered")
+        setSelectedBirthday(newDate);
+
+        if (onValueChange) {
+            // Clear any pending save action if the user is actively flipping months/years
+            console.log("value changed")
+            if (saveTimeout.current) {
+                clearTimeout(saveTimeout.current);
+            }
+
+            // Store as ISO (YYYY-MM-DD). This is the only string format that
+            // `new Date(str)` is spec-guaranteed to parse reliably across JS
+            // engines (including Hermes on React Native). Locale-formatted
+            // strings like "Jul 07, 2026" can silently fail to re-parse on
+            // mount (isNaN(parsed.getTime()) === true), which falls back to
+            // `new Date()` (today) — that's what made the birthday look like
+            // it "wasn't saving": it was saved fine, but couldn't be read back.
+            const isoDate = newDate.toISOString().slice(0, 10);
+
+            // Delay the parent storage commit by 400ms to settle interaction cycles cleanly
+            saveTimeout.current = setTimeout(() => {
+                if (isoDate !== value) {
+                    onValueChange(isoDate);
+                }
+            }, 400);
+        }
+    };
 
     return (
         <Pressable
             onPress={enabled ? onPress : undefined}
             disabled={!enabled}
-            style={({ pressed }) => [
+            style={[
                 setitem.setItemBase,
                 {
                     backgroundColor: currentTheme.element,
                     borderBottomWidth: isLast ? 0 : 1,
-                    borderBottomColor: currentTheme.backgroundSelected,
+                    borderBottomColor: currentTheme.border,
                 }
             ]}
         >
-            <View style={setitem.leftContainer}>
-                {/* 1. Render Icon natively only if iconName prop exists */}
+            <View style={setitem.leftContainer} pointerEvents="none">
                 {iconName && (
                     <View style={[setitem.iconWrapper, { backgroundColor: currentTheme.primaryBttn, padding: 6, borderRadius: 8 }]}>
                         <Host style={{ width: 22, height: 22 }}>
@@ -56,7 +117,6 @@ export default function SettingDatePickerItem({
                     </View>
                 )}
 
-                {/* 2. Primary Label */}
                 <View style={{ borderWidth: 0, borderColor: "#fff" }}>
                     <Text style={[setitem.settingName, { color: currentTheme.text }]}>
                         {name}
@@ -65,14 +125,11 @@ export default function SettingDatePickerItem({
             </View>
 
             <View style={{ flexDirection: "row", flex: 1, justifyContent: "flex-end", gap: 6 }}>
-                {/* 3. Optional Right-Side Value String */}
                 <Host matchContents>
                     <DatePicker
                         selection={selectedBirthday}
                         displayedComponents={["date"]}
-                        onDateChange={date => {
-                            setSelectedBirthday(date);
-                        }}
+                        onDateChange={handleDateChange}
                     />
                 </Host>
             </View>
@@ -93,17 +150,6 @@ const setitem = StyleSheet.create({
         justifyContent: "flex-start",
         gap: 12,
     },
-    rightContainer: {
-        width: "auto",
-        borderWidth: 0,
-        borderColor: "#fff",
-        flex: 0.9,
-        marginLeft: 10,
-        textAlign: "right",
-        justifyContent: "flex-end",
-        alignItems: "center",
-        flexDirection: "row"
-    },
     iconWrapper: {
         justifyContent: "center",
         alignItems: "center",
@@ -111,9 +157,5 @@ const setitem = StyleSheet.create({
     settingName: {
         fontSize: 18,
         fontFamily: "Body-Medium",
-    },
-    settingValue: {
-        fontSize: 18,
-        fontFamily: "Condensed-Bold",
     }
 });

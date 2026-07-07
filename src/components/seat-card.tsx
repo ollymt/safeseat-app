@@ -30,7 +30,7 @@ export default function SeatCard({
       style={[
         seatcard.baseCard,
         state == "empty" && seatcard.emptySeat,
-        { backgroundColor: currentTheme.backgroundElement },
+        { backgroundColor: currentTheme.element },
       ]}
     >
       <View

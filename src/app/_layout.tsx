@@ -10,16 +10,16 @@ import {
   useFonts,
 } from "@expo-google-fonts/roboto";
 import {
-  RobotoSlab_700Bold,
-  RobotoSlab_900Black,
-} from "@expo-google-fonts/roboto-slab";
-import {
   RobotoCondensed_400Regular,
   RobotoCondensed_400Regular_Italic,
   RobotoCondensed_500Medium,
   RobotoCondensed_700Bold,
   RobotoCondensed_900Black,
 } from "@expo-google-fonts/roboto-condensed";
+import {
+  RobotoSlab_700Bold,
+  RobotoSlab_900Black,
+} from "@expo-google-fonts/roboto-slab";
 
 import * as SplashScreen from "expo-splash-screen";
 
@@ -82,7 +82,7 @@ export default function RootLayout() {
       router.replace("/(auth)/splash");
     } else if (hasSession && inAuthGroup) {
       // User IS logged in but accidentally went back to splash/login -> force them back inside
-      router.replace("/(tabs)/home/home");
+      router.replace("/(tabs)/home");
     }
   }, [segments, loaded, authLoading, hasSession]);
 

@@ -14,7 +14,7 @@ export default function TextBlock({ text }: TextBlockProps) {
 		<View
 			style={[
 				textblockstyles.baseCard,
-				{ backgroundColor: currentTheme.backgroundElement },
+				{ backgroundColor: currentTheme.element },
 			]}
 		>
 			<Text style={{ color: currentTheme.text, fontSize: 18, fontFamily: "Body-Bold" }}>{text}</Text>

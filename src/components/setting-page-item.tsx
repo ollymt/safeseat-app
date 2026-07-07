@@ -14,6 +14,7 @@ type SettingPageItemProps = {
     value?: string;
     enabled?: boolean;
     isLast?: boolean;
+    destructive?: boolean;
     showChevron?: boolean;
     onPress?: () => void;
 };
@@ -24,6 +25,7 @@ export default function SettingPageItem({
     value,
     showChevron = false,
     isLast = false,
+    destructive = false,
     enabled = true,
     onPress,
 }: SettingPageItemProps) {
@@ -40,14 +42,15 @@ export default function SettingPageItem({
                 {
                     backgroundColor: currentTheme.element,
                     borderBottomWidth: isLast ? 0 : 1,
-                    borderBottomColor: currentTheme.backgroundSelected,
+                    borderBottomColor: currentTheme.border,
+                    opacity: enabled ? 1 : 0.5,
                 }
             ]}
         >
             <View style={setitem.leftContainer}>
                 {/* 1. Render Icon natively only if iconName prop exists */}
                 {iconName && (
-                    <View style={[setitem.iconWrapper, { backgroundColor: currentTheme.primaryBttn, padding: 6, borderRadius: 8 }]}>
+                    <View style={[setitem.iconWrapper, { backgroundColor: destructive ? currentTheme.warnBttn : currentTheme.primaryBttn, padding: 6, borderRadius: 8 }]}>
                         <Host style={{ width: 22, height: 22 }}>
                             <Icon name={iconName} color={currentTheme.primaryBttnText} />
                         </Host>
@@ -56,7 +59,7 @@ export default function SettingPageItem({
 
                 {/* 2. Primary Label */}
                 <View style={{ borderWidth: 0, borderColor: "#fff" }}>
-                    <Text style={[setitem.settingName, { color: currentTheme.text }]}>
+                    <Text style={[setitem.settingName, { color: destructive ? currentTheme.warnBttn : currentTheme.text }]}>
                         {name}
                     </Text>
                 </View>
@@ -77,7 +80,7 @@ export default function SettingPageItem({
                         <Host matchContents>
                             <Icon name={Icon.select({
                                 ios: "chevron.right",
-                                android: import("@expo/material-symbols/alternate_email.xml")
+                                android: import("@expo/material-symbols/chevron_right.xml")
                             })} color={currentTheme.textSecondary} />
                         </Host>
                     </View>

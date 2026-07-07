@@ -59,7 +59,7 @@ export default function ContactCard({
             style={[
                 contcard.baseCard,
                 {
-                    backgroundColor: currentTheme.backgroundElement,
+                    backgroundColor: currentTheme.element,
                     flexDirection: "row",
                     borderWidth: 2,
                     borderColor: order == "primary" ? currentTheme.warnBttn : order == "secondary" ? currentTheme.yellow : order == "tertiary" ? currentTheme.primaryBttn : order == "quaternary" ? currentTheme.blue : order == "quinary" ? currentTheme.purple : currentTheme.text
