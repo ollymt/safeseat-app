@@ -1,12 +1,12 @@
 import { Themes } from "@/constants/theme";
 import { useFocusEffect, useRouter } from "expo-router"; // Added useFocusEffect
 import {
-	Dimensions,
-	ScrollView,
-	StyleSheet,
-	Text,
-	useColorScheme,
-	View,
+  Dimensions,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -14,7 +14,6 @@ import TextBlock from "@/components/text-block";
 import { useCallback, useState } from "react"; // Added useCallback
 
 import ContactCard from "@/components/contact-card";
-import * as SecureStore from "expo-secure-store";
 
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../../../firebase";
@@ -46,30 +45,26 @@ export default function Me() {
   // Isolated data loader function so it can be invoked by both focus events and gestures
   const loadAllUserData = useCallback(async () => {
     try {
-      // Fetch Core Account Details from Firebase (Auth + Firestore)
+      // Fetch Core Account + Health Details from Firebase (Auth + Firestore)
       const currentUser = auth.currentUser;
       if (currentUser) {
         const userDocRef = doc(db, "users", currentUser.uid);
         const userDocSnap = await getDoc(userDocRef);
         if (userDocSnap.exists()) {
           const userData = userDocSnap.data();
+
+          // Core account fields
           if (userData.name) setUserName(userData.name);
           if (userData.email) setUserEmail(userData.email);
           if (userData.phone) setUserPhone(userData.phone);
-        }
-      }
 
-      // Fetch Health Profile Details
-      const savedHealthDataString = await SecureStore.getItemAsync(
-        "user_health_profile",
-      );
-      if (savedHealthDataString) {
-        const savedHealth = JSON.parse(savedHealthDataString);
-        if (savedHealth.height) setHeight(savedHealth.height);
-        if (savedHealth.weight) setWeight(savedHealth.weight);
-        if (savedHealth.bloodType) setBloodType(savedHealth.bloodType);
-        if (savedHealth.allergies) setAllergies(savedHealth.allergies);
-        if (savedHealth.birthday) setBirthday(savedHealth.birthday);
+          // Health fields
+          if (userData.height) setHeight(userData.height);
+          if (userData.weight) setWeight(userData.weight);
+          if (userData.bloodType) setBloodType(userData.bloodType);
+          if (userData.allergies) setAllergies(userData.allergies);
+          if (userData.birthday) setBirthday(userData.birthday);
+        }
       }
     } catch (error) {
       console.error("Failed to load user profile data:", error);
