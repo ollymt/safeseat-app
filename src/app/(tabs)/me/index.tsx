@@ -14,6 +14,7 @@ import TextBlock from "@/components/text-block";
 import { useCallback, useState } from "react";
 
 import ContactCard from "@/components/contact-card";
+
 import * as SecureStore from "expo-secure-store";
 
 import { doc, getDoc } from "firebase/firestore";

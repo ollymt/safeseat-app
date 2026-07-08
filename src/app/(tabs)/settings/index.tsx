@@ -1,5 +1,5 @@
 import { Themes } from "@/constants/theme";
-import { useFocusEffect, useRouter } from "expo-router"; // 🛠️ Replaced useEffect with useFocusEffect
+import { useFocusEffect, useRouter } from "expo-router";
 import {
 	Alert,
 	Dimensions,
@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Icon } from "@expo/ui";
-import { useCallback, useState } from "react"; // 🛠️ Added useCallback
+import { useCallback, useState } from "react";
 
 import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store";
@@ -58,7 +58,6 @@ export default function Settings() {
 	const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 	const [bloodPickerVisible, setBloodPickerVisible] = useState(false);
 
-	// 🛠️ Consolidated load function aligned directly with Me tab's sync logic
 	const loadAllUserData = useCallback(async () => {
 		try {
 			// 1. LOAD INSTANTLY FROM LOCAL STORAGE CACHES
@@ -83,7 +82,7 @@ export default function Settings() {
 				if (savedPrivacy.useMetric !== undefined) setIsMetric(savedPrivacy.useMetric);
 			}
 
-			// 2. FETCH FRESH BACKGROUND DATA FROM FIREBASE (Ensures complete fallback fallback)
+			// 2. FETCH FRESH BACKGROUND DATA FROM FIREBASE
 			const currentUser = auth.currentUser;
 			if (currentUser) {
 				const userDocRef = doc(db, "users", currentUser.uid);
@@ -92,7 +91,6 @@ export default function Settings() {
 				if (userDocSnap.exists()) {
 					const cloudData = userDocSnap.data();
 
-					// Map all UI states seamlessly
 					if (cloudData.name) setUserName(cloudData.name);
 					if (cloudData.email) setUserEmail(cloudData.email);
 					if (cloudData.phone) setUserPhone(cloudData.phone);
@@ -105,7 +103,6 @@ export default function Settings() {
 					if (cloudData.emergencyEscalation !== undefined) setEmergencyEscalation(cloudData.emergencyEscalation);
 					if (cloudData.useMetric !== undefined) setIsMetric(cloudData.useMetric);
 
-					// Re-cache cloud payload back to storage
 					const combinedProfile = {
 						name: cloudData.name || "",
 						email: cloudData.email || "",
@@ -131,14 +128,12 @@ export default function Settings() {
 		}
 	}, []);
 
-	// 🛠️ Triggers layout evaluation every single time screen achieves active focus
 	useFocusEffect(
 		useCallback(() => {
 			loadAllUserData();
 		}, [loadAllUserData])
 	);
 
-	// Helper to persist updated Health metric attributes
 	const saveHealthField = async (key: string, val: string) => {
 		try {
 			const currentObjRaw = await SecureStore.getItemAsync("user_health_profile");
@@ -146,7 +141,6 @@ export default function Settings() {
 			currentObj[key] = val;
 			await SecureStore.setItemAsync("user_health_profile", JSON.stringify(currentObj));
 
-			// Mirror setting change directly upstream to Firestore as well!
 			const currentUser = auth.currentUser;
 			if (currentUser) {
 				const userDocRef = doc(db, "users", currentUser.uid);
@@ -157,7 +151,6 @@ export default function Settings() {
 		}
 	};
 
-	// Helper to persist updated Privacy configuration options
 	const savePrivacyField = async (key: string, val: boolean) => {
 		try {
 			const currentObjRaw = await SecureStore.getItemAsync("user_privacy_prefs");
@@ -165,7 +158,6 @@ export default function Settings() {
 			currentObj[key] = val;
 			await SecureStore.setItemAsync("user_privacy_prefs", JSON.stringify(currentObj));
 
-			// Mirror configuration options upstream to Firestore
 			const currentUser = auth.currentUser;
 			if (currentUser) {
 				const userDocRef = doc(db, "users", currentUser.uid);
@@ -176,7 +168,6 @@ export default function Settings() {
 		}
 	};
 
-	// 🛠️ Safe Height Display Conversion
 	const getDisplayHeight = () => {
 		if (height === undefined || height === null || height === "Not Set") return "Not Set";
 		const cmValue = parseFloat(String(height).replace(/[^0-9.]/g, ""));
@@ -192,7 +183,6 @@ export default function Settings() {
 		}
 	};
 
-	// 🛠️ Safe Weight Display Conversion
 	const getDisplayWeight = () => {
 		if (weight === undefined || weight === null || weight === "Not Set") return "Not Set";
 		const kgValue = parseFloat(String(weight).replace(/[^0-9.]/g, ""));
@@ -422,7 +412,7 @@ export default function Settings() {
 												Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
 												Alert.alert(
 													"Are you sure you want to sign out?",
-													"You will have to sign in again next time.",
+													"You will have to sign in again next time and your local caches will be cleared.",
 													[
 														{ text: "No", style: "cancel" },
 														{
@@ -430,8 +420,17 @@ export default function Settings() {
 															style: "destructive",
 															onPress: async () => {
 																try {
+																	// 1. Clear session and auth flags
 																	await SecureStore.deleteItemAsync("is_logged_in");
 																	await SecureStore.deleteItemAsync("security_session_token");
+
+																	// 2. 🧼 CLEAR CACHED USER DATA ON LOGOUT
+																	await SecureStore.deleteItemAsync("user_health_profile");
+																	await SecureStore.deleteItemAsync("user_privacy_prefs");
+
+																	// 3. Optional: Trigger Firebase sign out if you want to completely destroy the active session
+																	// await auth.signOut();
+
 																	Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 																	router.replace("/(auth)/login");
 																} catch (error) {
@@ -459,6 +458,8 @@ export default function Settings() {
 								</View>
 							</View>
 						</View>
+
+						{/* FOOTER */}
 						<View style={{ paddingHorizontal: 10 }}>
 							<Text style={[styles.caption, { color: currentTheme.textSecondary }]}>
 								v.26w28d4r07 • made with 💚 by safeseat team
