@@ -40,7 +40,7 @@ export default function Settings() {
 	const [userPhone, setUserPhone] = useState<string>("Not Set");
 
 	// 2. Health Metrics States
-	const [birthday, setBirthday] = useState<string>("Jan 01, 2000"); // Hooked up birthday
+	const [birthday, setBirthday] = useState<string>("Jan 01, 2000");
 	const [height, setHeight] = useState<string>("Not Set");
 	const [weight, setWeight] = useState<string>("Not Set");
 	const [bloodType, setBloodType] = useState<string>("Not Set");
@@ -53,7 +53,10 @@ export default function Settings() {
 	const [heightIsExpanded, setHeightIsExpanded] = useState(false);
 
 	const [authModalVisible, setAuthModalVisible] = useState(false);
-	const [pendingAction, setPendingAction] = useState<(() => void) | null>(null)
+	const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+
+	// 🌟 4. State flag controlling the full-page picker visibility
+	const [bloodPickerVisible, setBloodPickerVisible] = useState(false);
 
 	// Fetch both storage blocks when the component mounts
 	useEffect(() => {
@@ -72,7 +75,7 @@ export default function Settings() {
 				const savedHealthDataString = await SecureStore.getItemAsync("user_health_profile");
 				if (savedHealthDataString) {
 					const savedHealth = JSON.parse(savedHealthDataString);
-					if (savedHealth.birthday) setBirthday(savedHealth.birthday); // Load birthday
+					if (savedHealth.birthday) setBirthday(savedHealth.birthday);
 					if (savedHealth.height) setHeight(savedHealth.height);
 					if (savedHealth.weight) setWeight(savedHealth.weight);
 					if (savedHealth.bloodType) setBloodType(savedHealth.bloodType);
@@ -128,7 +131,7 @@ export default function Settings() {
 		if (authenticated) {
 			action();
 		} else {
-			// FIX: Wrap the function so React stores it instead of executing it
+			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
 			setPendingAction(() => () => action());
 			setAuthModalVisible(true);
 		}
@@ -144,10 +147,10 @@ export default function Settings() {
 		>
 			<ScrollView
 				contentContainerStyle={{ flexGrow: 1 }}
-				showsVerticalScrollIndicator={true} // Set to false if you want a cleaner look
+				showsVerticalScrollIndicator={true}
 				bounces={true}
 			>
-				<View style={[styles.container, { marginTop: 40 }]}>
+				<View style={[styles.container, { marginTop: -40 }]}>
 					<Text style={[styles.pageHeader, { color: currentTheme.text }]}>
 						Settings
 					</Text>
@@ -158,7 +161,6 @@ export default function Settings() {
 							width: "100%",
 							borderWidth: 0,
 							borderColor: currentTheme.secondaryBttn,
-
 							borderRadius: 10,
 						}}
 					>
@@ -179,8 +181,8 @@ export default function Settings() {
 								})} value={userEmail} onPress={() => {
 									console.log("change email pressed")
 									executeSecureAction(() => {
-										// Open your allergy layout dialog or sheet directly here
 										console.log("Opening email editor freely...");
+										router.push("/(tabs)/settings/changeemail")
 									});
 								}} />
 
@@ -190,7 +192,6 @@ export default function Settings() {
 								})} value={userPhone} onPress={() => {
 									console.log("change phone pressed")
 									executeSecureAction(() => {
-										// Open your allergy layout dialog or sheet directly here
 										console.log("Opening phone editor freely...");
 									});
 								}} />
@@ -198,7 +199,10 @@ export default function Settings() {
 								<SettingPageItem name="Password" iconName={Icon.select({
 									ios: "asterisk",
 									android: import("@expo/material-symbols/asterisk.xml")
-								})} showChevron={true} />
+								})} showChevron={true} onPress={() => {
+									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+									router.push("/(tabs)/settings/changepass")
+								}}/>
 
 								<SettingPageItem name="Emergency Contacts" iconName={Icon.select({
 									ios: "person.crop.circle.fill",
@@ -206,7 +210,6 @@ export default function Settings() {
 								})} isLast={true} showChevron={true} onPress={() => {
 									console.log("change econ pressed")
 									executeSecureAction(() => {
-										// Open your allergy layout dialog or sheet directly here
 										console.log("Opening econ editor freely...");
 									});
 								}} />
@@ -244,23 +247,25 @@ export default function Settings() {
 									android: import("@expo/material-symbols/scale.xml")
 								})} value={weight} />
 
+								{/* 🛠️ Wired up with lifted visibility states & secure authentication gate */}
 								<SettingPicker
 									name="Blood Type"
 									iconName={Icon.select({
 										ios: "drop.fill",
-										android: import("@expo/material-symbols/humidity_high.xml")
+										android: import("@expo/material-symbols/opacity.xml")
 									})}
 									isLast={false}
 									value={bloodType}
+									isOpen={bloodPickerVisible}
+									onClose={() => setBloodPickerVisible(false)}
 									onValueChange={(type) => {
 										setBloodType(type);
 										saveHealthField("bloodType", type);
 									}}
 									onPress={() => {
-										console.log("change bloodtype pressed")
 										executeSecureAction(() => {
-											// Open your allergy layout dialog or sheet directly here
-											console.log("Opening blood type editor freely...");
+											// Secure action clears completely before shifting view state
+											setBloodPickerVisible(true);
 										});
 									}}
 								/>
@@ -271,7 +276,6 @@ export default function Settings() {
 								})} value={allergies} showChevron={true} isLast={true} onPress={() => {
 									console.log("change allergies pressed")
 									executeSecureAction(() => {
-										// Open your allergy layout dialog or sheet directly here
 										console.log("Opening allergies editor freely...");
 									});
 								}} />
@@ -363,16 +367,9 @@ export default function Settings() {
 														style: "destructive",
 														onPress: async () => {
 															try {
-																// 1. Clear your local storage session flag
 																await SecureStore.deleteItemAsync("is_logged_in");
-
-																// 2. Clear your security check timeout token if you use one
 																await SecureStore.deleteItemAsync("security_session_token");
-
-																// 3. Optional: Trigger satisfying physical click feedback
 																Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-																// 4. Kick them straight out to the login flow screen
 																router.replace("/(auth)/login");
 															} catch (error) {
 																Alert.alert("Error", "Could not complete sign out process safely.");
@@ -395,7 +392,7 @@ export default function Settings() {
 							</View>
 						</View>
 					</View>
-					{/* Hidden security gate component */}
+
 					<PasswordVerifyModal
 						visible={authModalVisible}
 						onClose={() => {
@@ -405,7 +402,7 @@ export default function Settings() {
 						onSuccess={() => {
 							setAuthModalVisible(false);
 							if (pendingAction) {
-								pendingAction(); // Run the user's desired action
+								pendingAction();
 								setPendingAction(null);
 							}
 						}}
@@ -425,7 +422,7 @@ const styles = StyleSheet.create({
 		borderColor: "#fff",
 	},
 	logoSection: {
-		height: "35%", // Reduced slightly to give more room for keyboard space
+		height: "35%",
 		alignItems: "center",
 		justifyContent: "flex-end",
 	},

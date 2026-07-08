@@ -1,7 +1,5 @@
 // @/components/setting-picker.android.tsx
 import { Themes } from "@/constants/theme";
-import unfoldMoreIcon from "@expo/material-symbols/unfold_more.xml";
-import { Host, Icon } from "@expo/ui";
 import { useState, useEffect } from "react";
 import {
     Modal,
@@ -12,14 +10,18 @@ import {
     useColorScheme,
     View,
 } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 
 type SettingPickerProps = {
     iconName?: any;
     name: string;
-    value?: string; // Wired core data hook state token
+    value?: string;
     isLast?: boolean;
     enabled?: boolean;
-    onValueChange?: (newValue: string) => void; // Parent asynchronous sync callback
+    isOpen: boolean;
+    onClose: () => void;
+    onValueChange?: (newValue: string) => void;
+    onPress?: () => void;
 };
 
 const bloodTypes = [
@@ -40,16 +42,17 @@ export default function SettingPicker({
     value = "none",
     isLast = false,
     enabled = true,
+    isOpen,
+    onClose,
     onValueChange,
+    onPress,
 }: SettingPickerProps) {
     const colorScheme = useColorScheme();
     const activeScheme = colorScheme === "dark" ? "dark" : "light";
     const currentTheme = Themes[activeScheme];
 
     const [selectedBloodType, setSelectedBloodType] = useState(value);
-    const [modalVisible, setModalVisible] = useState(false);
 
-    // Keep the local state synchronized when the parent's value loads asynchronously late
     useEffect(() => {
         if (value) {
             setSelectedBloodType(value);
@@ -63,13 +66,13 @@ export default function SettingPicker({
         if (onValueChange) {
             onValueChange(newValue);
         }
-        setModalVisible(false);
+        onClose();
     };
 
     return (
         <>
             <Pressable
-                onPress={enabled ? () => setModalVisible(true) : undefined}
+                onPress={enabled ? onPress : undefined}
                 disabled={!enabled}
                 style={({ pressed }) => [
                     setitem.setItemBase,
@@ -83,76 +86,82 @@ export default function SettingPicker({
             >
                 <View style={setitem.leftContainer}>
                     {iconName && (
-                        /* FIXED: Added pointerEvents="none" to the View container wrapping the native Host block */
-                        <View style={[setitem.iconWrapper, { backgroundColor: currentTheme.primaryBttn, padding: 6, borderRadius: 8 }]} pointerEvents="none">
-                            <Host style={{ width: 22, height: 22 }}>
-                                <Icon name={iconName} color={currentTheme.primaryBttnText} />
-                            </Host>
+                        <View style={[setitem.iconWrapper, { backgroundColor: currentTheme.primaryBttn, padding: 6, borderRadius: 8 }]}>
+                            <MaterialIcons
+                                name={typeof iconName === 'string' ? iconName as any : "water-drop"}
+                                size={22}
+                                color={currentTheme.primaryBttnText}
+                            />
                         </View>
                     )}
                     <Text style={[setitem.settingName, { color: currentTheme.text }]}>{name}</Text>
                 </View>
 
                 <View style={setitem.rightContainer}>
-                    {/* FIXED: Added pointerEvents="none" to the native indicator row wrapper container */}
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }} pointerEvents="none">
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                         <Text style={[setitem.settingValue, { color: currentTheme.primaryBttn }]}>
                             {currentLabel}
                         </Text>
-                        <Host style={{ width: 20, height: 20 }}>
-                            <Icon name={unfoldMoreIcon} color={currentTheme.primaryBttn} />
-                        </Host>
+                        <MaterialIcons name="chevron-right" size={20} color={currentTheme.primaryBttn} />
                     </View>
                 </View>
             </Pressable>
 
+            {/* 📱 Full Screen Immersive Modal view */}
             <Modal
-                transparent={true}
-                visible={modalVisible}
-                animationType="fade"
-                onRequestClose={() => setModalVisible(false)}
+                transparent={false} // Setting this to false forces a full native screen canvas overlay
+                visible={isOpen}
+                animationType="slide" // Immersive slide-up transition matching mobile paradigms
+                onRequestClose={onClose}
             >
-                <View style={setitem.modalOverlay}>
-                    <View style={[setitem.modalContent, { backgroundColor: currentTheme.element }]}>
-                        <Text style={[setitem.modalTitle, { color: currentTheme.text }]}>
-                            Select Blood Type
+                <View style={[setitem.pageContainer, { backgroundColor: currentTheme.background }]}>
+
+                    {/* Header bar structure */}
+                    <View style={[setitem.headerBar, { borderBottomColor: currentTheme.border }]}>
+                        <Pressable onPress={onClose} style={setitem.backButton}>
+                            <MaterialIcons name="arrow-back" size={24} color={currentTheme.text} />
+                        </Pressable>
+                        <Text style={[setitem.pageTitle, { color: currentTheme.text }]}>
+                            Select {name}
                         </Text>
-
-                        <ScrollView style={setitem.scrollContainer} nestedScrollEnabled={true}>
-                            {bloodTypes.map(b => {
-                                const isSelected = b.value === selectedBloodType;
-                                return (
-                                    <Pressable
-                                        key={b.value}
-                                        onPress={() => handleSelectValue(b.value)}
-                                        style={({ pressed }) => [
-                                            setitem.radioRow,
-                                            {
-                                                backgroundColor: isSelected ? currentTheme.backgroundSelected : "transparent",
-                                                opacity: pressed ? 0.7 : 1
-                                            }
-                                        ]}
-                                    >
-                                        <View style={[setitem.radioOuter, { borderColor: currentTheme.primaryBttn }]}>
-                                            {isSelected && <View style={[setitem.radioInner, { backgroundColor: currentTheme.primaryBttn }]} />}
-                                        </View>
-                                        <Text style={[setitem.regularText, { color: currentTheme.text }]}>
-                                            {b.label}
-                                        </Text>
-                                    </Pressable>
-                                );
-                            })}
-                        </ScrollView>
-
-                        <View style={setitem.buttonRow}>
-                            <Pressable
-                                style={[setitem.btn, { backgroundColor: currentTheme.backgroundSelected }]}
-                                onPress={() => setModalVisible(false)}
-                            >
-                                <Text style={{ color: currentTheme.text, fontFamily: "Body-Medium" }}>Cancel</Text>
-                            </Pressable>
-                        </View>
+                        <View style={{ width: 24 }} /> {/* Visual layout stabilizer balance axis */}
                     </View>
+
+                    {/* Full Selection Surface Area */}
+                    <ScrollView style={setitem.scrollContainer}>
+                        {bloodTypes.map(b => {
+                            const isSelected = b.value === selectedBloodType;
+                            return (
+                                <Pressable
+                                    key={b.value}
+                                    onPress={() => handleSelectValue(b.value)}
+                                    style={({ pressed }) => [
+                                        setitem.pageRow,
+                                        {
+                                            backgroundColor: isSelected ? currentTheme.element : "transparent",
+                                            borderBottomColor: currentTheme.border,
+                                            opacity: pressed ? 0.7 : 1
+                                        }
+                                    ]}
+                                >
+                                    <Text style={[
+                                        setitem.regularText,
+                                        {
+                                            color: isSelected ? currentTheme.primaryBttn : currentTheme.text,
+                                            fontFamily: "Body-Medium"
+                                        }
+                                    ]}>
+                                        {b.label}
+                                    </Text>
+
+                                    {/* 🛠️ FIX: Use a strict ternary operator here so it returns null instead of a bare boolean false */}
+                                    {isSelected ? (
+                                        <MaterialIcons name="check" size={22} color={currentTheme.primaryBttn} />
+                                    ) : null}
+                                </Pressable>
+                            );
+                        })}
+                    </ScrollView>
                 </View>
             </Modal>
         </>
@@ -166,14 +175,13 @@ const setitem = StyleSheet.create({
     iconWrapper: { justifyContent: "center", alignItems: "center" },
     settingName: { fontSize: 18, fontFamily: "Body-Medium" },
     settingValue: { fontSize: 18, fontFamily: "Condensed-Bold" },
-    modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center", padding: 24 },
-    modalContent: { width: "100%", maxHeight: "70%", borderRadius: 16, padding: 20, elevation: 5 },
-    modalTitle: { fontSize: 20, fontFamily: "Heading-Font", textAlign: "center", marginBottom: 16 },
-    scrollContainer: { width: "100%", marginBottom: 16 },
-    radioRow: { flexDirection: "row", alignItems: "center", width: "100%", padding: 14, borderRadius: 8, gap: 12 },
-    radioOuter: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, justifyContent: "center", alignItems: "center" },
-    radioInner: { width: 10, height: 10, borderRadius: 5 },
-    regularText: { fontSize: 16, fontFamily: "Body-Medium" },
-    buttonRow: { flexDirection: "row", justifyContent: "flex-end" },
-    btn: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 8 }
+
+    // Full Page Layout Overrides
+    pageContainer: { flex: 1, paddingTop: 16 },
+    headerBar: { height: 56, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, borderBottomWidth: 1, marginBottom: 8 },
+    backButton: { padding: 4 },
+    pageTitle: { fontSize: 20, fontFamily: "Heading-Font" },
+    scrollContainer: { flex: 1 },
+    pageRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", paddingVertical: 18, paddingHorizontal: 20, borderBottomWidth: 1 },
+    regularText: { fontSize: 18 }
 });

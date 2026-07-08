@@ -1,8 +1,8 @@
 // components/PasswordVerifyModal.tsx
 import { Themes } from "@/constants/theme";
 import { extendSession } from "@/utils/securitySession";
-import { BottomSheet, Button, Column, Host, Icon, Row, Spacer, Text, TextInput } from "@expo/ui";
-import { buttonBorderShape, buttonStyle, controlSize, submitLabel } from "@expo/ui/swift-ui/modifiers";
+import { BottomSheet, Button, Column, FieldGroup, Host, Icon, Row, Spacer, Text, TextInput } from "@expo/ui";
+import { buttonBorderShape, buttonStyle, controlSize, scrollDisabled, submitLabel } from "@expo/ui/swift-ui/modifiers";
 import * as SecureStore from "expo-secure-store";
 import * as Haptics from "expo-haptics"
 import { useEffect, useRef, useState } from "react";
@@ -31,7 +31,7 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
                 const savedUser = JSON.parse(savedUserDataString);
                 const actualPassword = savedUser.password;
 
-                
+
                 // Clean both sides just in case of keyboard auto-spacing
                 const enteredPassword = passwordInput.trim();
 
@@ -62,12 +62,13 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
 
     return (
         <Host matchContents>
-            <BottomSheet isPresented={visible} onDismiss={onClose} showDragIndicator={false} snapPoints={["half"]}>
+            <BottomSheet isPresented={visible} onDismiss={onClose} showDragIndicator={false} snapPoints={["full"]}>
                 <Column spacing={16} alignment="center">
 
                     {/* 🧭 Header Row */}
                     <Row>
                         <Button
+                            variant="outlined"
                             onPress={onClose}
                             modifiers={[buttonStyle('glass'), controlSize("large"), buttonBorderShape("circle")]}
                         >
@@ -81,7 +82,9 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
 
                         <Button
                             onPress={handleVerify}
-                            modifiers={[buttonStyle('borderedProminent'), controlSize("large"), buttonBorderShape("circle")]}
+                            variant={passwordInput ? "filled" : "outlined"}
+                            modifiers={[passwordInput ? buttonStyle("borderedProminent") : buttonStyle("glass"), controlSize("large"), buttonBorderShape("circle")]}
+                            disabled={passwordInput == ""}
                         >
                             <Icon name={Icon.select({
                                 ios: "checkmark",
@@ -95,18 +98,29 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
                         Enter Password to Continue
                     </Text>
 
-                    {/* TextInput field */}
-                    <TextInput
-                        placeholder="Password"
-                        secureTextEntry={true}
-                        // FIX 2: Use native text and onTextChange properties for custom state sync
-                        ref={passwordInputRef}
-                        onChangeText={setPasswordInput}
-                        modifiers={[submitLabel("done")]}
-                        textAlign="center"
-                        onSubmitEditing={handleVerify}
-                    />
-                    <Text textStyle={{ fontSize: 13, color: currentTheme.textSecondary, textAlign: "center" }}>We require a password to change important settings. Once you enter your password, you can change any setting you want for 15 minutes.</Text>
+                    <Column spacing={10} alignment="center">
+                        {/* TextInput field */}
+                        <FieldGroup modifiers={[scrollDisabled()]}>
+                            <TextInput
+                                placeholder="Password"
+                                secureTextEntry={true}
+                                // FIX 2: Use native text and onTextChange properties for custom state sync
+                                ref={passwordInputRef}
+                                onChangeText={setPasswordInput}
+                                modifiers={[submitLabel("done")]}
+                                textAlign="center"
+                                onSubmitEditing={handleVerify}
+                            />
+                        </FieldGroup>
+                        <Button
+                            label="Continue"
+                            variant={passwordInput ? "filled" : "outlined"}
+                            modifiers={[passwordInput ? buttonStyle("borderedProminent") : buttonStyle("glass"), controlSize("large"), buttonBorderShape("pill")]}
+                            disabled={passwordInput == ""}
+                            onPress={() => { }}
+                        />
+                    </Column>
+                    <Text textStyle={{ fontSize: 13, color: currentTheme.textSecondary, textAlign: "center" }}>After this, you can change any important setting for 15 minutes.</Text>
                     <Spacer />
                 </Column>
             </BottomSheet>

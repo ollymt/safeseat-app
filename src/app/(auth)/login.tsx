@@ -83,18 +83,6 @@ export default function Login() {
 
           router.replace("/(tabs)/home");
         }
-        {
-          /*Alert.alert("Success", `Welcome back, ${savedUser.name}!`, [
-          {
-            text: "Let's Go",
-            onPress: () => {
-              // Route them inside your dashboard application group (e.g., /(tabs)/home)
-              // Update this route string to match your main screen layout folder names
-              router.replace("/(tabs)");
-            },
-          },
-        ]); */
-        }
       } else {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         Alert.alert(

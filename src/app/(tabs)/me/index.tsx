@@ -17,6 +17,7 @@ import { useEffect, useState, useCallback } from "react"; // Added useCallback
 
 import * as SecureStore from "expo-secure-store";
 import ContactCard from "@/components/contact-card";
+import ContactCardDrawer from "@/components/contact-card-drawer";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -82,6 +83,26 @@ export default function Me() {
 		await loadAllUserData();
 		setRefreshing(false);
 	}, [loadAllUserData]);
+
+	// 🛠️ Helper to fix/normalize date strings for Android's Hermes engine
+	const parseAndroidSafeDate = (dateStr: string) => {
+		if (!dateStr) return null;
+
+		// If it's already a clean ISO string (YYYY-MM-DD), use it directly
+		if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+			return new Date(dateStr.replace(/-/g, '/')); // replacing dashes with slashes prevents timezone shift drops
+		}
+
+		// If it's formatted as MM-DD-YYYY or MM/DD/YYYY, convert it to YYYY/MM/DD
+		const parts = dateStr.split(/[-/]/);
+		if (parts.length === 3 && parts[2].length === 4) {
+			const [month, day, year] = parts;
+			return new Date(`${year}/${month}/${day}`);
+		}
+
+		const fallback = new Date(dateStr);
+		return isNaN(fallback.getTime()) ? null : fallback;
+	};
 
 	const getFormattedDate = () => {
 		if (!birthday) return "Not Set";
@@ -242,6 +263,7 @@ export default function Me() {
 						<ContactCard name="Jane Doe" phone="09123456790" order="secondary" />
 					</View>
 					<Text style={[styles.caption, { color: currentTheme.textSecondary, marginTop: 20 }]}>You can edit information presented here in the Settings tab.</Text>
+					
 				</View>
 			</ScrollView>
 		</SafeAreaView>
