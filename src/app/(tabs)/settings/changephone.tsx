@@ -1,9 +1,9 @@
 import Button from "@/components/button";
 import { Themes } from "@/constants/theme";
-import { Column, FieldGroup, Host, TextInput } from "@expo/ui";
+import { Column, FieldGroup, Host, Slider, TextInput } from "@expo/ui";
 import { frame, scrollDisabled, submitLabel } from "@expo/ui/swift-ui/modifiers";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     KeyboardAvoidingView,
     Platform,
@@ -18,58 +18,47 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store"; // 🛠️ Added for persistence logic
 
-export default function ChangeEmail() {
+import { isSessionValid } from "@/utils/securitySession";
+
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "../../../firebase";
+
+export default function ChangePhone() {
     const colorScheme = useColorScheme();
     const activeScheme = colorScheme === "dark" ? "dark" : "light";
     const currentTheme = Themes[activeScheme];
 
     const router = useRouter();
 
-    const [newEmail, setNewEmail] = useState("");
+    const [newNumber, setNewNumber] = useState(0);
+    const [cleanNumber, setCleanNumber] = useState("");
     const [isLoading, setIsLoading] = useState(false);
 
-    // 🛠️ Step 2: Handle saving logic to SecureStore
-    const handleChangeEmail = async () => {
-        // Clear whitespace and convert to lowercase for database/storage consistency
-        const cleanEmail = newEmail.trim().toLowerCase();
+    useEffect(() => {
+        setCleanNumber(newNumber.toString().trim().padEnd(9, '0'))
+    }, [newNumber])
 
-        // Basic Regex Validation for Email Structure
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(cleanEmail)) {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-            Alert.alert("Error", "Please enter a valid email address.");
-            return;
-        }
-
-        setIsLoading(true);
-
-        try {
-            // 1. Fetch your user profile object structure
-            const savedUserDataString = await SecureStore.getItemAsync("user_account");
-
-            let userAccount = {};
-            if (savedUserDataString) {
-                userAccount = JSON.parse(savedUserDataString);
+    // Fetch both storage blocks when the component mounts
+        useEffect(() => {
+            async function loadAllUserData() {
+                try {
+                    // Fetch Core Account Details from Firebase (Auth + Firestore)
+                    const currentUser = auth.currentUser;
+                    if (currentUser) {
+                        const userDocRef = doc(db, "users", currentUser.uid);
+                        const userDocSnap = await getDoc(userDocRef);
+                        if (userDocSnap.exists()) {
+                            const userData = userDocSnap.data();
+                            if (userData.phone) setNewNumber(userData.phone.slice(2));
+                        }
+                    }
+                } catch (error) {
+                    console.error("Failed to load user profile data:", error);
+                }
             }
-
-            // 2. Modify the target email key inside the profile block
-            // @ts-ignore
-            userAccount.email = cleanEmail;
-
-            // 3. Save the serialized object string bundle back down to the hardware container
-            await SecureStore.setItemAsync("user_account", JSON.stringify(userAccount));
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-            Alert.alert("Success", "Your email has been updated successfully!", [
-                { text: "OK", onPress: () => router.back() } // Return to Profile / Settings
-            ]);
-        } catch (error) {
-            console.error("SecureStore email update failure:", error);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-            Alert.alert("Error", "Failed to update email safely. Please try again.");
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    
+            loadAllUserData();
+        }, []);
 
     return (
         <SafeAreaView
@@ -91,7 +80,8 @@ export default function ChangeEmail() {
                 >
                     <View style={changepass.container}>
                         <View style={changepass.logoSection}>
-                            <Text style={[changepass.loginlogo, { color: currentTheme.text, textAlign: "center" }]}>Change Email</Text>
+                            <Text style={[changepass.loginlogo, { color: currentTheme.text, textAlign: "center" }]}>Change Phone Number</Text>
+                            <Text style={{ color: currentTheme.textSecondary, fontSize: 16 }}>Entered Number: 09{cleanNumber}</Text>
                         </View>
 
                         <View style={changepass.formSection}>
@@ -107,28 +97,17 @@ export default function ChangeEmail() {
                                     spacing={16}
                                     modifiers={[frame({ maxWidth: Infinity })]}
                                 >
-                                    <FieldGroup modifiers={[scrollDisabled()]}>
-                                        <TextInput
-                                            autoCorrect={false}
-                                            autoCapitalize="none" // 🛠️ Keeps native interface from pushing capitals on email input
-                                            placeholder="Enter New Email"
-                                            // @ts-ignore
-                                            value={newEmail}
-                                            modifiers={[submitLabel("done")]}
-                                            onChangeText={setNewEmail}
-                                            keyboardType={"email-address"}
-                                        />
-                                    </FieldGroup>
+                                    <Slider value={Number(newNumber)} onValueChange={setNewNumber} min={0} max={999999999} step={1} />
                                 </Column>
                             </Host>
                             <View style={{ paddingHorizontal: 20, marginTop: 10 }}>
                                 <Button
-                                    label={isLoading ? "Updating..." : "Change Email"}
+                                    label={isLoading ? "Updating..." : "Change Phone"}
                                     variant="primary"
                                     fullWidth={true}
-                                    onPress={handleChangeEmail} // 🛠️ Connected handler function hook
+                                    onPress={() => {}} // 🛠️ Connected handler function hook
                                     // 🛠️ Fixed logical lock: disabled/enabled rules match exact string validation constraints
-                                    enabled={!isLoading && newEmail.trim() !== ""}
+                                    enabled={!isLoading}
                                 />
                             </View>
                         </View>
