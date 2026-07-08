@@ -2,29 +2,31 @@ import Button from "@/components/button";
 import { Themes } from "@/constants/theme";
 import { Column, FieldGroup, Host, TextInput } from "@expo/ui";
 import {
-    autocorrectionDisabled,
-    frame,
-    keyboardType,
-    onSubmit,
-    scrollDisabled,
-    submitLabel,
+  autocorrectionDisabled,
+  frame,
+  keyboardType,
+  onSubmit,
+  scrollDisabled,
+  submitLabel,
 } from "@expo/ui/swift-ui/modifiers";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import * as SecureStore from "expo-secure-store";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
 import { useRef, useState } from "react";
 import {
-    Alert,
-    Dimensions,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    useColorScheme,
-    View,
+  Alert,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { auth, db } from "../../firebase";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -35,6 +37,7 @@ export default function Login() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const emailInputRef = useRef<any>(null);
   const phoneInputRef = useRef<any>(null);
@@ -62,20 +65,32 @@ export default function Login() {
       return;
     }
 
-    try {
-      // Structure the user payload
-      const userPayload = {
-        name,
-        email: email.toLowerCase().trim(),
-        phone,
-        password, // In production, never save passwords in plain text!
-      };
+    if (password.length < 6) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert("Error", "Password must be at least 6 characters.");
+      return;
+    }
 
-      // Save user payload to local encrypted storage under the key 'user_account'
-      await SecureStore.setItemAsync(
-        "user_account",
-        JSON.stringify(userPayload),
+    setIsSubmitting(true);
+
+    try {
+      const cleanEmail = email.toLowerCase().trim();
+
+      // 1. Create the account in Firebase Authentication (handles email + password securely)
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        cleanEmail,
+        password,
       );
+      const uid = userCredential.user.uid;
+
+      // 2. Save the rest of the profile (name, phone) in Firestore, linked by the same uid
+      await setDoc(doc(db, "users", uid), {
+        name,
+        email: cleanEmail,
+        phone,
+        createdAt: new Date().toISOString(),
+      });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert("Success", "Account created successfully!", [
@@ -84,10 +99,23 @@ export default function Login() {
           onPress: () => router.replace("/(auth)/login"), // Route them to login screen
         },
       ]);
-    } catch (error) {
+    } catch (error: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      Alert.alert("Storage Error", "Could not save account details locally.");
+
+      // Translate common Firebase error codes into friendlier messages
+      let message = "Something went wrong. Please try again.";
+      if (error.code === "auth/email-already-in-use") {
+        message = "An account with this email already exists.";
+      } else if (error.code === "auth/invalid-email") {
+        message = "Please enter a valid email address.";
+      } else if (error.code === "auth/weak-password") {
+        message = "Password is too weak. Use at least 6 characters.";
+      }
+
+      Alert.alert("Sign-up Failed", message);
       console.error(error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -190,9 +218,12 @@ export default function Login() {
               <View
                 style={{ width: "90%", alignSelf: "center", marginTop: 10 }}
               >
-                <Button label="Sign-up" onPress={() => {
-                    handleSignUp()
-                    }} />
+                <Button
+                  label={isSubmitting ? "Creating account..." : "Sign-up"}
+                  onPress={() => {
+                    if (!isSubmitting) handleSignUp();
+                  }}
+                />
               </View>
             </View>
           </View>
