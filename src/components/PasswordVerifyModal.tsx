@@ -3,10 +3,13 @@ import { Themes } from "@/constants/theme";
 import { extendSession } from "@/utils/securitySession";
 import { BottomSheet, Button, Column, FieldGroup, Host, Icon, Row, Spacer, Text, TextInput } from "@expo/ui";
 import { buttonBorderShape, buttonStyle, controlSize, scrollDisabled, submitLabel } from "@expo/ui/swift-ui/modifiers";
-import * as SecureStore from "expo-secure-store";
-import * as Haptics from "expo-haptics"
+import * as Haptics from "expo-haptics";
 import { useEffect, useRef, useState } from "react";
 import { Alert, StyleSheet, useColorScheme } from "react-native";
+
+// 🛠️ Step 1: Import Firebase Auth methods
+import { auth } from "@/firebase";
+import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 
 type Props = {
     visible: boolean;
@@ -15,8 +18,8 @@ type Props = {
 };
 
 export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Props) {
-    // FIX 1: Use regular useState to ensure accurate string comparisons with secureTextEntry
     const [passwordInput, setPasswordInput] = useState("");
+    const [isLoading, setIsLoading] = useState(false); // Track loading states during network check
     const passwordInputRef = useRef<any>(null);
 
     const colorScheme = useColorScheme();
@@ -24,41 +27,51 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
     const currentTheme = Themes[activeScheme];
 
     const handleVerify = async () => {
+        const currentUser = auth.currentUser;
+        const enteredPassword = passwordInput.trim();
+
+        if (!currentUser || !currentUser.email) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            Alert.alert("Error", "No active session found. Please sign in again.");
+            return;
+        }
+
+        setIsLoading(true);
+
         try {
-            const savedUserDataString = await SecureStore.getItemAsync("user_account");
+            // 🛠️ Step 2: Create a secure credential object using the user's email and entered password
+            const credential = EmailAuthProvider.credential(
+                currentUser.email,
+                enteredPassword
+            );
 
-            if (savedUserDataString) {
-                const savedUser = JSON.parse(savedUserDataString);
-                const actualPassword = savedUser.password;
+            // 🛠️ Step 3: Pass the credential block directly to the live Firebase instance
+            await reauthenticateWithCredential(currentUser, credential);
 
+            // If it succeeds without throwing an error, password is correct!
+            await extendSession();
+            setPasswordInput(""); // Reset field
+            onSuccess();
+        } catch (error: any) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
 
-                // Clean both sides just in case of keyboard auto-spacing
-                const enteredPassword = passwordInput.trim();
-
-                console.log(actualPassword)
-                console.log(enteredPassword)
-
-                if (enteredPassword === actualPassword) {
-                    await extendSession();
-                    setPasswordInput(""); // Clear field
-                    onSuccess();
-                } else {
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-                    Alert.alert("Access Denied", "Incorrect password. Please try again.");
-                }
+            // Catch common Auth-related network/password error codes
+            if (error.code === "auth/wrong-password" || error.code === "auth/invalid-credential") {
+                Alert.alert("Access Denied", "Incorrect password. Please try again.");
             } else {
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-                Alert.alert("Error", "No user profile found on this device. Please sign up again.");
+                console.error("Firebase Reauthentication Failure: ", error);
+                Alert.alert("Error", "Could not verify identity. Check your connection.");
             }
-        } catch (error) {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-            Alert.alert("Error", "Could not verify identity.");
+        } finally {
+            setIsLoading(false);
         }
     };
 
     useEffect(() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-    }, [visible])
+        if (visible) {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        }
+    }, [visible]);
 
     return (
         <Host matchContents>
@@ -70,6 +83,7 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
                         <Button
                             variant="outlined"
                             onPress={onClose}
+                            disabled={isLoading}
                             modifiers={[buttonStyle('glass'), controlSize("large"), buttonBorderShape("circle")]}
                         >
                             <Icon name={Icon.select({
@@ -82,9 +96,9 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
 
                         <Button
                             onPress={handleVerify}
-                            variant={passwordInput ? "filled" : "outlined"}
-                            modifiers={[passwordInput ? buttonStyle("borderedProminent") : buttonStyle("glass"), controlSize("large"), buttonBorderShape("circle")]}
-                            disabled={passwordInput == ""}
+                            variant={passwordInput && !isLoading ? "filled" : "outlined"}
+                            modifiers={[passwordInput && !isLoading ? buttonStyle("borderedProminent") : buttonStyle("glass"), controlSize("large"), buttonBorderShape("circle")]}
+                            disabled={passwordInput == "" || isLoading}
                         >
                             <Icon name={Icon.select({
                                 ios: "checkmark",
@@ -99,12 +113,11 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
                     </Text>
 
                     <Column spacing={10} alignment="center">
-                        {/* TextInput field */}
                         <FieldGroup modifiers={[scrollDisabled()]}>
                             <TextInput
                                 placeholder="Password"
                                 secureTextEntry={true}
-                                // FIX 2: Use native text and onTextChange properties for custom state sync
+                                editable={!isLoading} // Lock input during cloud check
                                 ref={passwordInputRef}
                                 onChangeText={setPasswordInput}
                                 modifiers={[submitLabel("done")]}
@@ -113,11 +126,11 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
                             />
                         </FieldGroup>
                         <Button
-                            label="Continue"
-                            variant={passwordInput ? "filled" : "outlined"}
-                            modifiers={[passwordInput ? buttonStyle("borderedProminent") : buttonStyle("glass"), controlSize("large"), buttonBorderShape("pill")]}
-                            disabled={passwordInput == ""}
-                            onPress={() => { }}
+                            label={isLoading ? "Verifying..." : "Continue"}
+                            variant={passwordInput && !isLoading ? "filled" : "outlined"}
+                            modifiers={[passwordInput && !isLoading ? buttonStyle("borderedProminent") : buttonStyle("glass"), controlSize("large"), buttonBorderShape("pill")]}
+                            disabled={passwordInput == "" || isLoading}
+                            onPress={handleVerify}
                         />
                     </Column>
                     <Text textStyle={{ fontSize: 13, color: currentTheme.textSecondary, textAlign: "center" }}>After this, you can change any important setting for 15 minutes.</Text>
