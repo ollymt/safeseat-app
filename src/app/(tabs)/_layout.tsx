@@ -33,8 +33,8 @@ export default function TabLayout() {
           />
         </NativeTabs.Trigger>
 
-        <NativeTabs.Trigger name="me">
-          <NativeTabs.Trigger.Label>Profiles</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger name="everyone">
+          <NativeTabs.Trigger.Label>Everyone</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon
             sf={{ default: "person.3", selected: "person.3.fill" }}
             md={{ default: "group", selected: "group" }}

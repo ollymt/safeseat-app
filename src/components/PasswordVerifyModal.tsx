@@ -75,7 +75,7 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
                 isPresented={visible}
                 onDismiss={onClose}
                 showDragIndicator={false}
-                snapPoints={["full"]}
+                snapPoints={["half"]}
             >
                 <Column spacing={16} alignment="center">
                     {/* 🧭 Header Navigation Row */}
@@ -122,7 +122,7 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
                     {/* 🔑 Verification Form Stack */}
                     <Column spacing={10} alignment="center">
                         <Text textStyle={{ fontSize: 36, color: currentTheme.text, fontWeight: "bold", textAlign: "center" }}>Enter Password to Continue</Text>
-                        <FieldGroup modifiers={[scrollDisabled()]}>
+                        <FieldGroup modifiers={[scrollDisabled()]} style={{ borderWidth: 3 }}>
                             <TextInput
                                 placeholder="Password"
                                 secureTextEntry={true}

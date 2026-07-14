@@ -24,7 +24,8 @@ export const Themes = {
     warnBttnText: "#ffffff",
     yellow: "#66613E",
     blue: "#0167FA",
-    purple: "#761BE0"
+    purple: "#761BE0",
+    pitch: "#ffffff"
   },
   dark: {
     text: "#ffffff",
@@ -42,7 +43,8 @@ export const Themes = {
     warnBttnText: "#000000",
     yellow: "#FFF197",
     blue: "#96C1FF",
-    purple: "#C8A5F0"
+    purple: "#C8A5F0",
+    pitch: "#000000"
   },
 } as const;
 

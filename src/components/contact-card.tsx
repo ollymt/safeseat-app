@@ -11,12 +11,14 @@ type ContactCardProps = {
     name: string
     phone: string
     order: "primary" | "secondary" | "tertiary" | "quaternary" | "quinary"
+    onPress?: () => void;
 }
 
 export default function ContactCard({
     name,
     phone,
-    order
+    order,
+    onPress
 }: ContactCardProps) {
     const colorScheme = useColorScheme();
     const activeScheme = colorScheme === "dark" ? "dark" : "light";
