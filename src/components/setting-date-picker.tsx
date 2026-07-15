@@ -34,6 +34,7 @@ export default function SettingDatePickerItem({
     const currentTheme = Themes[activeScheme];
 
     // Micro-debounce handler ref to avoid multiple writes while scrolling native wheel/month calendars
+    // @ts-ignore
     const saveTimeout = useRef<NodeJS.Timeout | null>(null);
 
     // Initialize with the parent storage value if valid, fallback to current Date

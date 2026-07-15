@@ -3,19 +3,22 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import {
 	Dimensions,
 	Image,
+	Platform,
 	ScrollView,
 	StyleSheet,
 	Text,
 	useColorScheme,
 	View,
+	Animated,
+	Keyboard,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Button, Host, Row } from "@expo/ui";
-import { buttonBorderShape, buttonStyle, controlSize } from '@expo/ui/swift-ui/modifiers';
+import { Button, Host, Picker, Row, TextInput } from "@expo/ui";
+import { buttonBorderShape, buttonStyle, controlSize, keyboardType } from '@expo/ui/swift-ui/modifiers';
 
 import TextBlock from "@/components/text-block";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 
 import PasswordVerifyModal from "@/components/PasswordVerifyModal";
 import { isSessionValid } from "@/utils/securitySession";
@@ -23,10 +26,15 @@ import * as SecureStore from "expo-secure-store";
 
 import * as Haptics from "expo-haptics";
 
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+
+import { DatePicker } from "@expo/ui/swift-ui";
+import { KeyboardAvoidingView } from "react-native";
 import { auth, db } from "../../../firebase";
 
 const { width: screenWidth } = Dimensions.get("window");
+
+const BLOOD_TYPE_OPTIONS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
 export default function Profile() {
 	const colorScheme = useColorScheme();
@@ -35,8 +43,9 @@ export default function Profile() {
 
 	const router = useRouter();
 
-	// Extract profileId from the route (e.g. /profile?profileId=XYZ)
 	const { profileId } = useLocalSearchParams<{ profileId?: string }>();
+	const isSubProfile = !!profileId;
+	const cacheKey = isSubProfile ? `profile_${profileId}` : "user_health_profile";
 
 	// 1. Core Account States
 	const [userName, setUserName] = useState<string>("Guest");
@@ -44,53 +53,58 @@ export default function Profile() {
 	const [userEmail, setUserEmail] = useState<string>("Not Set");
 	const [userPhone, setUserPhone] = useState<string>("Not Set");
 
-	// 2. Health Metrics States
+	// 2. Health Metrics States (Stored as pure numeric strings in metric/cm/kg internally)
 	const [height, setHeight] = useState<string>("Not Set");
 	const [weight, setWeight] = useState<string>("Not Set");
 	const [bloodType, setBloodType] = useState<string>("Not Set");
 	const [allergies, setAllergies] = useState<string>("None Stored");
 	const [birthday, setBirthday] = useState<string>("Not Set");
 
-	// 🌟 3. Unit Preference State
+	// 3. Unit Preference State
 	const [isMetric, setIsMetric] = useState<boolean>(true);
 
 	// 4. UI Interaction State
 	const [refreshing, setRefreshing] = useState(false);
+	const [editMode, setEditMode] = useState(false);
+	const [authModalVisible, setAuthModalVisible] = useState(false);
+	const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
 	const loadAllUserData = useCallback(async () => {
 		try {
 			const currentUser = auth.currentUser;
 			if (!currentUser) return;
 
-			// Are we loading a sub-profile, or the owner's own account?
-			const isSubProfile = !!profileId;
-			const cacheKey = isSubProfile ? `profile_${profileId}` : "user_health_profile";
-
-			// LOAD INSTANTLY FROM PRIVACY CACHE
 			const savedPrivacyString = await SecureStore.getItemAsync("user_privacy_prefs");
 			if (savedPrivacyString) {
 				const savedPrivacy = JSON.parse(savedPrivacyString);
 				if (savedPrivacy.useMetric !== undefined) setIsMetric(savedPrivacy.useMetric);
 			}
 
-			// 1. LOAD INSTANTLY FROM PROFILE CACHE
 			const cachedHealth = await SecureStore.getItemAsync(cacheKey);
 			if (cachedHealth) {
 				const localData = JSON.parse(cachedHealth);
 				setUserName(localData.name || "Guest");
-				setUserIcon(localData.icon || localData.pfp || "Not Set")
+				setUserIcon(localData.icon || localData.pfp || "Not Set");
 				setUserEmail(localData.email || "Not Set");
 				setUserPhone(localData.phone || "Not Set");
-				setBirthday(localData.birthday || "");
+				setBirthday(localData.birthday || "Not Set");
 				setHeight(localData.height || "Not Set");
 				setWeight(localData.weight || "Not Set");
 				setBloodType(localData.bloodType || "Not Set");
 				setAllergies(localData.allergies || "None Stored");
 			}
 
-			// 2. FETCH FRESH DATA FROM FIREBASE
-			let cloudData: any = null;
+			const settingsDocRef = doc(db, "users", currentUser.uid, "settings", "preferences");
+			const settingsDocSnap = await getDoc(settingsDocRef);
+			if (settingsDocSnap.exists()) {
+				const settingsData = settingsDocSnap.data();
+				if (settingsData.useMetric !== undefined) {
+					setIsMetric(settingsData.useMetric);
+					await SecureStore.setItemAsync("user_privacy_prefs", JSON.stringify({ useMetric: settingsData.useMetric }));
+				}
+			}
 
+			let cloudData: any = null;
 			if (isSubProfile) {
 				const profileDocRef = doc(db, "users", currentUser.uid, "profiles", profileId as string);
 				const profileDocSnap = await getDoc(profileDocRef);
@@ -105,26 +119,15 @@ export default function Profile() {
 				}
 			}
 
-			// FETCH SETTINGS DOC FOR UNIT SYSTEM PREFERENCE
-			const settingsDocRef = doc(db, "users", currentUser.uid, "settings", "preferences");
-			const settingsDocSnap = await getDoc(settingsDocRef);
-			if (settingsDocSnap.exists()) {
-				const settingsData = settingsDocSnap.data();
-				if (settingsData.useMetric !== undefined) {
-					setIsMetric(settingsData.useMetric);
-					await SecureStore.setItemAsync("user_privacy_prefs", JSON.stringify({ useMetric: settingsData.useMetric }));
-				}
-			}
-
-			// 3. UPDATE UI STATE + CACHE
 			if (cloudData) {
 				const nameVal = cloudData.name || "Guest";
 				const iconVal = cloudData.icon || "Not Set";
 				const emailVal = cloudData.email || "Not Set";
 				const phoneVal = cloudData.phone || "Not Set";
-				const bdayVal = cloudData.birthday || "";
-				const heightVal = cloudData.heightCm ? `${cloudData.heightCm}` : (cloudData.height || "Not Set");
-				const weightVal = cloudData.weightKg ? `${cloudData.weightKg}` : (cloudData.weight || "Not Set");
+				const bdayVal = cloudData.birthday || "Not Set";
+
+				const heightVal = cloudData.heightCm !== undefined ? `${cloudData.heightCm}` : (cloudData.height || "Not Set");
+				const weightVal = cloudData.weightKg !== undefined ? `${cloudData.weightKg}` : (cloudData.weight || "Not Set");
 				const bloodVal = cloudData.bloodType || "Not Set";
 				const allergyVal = cloudData.allergies || "None Stored";
 
@@ -154,7 +157,7 @@ export default function Profile() {
 		} catch (error) {
 			console.error("Error syncing cache with Firestore:", error);
 		}
-	}, [profileId]);
+	}, [profileId, cacheKey, isSubProfile]);
 
 	useFocusEffect(
 		useCallback(() => {
@@ -162,13 +165,57 @@ export default function Profile() {
 		}, [loadAllUserData]),
 	);
 
-	const onRefresh = useCallback(async () => {
-		setRefreshing(true);
-		await loadAllUserData();
-		setRefreshing(false);
-	}, [loadAllUserData]);
+	const handleSaveChanges = async () => {
+		try {
+			const currentUser = auth.currentUser;
+			if (!currentUser) return;
 
-	// 🌟 HEIGHT UNIT CONVERTER HELPER
+			const updatedProfile = {
+				name: userName,
+				icon: userIcon,
+				email: userEmail,
+				phone: userPhone,
+				birthday: birthday,
+				height: height,
+				weight: weight,
+				bloodType: bloodType,
+				allergies: allergies,
+			};
+
+			await SecureStore.setItemAsync(cacheKey, JSON.stringify(updatedProfile));
+
+			const cleanHeightNum = height !== "Not Set" ? parseFloat(height.replace(/[^0-9.]/g, "")) : null;
+			const cleanWeightNum = weight !== "Not Set" ? parseFloat(weight.replace(/[^0-9.]/g, "")) : null;
+
+			const firestorePayload: any = {
+				name: userName,
+				email: userEmail,
+				phone: userPhone,
+				birthday: birthday,
+				bloodType: bloodType,
+				allergies: allergies,
+			};
+
+			if (cleanHeightNum !== null && !isNaN(cleanHeightNum)) {
+				firestorePayload.heightCm = cleanHeightNum;
+				firestorePayload.height = String(cleanHeightNum);
+			}
+			if (cleanWeightNum !== null && !isNaN(cleanWeightNum)) {
+				firestorePayload.weightKg = cleanWeightNum;
+				firestorePayload.weight = String(cleanWeightNum);
+			}
+
+			const profileDocRef = isSubProfile
+				? doc(db, "users", currentUser.uid, "profiles", profileId as string)
+				: doc(db, "users", currentUser.uid);
+
+			await updateDoc(profileDocRef, firestorePayload);
+			setEditMode(false);
+		} catch (error) {
+			console.error("Failed to save changes:", error);
+		}
+	};
+
 	const getDisplayHeight = () => {
 		if (!height || height === "Not Set") return "Not Set";
 		const cmValue = parseFloat(height.replace(/[^0-9.]/g, ""));
@@ -184,7 +231,6 @@ export default function Profile() {
 		}
 	};
 
-	// 🌟 WEIGHT UNIT CONVERTER HELPER
 	const getDisplayWeight = () => {
 		if (!weight || weight === "Not Set") return "Not Set";
 		const kgValue = parseFloat(weight.replace(/[^0-9.]/g, ""));
@@ -199,7 +245,7 @@ export default function Profile() {
 	};
 
 	const getFormattedDate = () => {
-		if (!birthday) return "Not Set";
+		if (!birthday || birthday === "Not Set") return "Not Set";
 		const parsedDate = new Date(birthday);
 		if (isNaN(parsedDate.getTime())) return birthday;
 		return new Intl.DateTimeFormat('en-US', {
@@ -210,7 +256,7 @@ export default function Profile() {
 	};
 
 	const getAge = () => {
-		if (!birthday) return "Not Set";
+		if (!birthday || birthday === "Not Set") return "Not Set";
 		const birthDate = new Date(birthday);
 		if (isNaN(birthDate.getTime())) return "Not Set";
 
@@ -225,7 +271,7 @@ export default function Profile() {
 	};
 
 	const getZodiacSign = () => {
-		if (!birthday) return "Not Set";
+		if (!birthday || birthday === "Not Set") return "Not Set";
 		const birthDate = new Date(birthday);
 		if (isNaN(birthDate.getTime())) return "Not Set";
 
@@ -248,11 +294,6 @@ export default function Profile() {
 		return "Not Set";
 	};
 
-	const [editMode, setEditMode] = useState(false);
-
-	const [authModalVisible, setAuthModalVisible] = useState(false);
-	const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
-
 	const executeSecureAction = async (action: () => void) => {
 		const authenticated = await isSessionValid();
 		if (authenticated) {
@@ -264,19 +305,43 @@ export default function Profile() {
 		}
 	};
 
+	const bloodTypeIndex = BLOOD_TYPE_OPTIONS.indexOf(bloodType.toUpperCase());
+
+	// inside your component:
+	const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+	useEffect(() => {
+		const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+		const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+		const showSub = Keyboard.addListener(showEvent, (e) => {
+			setKeyboardHeight(e.endCoordinates.height);
+		});
+		const hideSub = Keyboard.addListener(hideEvent, () => {
+			setKeyboardHeight(0);
+		});
+
+		return () => {
+			showSub.remove();
+			hideSub.remove();
+		};
+	}, []);
+
 	return (
 		<SafeAreaView
 			style={{ flex: 1, backgroundColor: currentTheme.background }}
 			edges={['left', 'right']}
 		>
 			<ScrollView
-				contentContainerStyle={{ flexGrow: 1, marginBottom: 100, marginTop: 100 }}
+				contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
 				showsVerticalScrollIndicator={true}
 				bounces={true}
+				automaticallyAdjustKeyboardInsets={true}
+				keyboardShouldPersistTaps="handled"
 			>
-				<View style={[styles.container, { marginTop: -20 }]}>
+				<View style={[styles.container, { marginTop: -20, paddingBottom: 100 }]}>
 					<View style={{ flexDirection: "column", alignItems: "center", marginBottom: 0 }}>
-						<Image source={userIcon == "Not Set" || userIcon == "" || userIcon == null ? { uri: "https://pbs.twimg.com/media/C8SFjSYWAAA6452.jpg" } : { uri: userIcon }} style={{ width: 150, height: 150, borderRadius: 75 }} />
+						<Image source={userIcon === "Not Set" || userIcon === "" || userIcon === null ? { uri: "https://pbs.twimg.com/media/C8SFjSYWAAA6452.jpg" } : { uri: userIcon }} style={{ width: 150, height: 150, borderRadius: 75 }} />
 						<Text style={[styles.pageHeader, { color: currentTheme.text, flex: 1 }]}>
 							{userName.split(" ")[0]}
 						</Text>
@@ -292,7 +357,8 @@ export default function Profile() {
 											buttonBorderShape("capsule")]}
 										onPress={() => {
 											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-											setEditMode(false)
+											loadAllUserData(); // Reset to current db state
+											setEditMode(false);
 										}}
 									/>
 									<Button
@@ -304,7 +370,7 @@ export default function Profile() {
 											buttonBorderShape("capsule")]}
 										onPress={() => {
 											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-											setEditMode(false)
+											handleSaveChanges(); // Actually triggers save to Firestore!
 										}}
 									/>
 								</Row> :
@@ -318,8 +384,8 @@ export default function Profile() {
 									onPress={() => {
 										executeSecureAction(() => {
 											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-											setEditMode(true)
-										})
+											setEditMode(true);
+										});
 									}}
 								/>}
 						</Host>
@@ -333,21 +399,59 @@ export default function Profile() {
 							<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
 								NAME
 							</Text>
-							<TextBlock text={userName} />
+							{editMode ?
+								<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
+									<Host matchContents>
+										<TextInput 
+											// @ts-ignore
+											value={userName} 
+											onChangeText={setUserName} 
+											placeholder="Name" />
+									</Host>
+								</View>
+								:
+								<TextBlock text={userName} />
+							}
 						</View>
 
 						<View style={styles.fieldContainer}>
 							<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
 								EMAIL
 							</Text>
-							<TextBlock text={userEmail} />
+							{editMode ?
+								<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
+									<Host matchContents>
+										<TextInput 
+											// @ts-ignore
+											value={userEmail} 
+											onChangeText={setUserEmail} 
+											placeholder="Email" 
+											modifiers={[keyboardType("email-address")]} />
+									</Host>
+								</View>
+								:
+								<TextBlock text={userEmail} />
+							}
 						</View>
 
 						<View style={styles.fieldContainer}>
 							<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
 								PHONE NUMBER
 							</Text>
-							<TextBlock text={userPhone} />
+							{editMode ?
+								<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
+									<Host matchContents>
+										<TextInput 
+											// @ts-ignore
+											value={userPhone} 
+											onChangeText={setUserPhone} 
+											placeholder="Phone Number" 
+											modifiers={[keyboardType("phone-pad")]} />
+									</Host>
+								</View>
+								:
+								<TextBlock text={userPhone} />
+							}
 						</View>
 
 						<View style={{ borderColor: currentTheme.textSecondary, borderWidth: 1, opacity: 0.5, marginVertical: 10 }} />
@@ -359,7 +463,19 @@ export default function Profile() {
 								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
 									BIRTHDAY
 								</Text>
-								<TextBlock text={getFormattedDate()} />
+								{editMode ?
+									<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
+										<Host matchContents>
+											<DatePicker
+												selection={birthday && birthday !== "Not Set" ? new Date(birthday) : new Date()}
+												onDateChange={(date) => setBirthday(date.toISOString())}
+												displayedComponents={["date"]}
+											/>
+										</Host>
+									</View>
+									:
+									<TextBlock text={getFormattedDate()} />
+								}
 							</View>
 							<View style={[styles.fieldContainer, { flex: 1 }]}>
 								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
@@ -378,17 +494,43 @@ export default function Profile() {
 						<View style={{ flexDirection: "row", gap: 10, borderColor: "#000", borderWidth: 0 }}>
 							<View style={[styles.fieldContainer, { flex: 1 }]}>
 								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
-									HEIGHT
+									HEIGHT {isMetric ? "(CM)" : "(IN)"}
 								</Text>
-								{/* 🌟 Using helper text converter */}
-								<TextBlock text={getDisplayHeight()} />
+								{editMode ?
+									<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
+										<Host matchContents>
+											<TextInput
+												// @ts-ignore
+												value={height === "Not Set" ? "" : height}
+												onChangeText={setHeight}
+												placeholder={isMetric ? "e.g. 175" : "e.g. 68"}
+												modifiers={[keyboardType("decimal-pad")]}
+											/>
+										</Host>
+									</View>
+									:
+									<TextBlock text={getDisplayHeight()} />
+								}
 							</View>
 							<View style={[styles.fieldContainer, { flex: 1 }]}>
 								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
-									WEIGHT
+									WEIGHT {isMetric ? "(KG)" : "(LB)"}
 								</Text>
-								{/* 🌟 Using helper text converter */}
-								<TextBlock text={getDisplayWeight()} />
+								{editMode ?
+									<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
+										<Host matchContents>
+											<TextInput
+												// @ts-ignore
+												value={weight === "Not Set" ? "" : weight}
+												onChangeText={setWeight}
+												placeholder={isMetric ? "e.g. 70" : "e.g. 154"}
+												modifiers={[keyboardType("decimal-pad")]}
+											/>
+										</Host>
+									</View>
+									:
+									<TextBlock text={getDisplayWeight()} />
+								}
 							</View>
 						</View>
 
@@ -396,14 +538,41 @@ export default function Profile() {
 							<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
 								BLOOD TYPE
 							</Text>
-							<TextBlock text={bloodType.toUpperCase()} />
+							{editMode ?
+								<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
+									<Host matchContents>
+										<Picker
+											// @ts-ignore
+											options={BLOOD_TYPE_OPTIONS}
+											selectedIndex={bloodTypeIndex === -1 ? 0 : bloodTypeIndex}
+											onOptionSelected={({ nativeEvent: { index } }) => setBloodType(BLOOD_TYPE_OPTIONS[index])}
+											variant="segmented"
+										/>
+									</Host>
+								</View>
+								:
+								<TextBlock text={bloodType.toUpperCase()} />
+							}
 						</View>
 
 						<View style={styles.fieldContainer}>
 							<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
 								ALLERGIES
 							</Text>
-							<TextBlock text={allergies == "" ? "None Stored" : allergies} />
+							{editMode ?
+								<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
+									<Host matchContents>
+										<TextInput
+											// @ts-ignore
+											value={allergies === "None Stored" ? "" : allergies}
+											onChangeText={setAllergies}
+											placeholder="e.g. Peanuts, Penicillin"
+										/>
+									</Host>
+								</View>
+								:
+								<TextBlock text={allergies === "" ? "None Stored" : allergies} />
+							}
 						</View>
 					</View>
 
@@ -451,5 +620,12 @@ const styles = StyleSheet.create({
 		fontFeatureSettings: "Body-Medium",
 		opacity: 0.8,
 		fontSize: 13
+	},
+	textInput: {
+		width: "100%",            // Force the wrapper to take up the full horizontal space
+		minHeight: 46,            // Give it a solid native tap target height
+		justifyContent: "center", // Vertically center the internal Host and TextInput
+		paddingHorizontal: 12,    // Left & right space inside the input block
+		borderRadius: 8,
 	}
 });
