@@ -6,10 +6,11 @@ import { buttonBorderShape, buttonStyle, controlSize, presentationBackground, pr
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
 import { StyleSheet, useColorScheme, Platform, Alert } from "react-native";
+import * as SecureStore from "expo-secure-store"; // 🌟 Import SecureStore
 
 // 🛠️ Firebase Imports
 import { auth, db } from "../firebase";
-import { collection, addDoc } from "firebase/firestore";
+import { collection, addDoc, doc, getDoc } from "firebase/firestore";
 
 type Props = {
     visible: boolean;
@@ -38,7 +39,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
     const [phone, setPhone] = useState("");
     const [birthday, setBirthday] = useState(new Date());
 
-    const [isMetric, setIsMetric] = useState(false);
+    const [isMetric, setIsMetric] = useState(true); // 🌟 Defaults to true, syncs dynamically with SecureStore
 
     const [heightCm, setHeightCm] = useState("");
     const [heightFt, setHeightFt] = useState("");
@@ -55,9 +56,76 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
 
     const [discardConfirmVisible, setDiscardConfirmVisible] = useState(false);
 
+    // 🌟 Load unit settings dynamically when modal is shown
+    // Update this block in components/AddProfileModal.tsx
+    // 🌟 Load unit settings dynamically when modal is shown
     useEffect(() => {
         if (visible) {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+            const loadUnitPreference = async () => {
+                let localValueFound = false;
+
+                try {
+                    // Layer 1: Check SecureStore (Instant & Offline-friendly)
+                    const savedPrivacyString = await SecureStore.getItemAsync("user_privacy_prefs");
+                    console.log("[Modal] Raw savedPrivacyString loaded:", savedPrivacyString);
+
+                    if (savedPrivacyString) {
+                        const savedPrivacy = JSON.parse(savedPrivacyString);
+
+                        // Check for both key variations just in case (useMetric or isMetric)
+                        const targetKey = savedPrivacy.useMetric !== undefined ? savedPrivacy.useMetric : savedPrivacy.isMetric;
+
+                        if (targetKey !== undefined) {
+                            const normalizedMetric = targetKey === true || targetKey === "true";
+                            console.log("[Modal] Layer 1 (Cache) success. Setting isMetric to:", normalizedMetric);
+                            setIsMetric(normalizedMetric);
+                            localValueFound = true;
+                        }
+                    }
+                } catch (error) {
+                    console.error("Failed to read SecureStore in modal:", error);
+                }
+
+                // Layer 2: Cloud Fallback / Direct Sync verification
+                try {
+                    const currentUser = auth.currentUser;
+                    if (currentUser) {
+                        console.log("[Modal] Syncing with Firestore subcollection for direct confirmation...");
+                        const settingsDocRef = doc(db, "users", currentUser.uid, "settings", "preferences");
+                        const settingsDocSnap = await getDoc(settingsDocRef);
+
+                        if (settingsDocSnap.exists()) {
+                            const settingsData = settingsDocSnap.data();
+                            console.log("[Modal] Layer 2 (Firestore) data fetched:", settingsData);
+
+                            // Check all potential field names coming from your subcollection
+                            const cloudMetricVal = settingsData.useMetric !== undefined ? settingsData.useMetric : settingsData.isMetric;
+
+                            if (cloudMetricVal !== undefined) {
+                                const normalizedMetric = cloudMetricVal === true || cloudMetricVal === "true";
+                                console.log("[Modal] Applying current Firestore value to state:", normalizedMetric);
+
+                                setIsMetric(normalizedMetric);
+
+                                // Refresh the local cache immediately to flush out old configurations
+                                const combinedPrivacy = {
+                                    useMetric: normalizedMetric,
+                                    consent: settingsData.consent ?? true,
+                                    emergencyEscalation: settingsData.emergencyEscalation ?? true,
+                                };
+                                await SecureStore.setItemAsync("user_privacy_prefs", JSON.stringify(combinedPrivacy));
+                                return;
+                            }
+                        }
+                    }
+                } catch (cloudError) {
+                    console.error("Failed to clear cloud validation fallback in modal:", cloudError);
+                }
+            };
+
+            loadUnitPreference();
         }
     }, [visible]);
 
@@ -117,10 +185,11 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
     };
 
     // 🌟 Save Logic directly connecting to Firestore Subcollection
+    // 🌟 Save Logic directly connecting to Firestore Subcollection with auto-conversion
     const handleSave = async () => {
         const currentUser = auth.currentUser;
         if (!currentUser) {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
             Alert.alert("Authentication Error", "You must be signed in to add profiles.");
             return;
         }
@@ -129,6 +198,21 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
         try {
             const subcollectionRef = collection(db, "users", currentUser.uid, "profiles");
 
+            // 🧮 Conversion Logic
+            let finalHeightCm = 0;
+            let finalWeightKg = 0;
+
+            if (isMetric) {
+                finalHeightCm = parseNum(heightCm);
+                finalWeightKg = parseNum(weightKg);
+            } else {
+                // Imperial to Metric conversion
+                const totalInches = (parseNum(heightFt) * 12) + parseNum(heightIn);
+                finalHeightCm = Math.round((totalInches * 2.54) * 10) / 10; // Round to 1 decimal place
+
+                finalWeightKg = Math.round((parseNum(weightLb) * 0.45359237) * 10) / 10; // Round to 1 decimal place
+            }
+
             await addDoc(subcollectionRef, {
                 name: name.trim(),
                 icon: icon.trim() || null,
@@ -136,16 +220,20 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                 phone: phone.trim(),
                 birthday: birthday.toISOString(),
                 bloodType: bloodType,
-                height: isMetric ? `${heightCm} cm` : `${heightFt} ft ${heightIn} in`,
-                weight: isMetric ? `${weightKg} kg` : `${weightLb} lb`,
+                // Saving both values strictly normalized to Metric system values
+                heightCm: finalHeightCm,
+                weightKg: finalWeightKg,
+                // Keeps a readable layout backup string based on what they initially input
+                displayHeight: isMetric ? `${heightCm} cm` : `${heightFt} ft ${heightIn} in`,
+                displayWeight: isMetric ? `${weightKg} kg` : `${weightLb} lb`,
                 createdAt: new Date().toISOString()
             });
 
             handleResetAndClose();
-            onSuccess();
+            if (onSuccess) onSuccess();
         } catch (error) {
             console.error("Error saving profile to Firestore: ", error);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
             Alert.alert("Save Error", "Failed to create this profile. Please try again.");
         } finally {
             setIsLoading(false);
@@ -238,35 +326,43 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                                         placeholder="Name"
                                         editable={!isLoading}
                                         onChangeText={setName}
+                                        // @ts-ignore
                                         value={name}
                                         modifiers={[submitLabel("next")]}
-                                        textAlign="start"
+                                        // @ts-ignore
+                                        textAlign="left"
                                     />
                                     <TextInput
                                         placeholder="Icon URL (optional)"
                                         editable={!isLoading}
                                         onChangeText={setIcon}
+                                        // @ts-ignore
                                         value={icon}
                                         modifiers={[submitLabel("next")]}
-                                        textAlign="start"
+                                        // @ts-ignore
+                                        textAlign="left"
                                     />
                                     <TextInput
                                         placeholder="Email"
                                         editable={!isLoading}
                                         onChangeText={setEmail}
+                                        // @ts-ignore
                                         value={email}
                                         modifiers={[submitLabel("next")]}
                                         keyboardType="email-address"
-                                        textAlign="start"
+                                        // @ts-ignore
+                                        textAlign="left"
                                     />
                                     <TextInput
                                         placeholder="Phone"
                                         editable={!isLoading}
                                         onChangeText={setPhone}
+                                        // @ts-ignore
                                         value={phone}
                                         modifiers={[submitLabel("next")]}
                                         keyboardType="phone-pad"
-                                        textAlign="start"
+                                        // @ts-ignore
+                                        textAlign="left"
                                     />
                                     {Platform.OS == "ios" &&
                                         <>
@@ -288,19 +384,23 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                                                 placeholder="Height (cm)"
                                                 editable={!isLoading}
                                                 onChangeText={setHeightCm}
+                                                // @ts-ignore
                                                 value={heightCm}
                                                 modifiers={[submitLabel("next")]}
                                                 keyboardType="number-pad"
-                                                textAlign="start"
+                                                // @ts-ignore
+                                                textAlign="left"
                                             />
                                             <TextInput
                                                 placeholder="Weight (kg)"
                                                 editable={!isLoading}
                                                 onChangeText={setWeightKg}
+                                                // @ts-ignore
                                                 value={weightKg}
                                                 modifiers={[submitLabel("next")]}
                                                 keyboardType="number-pad"
-                                                textAlign="start"
+                                                // @ts-ignore
+                                                textAlign="left"
                                             />
                                         </Row>
                                     ) : (
@@ -310,29 +410,35 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                                                     placeholder="Height (ft)"
                                                     editable={!isLoading}
                                                     onChangeText={setHeightFt}
+                                                    // @ts-ignore
                                                     value={heightFt}
                                                     modifiers={[submitLabel("next")]}
                                                     keyboardType="number-pad"
-                                                    textAlign="start"
+                                                    // @ts-ignore
+                                                    textAlign="left"
                                                 />
                                                 <TextInput
                                                     placeholder="Height (in)"
                                                     editable={!isLoading}
                                                     onChangeText={setHeightIn}
+                                                    // @ts-ignore
                                                     value={heightIn}
                                                     modifiers={[submitLabel("next")]}
                                                     keyboardType="number-pad"
-                                                    textAlign="start"
+                                                    // @ts-ignore
+                                                    textAlign="left"
                                                 />
                                             </Row>
                                             <TextInput
                                                 placeholder="Weight (lb)"
                                                 editable={!isLoading}
                                                 onChangeText={setWeightLb}
+                                                    // @ts-ignore
                                                 value={weightLb}
                                                 modifiers={[submitLabel("next")]}
                                                 keyboardType="number-pad"
-                                                textAlign="start"
+                                                    // @ts-ignore
+                                                textAlign="left"
                                             />
                                         </>
                                     )}

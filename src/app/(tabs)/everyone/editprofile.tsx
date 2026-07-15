@@ -1,31 +1,28 @@
 import { Themes } from "@/constants/theme";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import {
-    Alert,
     Dimensions,
     ScrollView,
     StyleSheet,
     Text,
     useColorScheme,
-    View,
+    View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Icon } from "@expo/ui";
+import { Column, FieldGroup, Host, TextInput } from "@expo/ui";
+import { frame } from "@expo/ui/swift-ui/modifiers";
 import { useCallback, useState } from "react";
 
 import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store";
 
-import SettingDatePickerItem from "@/components/setting-date-picker";
-import SettingPageItem from "@/components/setting-page-item";
-import SettingPicker from "@/components/setting-picker";
-import SettingSwitch from "@/components/setting-switch";
 
 import PasswordVerifyModal from "@/components/PasswordVerifyModal";
 import { isSessionValid } from "@/utils/securitySession";
 
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { submitLabel } from "@expo/ui/swift-ui/modifiers";
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../../../firebase";
 
 const { width: screenWidth } = Dimensions.get("window");
@@ -36,6 +33,10 @@ export default function EditProfile() {
     const currentTheme = Themes[activeScheme];
 
     const router = useRouter();
+
+    // 🌟 Which profile are we editing? Absent = the owner's own account.
+    const { profileId } = useLocalSearchParams<{ profileId?: string }>();
+    const isSubProfile = !!profileId;
 
     // 1. Core Account States
     const [userName, setUserName] = useState<string>("Guest");
@@ -49,19 +50,23 @@ export default function EditProfile() {
     const [bloodType, setBloodType] = useState<string>("Not Set");
     const [allergies, setAllergies] = useState<string>("None Stored");
 
-    // 3. Privacy Preferences States
+    // 🌟 Missing state that the JSX below relies on — was undefined before
     const [consent, setConsent] = useState<boolean>(true);
     const [emergencyEscalation, setEmergencyEscalation] = useState<boolean>(true);
-    const [isMetric, setIsMetric] = useState(true);
+
+    const [isMetric, setIsMetric] = useState<boolean>(false);
 
     const [authModalVisible, setAuthModalVisible] = useState(false);
     const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
     const [bloodPickerVisible, setBloodPickerVisible] = useState(false);
 
+    // Cache key varies depending on whether we're editing a sub-profile or the owner
+    const healthCacheKey = isSubProfile ? `profile_${profileId}` : "user_health_profile";
+
     const loadAllUserData = useCallback(async () => {
         try {
-            // 1. LOAD INSTANTLY FROM LOCAL STORAGE CACHES
-            const savedHealthDataString = await SecureStore.getItemAsync("user_health_profile");
+            // 1. LOAD INSTANTLY FROM LOCAL STORAGE CACHE
+            const savedHealthDataString = await SecureStore.getItemAsync(healthCacheKey);
             if (savedHealthDataString) {
                 const savedHealth = JSON.parse(savedHealthDataString);
                 if (savedHealth.name) setUserName(savedHealth.name);
@@ -74,23 +79,32 @@ export default function EditProfile() {
                 if (savedHealth.allergies) setAllergies(savedHealth.allergies);
             }
 
+            // Privacy prefs (useMetric/consent/emergencyEscalation) always live at the account level,
+            // regardless of which profile is being viewed
             const savedPrivacyString = await SecureStore.getItemAsync("user_privacy_prefs");
             if (savedPrivacyString) {
                 const savedPrivacy = JSON.parse(savedPrivacyString);
+                if (savedPrivacy.useMetric !== undefined) setIsMetric(savedPrivacy.useMetric);
                 if (savedPrivacy.consent !== undefined) setConsent(savedPrivacy.consent);
                 if (savedPrivacy.emergencyEscalation !== undefined) setEmergencyEscalation(savedPrivacy.emergencyEscalation);
-                if (savedPrivacy.useMetric !== undefined) setIsMetric(savedPrivacy.useMetric);
             }
 
             // 2. FETCH FRESH BACKGROUND DATA FROM FIREBASE
             const currentUser = auth.currentUser;
             if (currentUser) {
-                const userDocRef = doc(db, "users", currentUser.uid);
-                const userDocSnap = await getDoc(userDocRef);
+                // 🌟 Point at the sub-profile doc or the main user doc depending on context
+                const profileDocRef = isSubProfile
+                    ? doc(db, "users", currentUser.uid, "profiles", profileId as string)
+                    : doc(db, "users", currentUser.uid);
+                const profileDocSnap = await getDoc(profileDocRef);
 
-                if (userDocSnap.exists()) {
-                    const cloudData = userDocSnap.data();
+                // Settings/preferences (privacy + metric) still come from the owner's own subcollection
+                const settingsDocRef = doc(db, "users", currentUser.uid, "settings", "preferences");
+                const settingsDocSnap = await getDoc(settingsDocRef);
 
+                let cloudData: any = {};
+                if (profileDocSnap.exists()) {
+                    cloudData = profileDocSnap.data();
                     if (cloudData.name) setUserName(cloudData.name);
                     if (cloudData.email) setUserEmail(cloudData.email);
                     if (cloudData.phone) setUserPhone(cloudData.phone);
@@ -99,9 +113,6 @@ export default function EditProfile() {
                     if (cloudData.weight) setWeight(cloudData.weight);
                     if (cloudData.bloodType) setBloodType(cloudData.bloodType);
                     if (cloudData.allergies) setAllergies(cloudData.allergies);
-                    if (cloudData.consent !== undefined) setConsent(cloudData.consent);
-                    if (cloudData.emergencyEscalation !== undefined) setEmergencyEscalation(cloudData.emergencyEscalation);
-                    if (cloudData.useMetric !== undefined) setIsMetric(cloudData.useMetric);
 
                     const combinedProfile = {
                         name: cloudData.name || "",
@@ -113,12 +124,19 @@ export default function EditProfile() {
                         bloodType: cloudData.bloodType || "",
                         allergies: cloudData.allergies || "",
                     };
-                    await SecureStore.setItemAsync("user_health_profile", JSON.stringify(combinedProfile));
+                    await SecureStore.setItemAsync(healthCacheKey, JSON.stringify(combinedProfile));
+                }
+
+                if (settingsDocSnap.exists()) {
+                    const settingsData = settingsDocSnap.data();
+                    if (settingsData.useMetric !== undefined) setIsMetric(settingsData.useMetric);
+                    if (settingsData.consent !== undefined) setConsent(settingsData.consent);
+                    if (settingsData.emergencyEscalation !== undefined) setEmergencyEscalation(settingsData.emergencyEscalation);
 
                     const combinedPrivacy = {
-                        useMetric: cloudData.useMetric ?? true,
-                        consent: cloudData.consent ?? true,
-                        emergencyEscalation: cloudData.emergencyEscalation ?? true,
+                        useMetric: settingsData.useMetric ?? true,
+                        consent: settingsData.consent ?? true,
+                        emergencyEscalation: settingsData.emergencyEscalation ?? true,
                     };
                     await SecureStore.setItemAsync("user_privacy_prefs", JSON.stringify(combinedPrivacy));
                 }
@@ -126,7 +144,7 @@ export default function EditProfile() {
         } catch (error) {
             console.error("Failed to load user profile data:", error);
         }
-    }, []);
+    }, [healthCacheKey, isSubProfile, profileId]);
 
     useFocusEffect(
         useCallback(() => {
@@ -136,15 +154,18 @@ export default function EditProfile() {
 
     const saveHealthField = async (key: string, val: string) => {
         try {
-            const currentObjRaw = await SecureStore.getItemAsync("user_health_profile");
+            const currentObjRaw = await SecureStore.getItemAsync(healthCacheKey);
             const currentObj = currentObjRaw ? JSON.parse(currentObjRaw) : {};
             currentObj[key] = val;
-            await SecureStore.setItemAsync("user_health_profile", JSON.stringify(currentObj));
+            await SecureStore.setItemAsync(healthCacheKey, JSON.stringify(currentObj));
 
             const currentUser = auth.currentUser;
             if (currentUser) {
-                const userDocRef = doc(db, "users", currentUser.uid);
-                await updateDoc(userDocRef, { [key]: val });
+                // 🌟 Write to the correct doc: sub-profile or main user doc
+                const profileDocRef = isSubProfile
+                    ? doc(db, "users", currentUser.uid, "profiles", profileId as string)
+                    : doc(db, "users", currentUser.uid);
+                await updateDoc(profileDocRef, { [key]: val });
             }
         } catch (error) {
             console.error("Failed to save health data:", error);
@@ -160,8 +181,9 @@ export default function EditProfile() {
 
             const currentUser = auth.currentUser;
             if (currentUser) {
-                const userDocRef = doc(db, "users", currentUser.uid);
-                await updateDoc(userDocRef, { [key]: val });
+                // Privacy settings always belong to the owner account, not a sub-profile
+                const settingsDocRef = doc(db, "users", currentUser.uid, "settings", "preferences");
+                await setDoc(settingsDocRef, { [key]: val }, { merge: true });
             }
         } catch (error) {
             console.error("Failed to save privacy preference:", error);
@@ -218,253 +240,34 @@ export default function EditProfile() {
             edges={["left", "right"]}
         >
             <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={true} bounces={true}>
-                <View style={[styles.container, { marginTop: -40 }]}>
-                    <Text style={[styles.pageHeader, { color: currentTheme.text }]}>Settings</Text>
-                    <View style={{ gap: 20, marginTop: 10, width: "100%" }}>
-
-                        {/* ACCOUNT SECTION */}
-                        <View>
-                            <Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>ACCOUNT</Text>
-                            <View style={{ borderRadius: 12, overflow: "hidden" }}>
-                                <SettingPageItem
-                                    name="Name"
-                                    iconName={Icon.select({ ios: "person.fill", android: import("@expo/material-symbols/person.xml") })}
+                <View style={[styles.container, { marginTop: -30 }]}>
+                    <Text style={[styles.pageHeader, { color: currentTheme.text }]}>Edit {userName.split(" ")[0]}</Text>
+                    <View style={{ gap: 20, marginTop: 10, width: "100%", height: "auto", borderWidth: 3, borderColor: "#000" }}>
+                        <Host>
+                            <Column
+                                spacing={16}
+                                style={{ height: "100%" }}
+                            >
+                                <TextInput
+                                    placeholder="Name"
                                     value={userName}
+                                    onChangeText={setUserName}
+                                    modifiers={[submitLabel("next")]}
+                                    textAlign="left"
                                 />
-                                <SettingPageItem
-                                    name="Email"
-                                    iconName={Icon.select({ ios: "at", android: import("@expo/material-symbols/alternate_email.xml") })}
-                                    value={userEmail}
-                                    onPress={() => {
-                                        executeSecureAction(() => {
-                                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                                            router.push("/(tabs)/settings/changeemail");
-                                        });
-                                    }}
-                                />
-                                <SettingPageItem
-                                    name="Phone Number"
-                                    iconName={Icon.select({ ios: "phone.fill", android: import("@expo/material-symbols/phone_enabled.xml") })}
-                                    value={userPhone}
-                                    onPress={() => {
-                                        executeSecureAction(() => {
-                                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                                            router.push("/(tabs)/settings/changephone");
-                                        });
-                                    }}
-                                />
-                                <SettingPageItem
-                                    name="Password"
-                                    iconName={Icon.select({ ios: "asterisk", android: import("@expo/material-symbols/asterisk.xml") })}
-                                    showChevron={true}
-                                    onPress={() => {
-                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                                        router.push("/(tabs)/settings/changepass");
-                                    }}
-                                />
-                                <SettingPageItem
-                                    name="Emergency Contacts"
-                                    iconName={Icon.select({ ios: "person.crop.circle.fill", android: import("@expo/material-symbols/account_circle.xml") })}
-                                    isLast={true}
-                                    showChevron={true}
-                                    onPress={() => {
-                                        executeSecureAction(() => {
-                                            console.log("Opening econ editor freely...");
-                                        });
-                                    }}
-                                />
-                            </View>
-                        </View>
-
-                        {/* HEALTH SECTION */}
-                        <View>
-                            <Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>HEALTH</Text>
-                            <View style={{ borderRadius: 12, overflow: "hidden" }}>
-                                <SettingDatePickerItem
-                                    name="Birthday"
-                                    iconName={Icon.select({ ios: "birthday.cake.fill", android: import("@expo/material-symbols/cake.xml") })}
-                                    value={birthday}
-                                    onValueChange={(dateStr) => {
-                                        setBirthday(dateStr);
-                                        saveHealthField("birthday", dateStr);
-                                    }}
-                                />
-                                <SettingPageItem
-                                    name="Height"
-                                    iconName={Icon.select({ ios: "lines.measurement.vertical", android: import("@expo/material-symbols/height.xml") })}
-                                    value={getDisplayHeight()}
-                                />
-                                <SettingPageItem
-                                    name="Weight"
-                                    iconName={Icon.select({ ios: "scalemass.fill", android: import("@expo/material-symbols/scale.xml") })}
-                                    value={getDisplayWeight()}
-                                />
-                                <SettingPicker
-                                    name="Blood Type"
-                                    iconName={Icon.select({ ios: "drop.fill", android: import("@expo/material-symbols/opacity.xml") })}
-                                    isLast={false}
-                                    value={bloodType}
-                                    isOpen={bloodPickerVisible}
-                                    onClose={() => setBloodPickerVisible(false)}
-                                    onValueChange={(type) => {
-                                        setBloodType(type);
-                                        saveHealthField("bloodType", type);
-                                    }}
-                                    onPress={() => {
-                                        executeSecureAction(() => {
-                                            setBloodPickerVisible(true);
-                                        });
-                                    }}
-                                />
-                                <SettingPageItem
-                                    name="Allergies"
-                                    iconName={Icon.select({ ios: "nosign", android: import("@expo/material-symbols/block.xml") })}
-                                    value={allergies}
-                                    showChevron={true}
-                                    isLast={true}
-                                    onPress={() => {
-                                        executeSecureAction(() => {
-                                            console.log("Opening allergies editor freely...");
-                                        });
-                                    }}
-                                />
-                            </View>
-                        </View>
-
-                        {/* PRIVACY SECTION */}
-                        <View>
-                            <Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>PRIVACY</Text>
-                            <View style={{ gap: 20 }}>
-                                <View style={{ gap: 6 }}>
-                                    <View style={{ borderRadius: 12, overflow: "hidden" }}>
-                                        <SettingSwitch
-                                            name="Data Sharing Consent"
-                                            iconName={Icon.select({ ios: "hand.raised.fill", android: import("@expo/material-symbols/front_hand.xml") })}
-                                            isLast={true}
-                                            value={consent}
-                                            onValueChange={(val) => {
-                                                setConsent(val);
-                                                savePrivacyField("consent", val);
-                                            }}
+                                <FieldGroup>
+                                    <FieldGroup.Section title="Basic Information">
+                                        <TextInput
+                                            placeholder="Name"
+                                            value={userName}
+                                            onChangeText={setUserName}
+                                            modifiers={[submitLabel("next")]}
+                                            textAlign="left"
                                         />
-                                    </View>
-                                    <View style={{ paddingHorizontal: 10 }}>
-                                        <Text style={[styles.caption, { color: currentTheme.textSecondary }]}>
-                                            Authorize real-time synchronization with secure cloud nodes.
-                                        </Text>
-                                    </View>
-                                </View>
-                                <View style={{ gap: 6 }}>
-                                    <View style={{ borderRadius: 12, overflow: "hidden" }}>
-                                        <SettingSwitch
-                                            name="Emergency Escalation"
-                                            iconName={Icon.select({ ios: "exclamationmark.triangle.fill", android: import("@expo/material-symbols/front_hand.xml") })}
-                                            isLast={true}
-                                            value={emergencyEscalation}
-                                            onValueChange={(val) => {
-                                                setEmergencyEscalation(val);
-                                                savePrivacyField("emergencyEscalation", val);
-                                            }}
-                                        />
-                                    </View>
-                                    <View style={{ paddingHorizontal: 10 }}>
-                                        <Text style={[styles.caption, { color: currentTheme.textSecondary }]}>
-                                            Automatic alert routing to nearest response center if unresponsive.
-                                        </Text>
-                                    </View>
-                                </View>
-                            </View>
-                        </View>
-
-                        {/* APP SECTION */}
-                        <View>
-                            <Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>APP</Text>
-                            <View style={{ gap: 20 }}>
-                                <View style={{ gap: 6 }}>
-                                    <View style={{ borderRadius: 12, overflow: "hidden" }}>
-                                        <SettingSwitch
-                                            name="Use Metric Units"
-                                            iconName={Icon.select({ ios: "ruler.fill", android: import("@expo/material-symbols/straighten.xml") })}
-                                            isLast={true}
-                                            value={isMetric}
-                                            onValueChange={handleMetricToggle}
-                                        />
-                                        <SettingPageItem
-                                            name="Dark Theme"
-                                            iconName={Icon.select({ ios: "moon.fill", android: import("@expo/material-symbols/dark_mode.xml") })}
-                                            enabled={false}
-                                            isLast={true}
-                                        />
-                                    </View>
-                                    <View style={{ paddingHorizontal: 10 }}>
-                                        <Text style={[styles.caption, { color: currentTheme.textSecondary }]}>
-                                            You can change your theme in the Settings app.
-                                        </Text>
-                                    </View>
-                                </View>
-                                <View style={{ gap: 6 }}>
-                                    <View style={{ borderRadius: 12, overflow: "hidden" }}>
-                                        <SettingPageItem
-                                            name="Sign-out"
-                                            iconName={Icon.select({ ios: "power", android: import("@expo/material-symbols/power_settings_new.xml") })}
-                                            isLast={false}
-                                            onPress={() => {
-                                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                                                Alert.alert(
-                                                    "Are you sure you want to sign out?",
-                                                    "You will have to sign in again next time and your local caches will be cleared.",
-                                                    [
-                                                        { text: "No", style: "cancel" },
-                                                        {
-                                                            text: "Yes",
-                                                            style: "destructive",
-                                                            onPress: async () => {
-                                                                try {
-                                                                    // 1. Clear session and auth flags
-                                                                    await SecureStore.deleteItemAsync("is_logged_in");
-                                                                    await SecureStore.deleteItemAsync("security_session_token");
-
-                                                                    // 2. 🧼 CLEAR CACHED USER DATA ON LOGOUT
-                                                                    await SecureStore.deleteItemAsync("user_health_profile");
-                                                                    await SecureStore.deleteItemAsync("user_privacy_prefs");
-
-                                                                    // 3. Optional: Trigger Firebase sign out if you want to completely destroy the active session
-                                                                    // await auth.signOut();
-
-                                                                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                                                                    router.replace("/(auth)/login");
-                                                                } catch (error) {
-                                                                    Alert.alert("Error", "Could not complete sign out process safely.");
-                                                                    console.error(error);
-                                                                }
-                                                            },
-                                                        },
-                                                    ],
-                                                );
-                                            }}
-                                        />
-                                        <SettingPageItem
-                                            name="Delete Account"
-                                            iconName={Icon.select({ ios: "trash.fill", android: import("@expo/material-symbols/delete.xml") })}
-                                            isLast={true}
-                                            destructive={true}
-                                        />
-                                    </View>
-                                    <View style={{ paddingHorizontal: 10 }}>
-                                        <Text style={[styles.caption, { color: currentTheme.textSecondary }]}>
-                                            Permanently delete your account. This action cannot be undone.
-                                        </Text>
-                                    </View>
-                                </View>
-                            </View>
-                        </View>
-
-                        {/* FOOTER */}
-                        <View style={{ paddingHorizontal: 10 }}>
-                            <Text style={[styles.caption, { color: currentTheme.textSecondary }]}>
-                                v.26w28d4r07 • made with 💚 by safeseat team
-                            </Text>
-                        </View>
+                                    </FieldGroup.Section>
+                                </FieldGroup>
+                            </Column>
+                        </Host>
                     </View>
 
                     <PasswordVerifyModal
@@ -488,7 +291,7 @@ export default function EditProfile() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, width: "100%", padding: 20 },
+    container: { flex: 1, width: "100%", padding: 20, height: "100%" },
     pageHeader: { fontSize: 40, fontFamily: "Logo-Font" },
     infoLabel: { fontFamily: "Condensed-Bold", fontSize: 14, margin: 0, marginBottom: 8 },
     caption: { fontFeatureSettings: "Body-Medium", opacity: 0.8, fontSize: 13 },

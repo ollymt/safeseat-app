@@ -25,7 +25,7 @@ import SettingSwitch from "@/components/setting-switch";
 import PasswordVerifyModal from "@/components/PasswordVerifyModal";
 import { isSessionValid } from "@/utils/securitySession";
 
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../../../firebase";
 
 const { width: screenWidth } = Dimensions.get("window");
@@ -83,14 +83,20 @@ export default function Settings() {
 			}
 
 			// 2. FETCH FRESH BACKGROUND DATA FROM FIREBASE
+			// Find this block inside your loadAllUserData function:
 			const currentUser = auth.currentUser;
 			if (currentUser) {
+				// 1. Fetch User Profile Doc
 				const userDocRef = doc(db, "users", currentUser.uid);
 				const userDocSnap = await getDoc(userDocRef);
 
-				if (userDocSnap.exists()) {
-					const cloudData = userDocSnap.data();
+				// 🌟 2. Fetch the new Settings Doc from the subcollection
+				const settingsDocRef = doc(db, "users", currentUser.uid, "settings", "preferences");
+				const settingsDocSnap = await getDoc(settingsDocRef);
 
+				let cloudData: any = {};
+				if (userDocSnap.exists()) {
+					cloudData = userDocSnap.data();
 					if (cloudData.name) setUserName(cloudData.name);
 					if (cloudData.email) setUserEmail(cloudData.email);
 					if (cloudData.phone) setUserPhone(cloudData.phone);
@@ -99,9 +105,6 @@ export default function Settings() {
 					if (cloudData.weight) setWeight(cloudData.weight);
 					if (cloudData.bloodType) setBloodType(cloudData.bloodType);
 					if (cloudData.allergies) setAllergies(cloudData.allergies);
-					if (cloudData.consent !== undefined) setConsent(cloudData.consent);
-					if (cloudData.emergencyEscalation !== undefined) setEmergencyEscalation(cloudData.emergencyEscalation);
-					if (cloudData.useMetric !== undefined) setIsMetric(cloudData.useMetric);
 
 					const combinedProfile = {
 						name: cloudData.name || "",
@@ -114,11 +117,20 @@ export default function Settings() {
 						allergies: cloudData.allergies || "",
 					};
 					await SecureStore.setItemAsync("user_health_profile", JSON.stringify(combinedProfile));
+				}
+
+				// 🌟 3. Handle loading Privacy & Metric preferences from the subcollection
+				if (settingsDocSnap.exists()) {
+					const settingsData = settingsDocSnap.data();
+
+					if (settingsData.consent !== undefined) setConsent(settingsData.consent);
+					if (settingsData.emergencyEscalation !== undefined) setEmergencyEscalation(settingsData.emergencyEscalation);
+					if (settingsData.useMetric !== undefined) setIsMetric(settingsData.useMetric);
 
 					const combinedPrivacy = {
-						useMetric: cloudData.useMetric ?? true,
-						consent: cloudData.consent ?? true,
-						emergencyEscalation: cloudData.emergencyEscalation ?? true,
+						useMetric: settingsData.useMetric ?? true,
+						consent: settingsData.consent ?? true,
+						emergencyEscalation: settingsData.emergencyEscalation ?? true,
 					};
 					await SecureStore.setItemAsync("user_privacy_prefs", JSON.stringify(combinedPrivacy));
 				}
@@ -160,8 +172,11 @@ export default function Settings() {
 
 			const currentUser = auth.currentUser;
 			if (currentUser) {
-				const userDocRef = doc(db, "users", currentUser.uid);
-				await updateDoc(userDocRef, { [key]: val });
+				// 🌟 Point directly to users/{uid}/settings/preferences
+				const settingsDocRef = doc(db, "users", currentUser.uid, "settings", "preferences");
+
+				// setDoc with merge: true creates the document if missing, or updates it if present
+				await setDoc(settingsDocRef, { [key]: val }, { merge: true });
 			}
 		} catch (error) {
 			console.error("Failed to save privacy preference:", error);

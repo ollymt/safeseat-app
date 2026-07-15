@@ -66,7 +66,7 @@ export default function ChangePhone() {
                 flex: 1,
                 backgroundColor: currentTheme.background,
             }}
-            edges={["bottom", 'left', 'right']}
+            edges={['left', 'right']}
         >
             <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : "height"}

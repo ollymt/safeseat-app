@@ -1,35 +1,35 @@
 import { Themes } from "@/constants/theme";
-import { Button, Host, Icon, Row, Spacer, TextInput } from "@expo/ui";
+import { Button, Host, Icon, Row, TextInput } from "@expo/ui";
+import { GlassView } from "expo-glass-effect";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
 	Dimensions,
+	FlatList,
+	KeyboardAvoidingView,
+	Platform,
+	Pressable,
 	SectionList,
 	StyleSheet,
 	Text,
 	useColorScheme,
 	View,
-	KeyboardAvoidingView,
-	Platform,
-	Pressable,
-	FlatList, // 🌟 Added FlatList for Emergency Contacts
 } from "react-native";
-import { GlassView } from "expo-glass-effect";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { useCallback, useState, useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import * as SecureStore from "expo-secure-store";
+import * as Haptics from "expo-haptics";
 
 // Import doc, getDoc, collection, and getDocs
-import { doc, getDoc, collection, getDocs } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs } from "firebase/firestore";
 import { auth, db } from "../../../firebase";
 
-import SegmentedControl from '@expo/ui/community/segmented-control';
-import { buttonBorderShape, buttonStyle, controlSize } from "@expo/ui/swift-ui/modifiers";
-import ProfileCard from "@/components/profile-card";
-import AdaptiveSearchBar from "@/components/search-bar";
 import AddProfileModal from "@/components/add-profile-modal";
 import ContactCard from "@/components/contact-card";
+import ProfileCard from "@/components/profile-card";
+import SegmentedControl from '@expo/ui/community/segmented-control';
+import { buttonBorderShape, buttonStyle, controlSize } from "@expo/ui/swift-ui/modifiers";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -53,7 +53,7 @@ interface ProfileSection {
 	data: UserProfile[];
 }
 
-export default function Profiles() {
+export default function Everyone() {
 	const colorScheme = useColorScheme();
 	const activeScheme = colorScheme === "dark" ? "dark" : "light";
 	const currentTheme = Themes[activeScheme];
@@ -260,6 +260,7 @@ export default function Profiles() {
 						values={['Profiles', 'Emergency Contacts']}
 						selectedIndex={selectedIndex}
 						onChange={(event) => {
+							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft)
 							setSelectedIndex(event.nativeEvent.selectedSegmentIndex);
 						}}
 						style={{ paddingBottom: 10 }}
@@ -279,18 +280,22 @@ export default function Profiles() {
 							showsHorizontalScrollIndicator={false}
 
 							renderItem={({ item, index, section }) => (
+								// @ts-ignore
 								<View style={{ backgroundColor: currentTheme.element, overflow: "hidden", borderTopLeftRadius: index == 0 && 12, borderTopRightRadius: index == 0 && 12, borderBottomLeftRadius: index === section.data.length - 1 && 12, borderBottomRightRadius: index === section.data.length - 1 && 12 }}>
 									<ProfileCard
 										name={item.name}
 										img={item.img || "https://pbs.twimg.com/media/C8SFjSYWAAA6452.jpg"}
 										isLast={index === section.data.length - 1}
 										onPress={() => {
+											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
 											if (item.id === "owner-profile") {
-												router.push("/account-settings");
+												// @ts-ignore
+												router.push("/(tabs)/everyone/profile");
 											} else {
 												router.push({
-													pathname: "/profile-details",
-													params: { profileId: item.id }
+													// @ts-ignore
+													pathname: "/(tabs)/everyone/profile",
+													params: { profileId: item.id } // 🌟 Changed key from "id" to "profileId"
 												});
 											}
 										}}
@@ -338,7 +343,7 @@ export default function Profiles() {
 									borderBottomLeftRadius: index === emergencyContacts.length - 1 ? 12 : 0,
 									borderBottomRightRadius: index === emergencyContacts.length - 1 ? 12 : 0
 								}}>
-									<ContactCard name={item.name} phone={item.phone} order={item.hierarchy == 1 ? "primary" : item.hierarchy == 2 ? "secondary" : item.hierarchy == 3 ? "tertiary" : item.hierarchy == 4 ? "quaternary" : "quinary"} />
+									<ContactCard name={item.name} phone={item.phone} order={item.hierarchy == 1 ? "primary" : item.hierarchy == 2 ? "secondary" : item.hierarchy == 3 ? "tertiary" : item.hierarchy == 4 ? "quaternary" : "quinary"}/>
 								</View>
 							)}
 							ListEmptyComponent={() => (
@@ -370,7 +375,10 @@ export default function Profiles() {
 								{/* 🌟 Wrap the GlassView in a Pressable to handle taps anywhere on the bar */}
 								<Pressable
 									style={{ flex: 1 }}
-									onPress={() => searchInputRef.current?.focus()}
+									onPress={() => {
+										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft)
+										searchInputRef.current?.focus()
+									}}
 								>
 									<GlassView
 										style={{ flex: 1, borderRadius: 100, justifyContent: "center", paddingHorizontal: 20 }}
@@ -385,10 +393,12 @@ export default function Profiles() {
 												<TextInput
 													ref={searchInputRef} // 🌟 Attach the ref here
 													placeholder="Search"
+													// @ts-ignore
 													value={searchQuery}
 													onChangeText={setSearchQuery}
 													clearButtonMode="while-editing"
 													returnKeyType="search"
+													// @ts-ignore
 													style={{ flex: 1 }} // 🌟 Ensure the TextInput tries to take up remaining space
 												/>
 											</Row>
