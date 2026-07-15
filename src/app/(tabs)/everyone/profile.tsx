@@ -1,25 +1,25 @@
 import { Themes } from "@/constants/theme";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import {
-	Dimensions,
-	Image,
-	Keyboard,
-	Platform,
-	Pressable,
-	ScrollView,
-	StyleSheet,
-	Text,
-	useColorScheme,
-	View,
+  Dimensions,
+  Image,
+  Keyboard,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Button, Host, Picker, Row, TextInput } from "@expo/ui";
 import {
-	buttonBorderShape,
-	buttonStyle,
-	controlSize,
-	keyboardType,
+  buttonBorderShape,
+  buttonStyle,
+  controlSize,
+  keyboardType,
 } from "@expo/ui/swift-ui/modifiers";
 
 import TextBlock from "@/components/text-block";
@@ -661,12 +661,13 @@ export default function Profile() {
                             }
                             mode="date"
                             display="default"
-                            onChange={(event, date) => {
+                            onValueChange={(event, date) => {
                               setShowBirthdayPicker(false);
                               if (date) {
                                 setBirthday(date.toISOString());
                               }
                             }}
+                            onDismiss={() => setShowBirthdayPicker(false)}
                           />
                         )}
                       </>

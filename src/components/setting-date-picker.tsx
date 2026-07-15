@@ -4,12 +4,12 @@ import { DatePicker } from "@expo/ui/swift-ui";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useEffect, useRef, useState } from "react";
 import {
-    Platform,
-    Pressable,
-    StyleSheet,
-    Text,
-    useColorScheme,
-    View,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View,
 } from "react-native";
 
 type SettingDatePickerProps = {
@@ -180,12 +180,13 @@ export default function SettingDatePickerItem({
                 value={selectedBirthday}
                 mode="date"
                 display="default"
-                onChange={(event, date) => {
+                onValueChange={(event, date) => {
                   setShowAndroidPicker(false);
                   if (date) {
                     handleDateChange(date);
                   }
                 }}
+                onDismiss={() => setShowAndroidPicker(false)}
               />
             )}
           </>
