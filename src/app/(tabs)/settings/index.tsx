@@ -8,6 +8,7 @@ import {
 	Text,
 	useColorScheme,
 	View,
+	Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -52,7 +53,7 @@ export default function Settings() {
 	// 3. Privacy Preferences States
 	const [consent, setConsent] = useState<boolean>(true);
 	const [emergencyEscalation, setEmergencyEscalation] = useState<boolean>(true);
-	const [isMetric, setIsMetric] = useState(true);
+	const [isMetric, setIsMetric] = useState(false);
 
 	const [authModalVisible, setAuthModalVisible] = useState(false);
 	const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
@@ -74,61 +75,41 @@ export default function Settings() {
 				if (savedHealth.allergies) setAllergies(savedHealth.allergies);
 			}
 
+			// 🌟 Inside loadAllUserData()...
+
+			// 1. First, load your local settings as normal.
 			const savedPrivacyString = await SecureStore.getItemAsync("user_privacy_prefs");
 			if (savedPrivacyString) {
 				const savedPrivacy = JSON.parse(savedPrivacyString);
 				if (savedPrivacy.consent !== undefined) setConsent(savedPrivacy.consent);
 				if (savedPrivacy.emergencyEscalation !== undefined) setEmergencyEscalation(savedPrivacy.emergencyEscalation);
+
+				// This keeps loading your local setting perfectly!
 				if (savedPrivacy.useMetric !== undefined) setIsMetric(savedPrivacy.useMetric);
 			}
 
-			// 2. FETCH FRESH BACKGROUND DATA FROM FIREBASE
-			// Find this block inside your loadAllUserData function:
 			const currentUser = auth.currentUser;
 			if (currentUser) {
-				// 1. Fetch User Profile Doc
 				const userDocRef = doc(db, "users", currentUser.uid);
 				const userDocSnap = await getDoc(userDocRef);
 
-				// 🌟 2. Fetch the new Settings Doc from the subcollection
 				const settingsDocRef = doc(db, "users", currentUser.uid, "settings", "preferences");
 				const settingsDocSnap = await getDoc(settingsDocRef);
 
-				let cloudData: any = {};
-				if (userDocSnap.exists()) {
-					cloudData = userDocSnap.data();
-					if (cloudData.name) setUserName(cloudData.name);
-					if (cloudData.email) setUserEmail(cloudData.email);
-					if (cloudData.phone) setUserPhone(cloudData.phone);
-					if (cloudData.birthday) setBirthday(cloudData.birthday);
-					if (cloudData.height) setHeight(cloudData.height);
-					if (cloudData.weight) setWeight(cloudData.weight);
-					if (cloudData.bloodType) setBloodType(cloudData.bloodType);
-					if (cloudData.allergies) setAllergies(cloudData.allergies);
+				// ... (keep your profile/health data logic the same)
 
-					const combinedProfile = {
-						name: cloudData.name || "",
-						email: cloudData.email || "",
-						phone: cloudData.phone || "",
-						birthday: cloudData.birthday || "",
-						height: cloudData.height || "",
-						weight: cloudData.weight || "",
-						bloodType: cloudData.bloodType || "",
-						allergies: cloudData.allergies || "",
-					};
-					await SecureStore.setItemAsync("user_health_profile", JSON.stringify(combinedProfile));
-				}
-
-				// 🌟 3. Handle loading Privacy & Metric preferences from the subcollection
+				// 2. Fetch privacy settings from Firebase, but EXCLUDE "useMetric"
 				if (settingsDocSnap.exists()) {
 					const settingsData = settingsDocSnap.data();
 
 					if (settingsData.consent !== undefined) setConsent(settingsData.consent);
 					if (settingsData.emergencyEscalation !== undefined) setEmergencyEscalation(settingsData.emergencyEscalation);
-					if (settingsData.useMetric !== undefined) setIsMetric(settingsData.useMetric);
+
+					// 🌟 FIXED: We read the local cache value for metric, NOT the cloud data
+					const currentLocalPrivacyRaw = await SecureStore.getItemAsync("user_privacy_prefs");
+					const currentLocalPrivacy = currentLocalPrivacyRaw ? JSON.parse(currentLocalPrivacyRaw) : {};
 
 					const combinedPrivacy = {
-						useMetric: settingsData.useMetric ?? true,
 						consent: settingsData.consent ?? true,
 						emergencyEscalation: settingsData.emergencyEscalation ?? true,
 					};
@@ -230,117 +211,25 @@ export default function Settings() {
 	return (
 		<SafeAreaView
 			style={{ flex: 1, backgroundColor: currentTheme.background }}
-			edges={["left", "right"]}
+			edges={Platform.OS == "android" ? ["left", "right", "top"] : ["left", "right"]}
 		>
-			<ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={true} bounces={true}>
-				<View style={[styles.container, { marginTop: -40 }]}>
+			<ScrollView contentContainerStyle={[{ flexGrow: 1 }, Platform.OS == "ios" ? { marginTop: 40 } : { marginTop: 6 }]} showsVerticalScrollIndicator={true} bounces={true}>
+				<View style={[styles.container, { borderWidth: 0, borderColor: currentTheme.text}]}>
 					<Text style={[styles.pageHeader, { color: currentTheme.text }]}>Settings</Text>
-					<View style={{ gap: 20, marginTop: 10, width: "100%" }}>
+					<View style={{ gap: 20, marginTop: 0, width: "100%" }}>
 
 						{/* ACCOUNT SECTION */}
 						<View>
 							<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>ACCOUNT</Text>
 							<View style={{ borderRadius: 12, overflow: "hidden" }}>
 								<SettingPageItem
-									name="Name"
-									iconName={Icon.select({ ios: "person.fill", android: import("@expo/material-symbols/person.xml") })}
-									value={userName}
-								/>
-								<SettingPageItem
-									name="Email"
-									iconName={Icon.select({ ios: "at", android: import("@expo/material-symbols/alternate_email.xml") })}
-									value={userEmail}
-									onPress={() => {
-										executeSecureAction(() => {
-											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-											router.push("/(tabs)/settings/changeemail");
-										});
-									}}
-								/>
-								<SettingPageItem
-									name="Phone Number"
-									iconName={Icon.select({ ios: "phone.fill", android: import("@expo/material-symbols/phone_enabled.xml") })}
-									value={userPhone}
-									onPress={() => {
-										executeSecureAction(() => {
-											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-											router.push("/(tabs)/settings/changephone");
-										});
-									}}
-								/>
-								<SettingPageItem
 									name="Password"
 									iconName={Icon.select({ ios: "asterisk", android: import("@expo/material-symbols/asterisk.xml") })}
 									showChevron={true}
+									isLast={true}
 									onPress={() => {
 										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 										router.push("/(tabs)/settings/changepass");
-									}}
-								/>
-								<SettingPageItem
-									name="Emergency Contacts"
-									iconName={Icon.select({ ios: "person.crop.circle.fill", android: import("@expo/material-symbols/account_circle.xml") })}
-									isLast={true}
-									showChevron={true}
-									onPress={() => {
-										executeSecureAction(() => {
-											console.log("Opening econ editor freely...");
-										});
-									}}
-								/>
-							</View>
-						</View>
-
-						{/* HEALTH SECTION */}
-						<View>
-							<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>HEALTH</Text>
-							<View style={{ borderRadius: 12, overflow: "hidden" }}>
-								<SettingDatePickerItem
-									name="Birthday"
-									iconName={Icon.select({ ios: "birthday.cake.fill", android: import("@expo/material-symbols/cake.xml") })}
-									value={birthday}
-									onValueChange={(dateStr) => {
-										setBirthday(dateStr);
-										saveHealthField("birthday", dateStr);
-									}}
-								/>
-								<SettingPageItem
-									name="Height"
-									iconName={Icon.select({ ios: "lines.measurement.vertical", android: import("@expo/material-symbols/height.xml") })}
-									value={getDisplayHeight()}
-								/>
-								<SettingPageItem
-									name="Weight"
-									iconName={Icon.select({ ios: "scalemass.fill", android: import("@expo/material-symbols/scale.xml") })}
-									value={getDisplayWeight()}
-								/>
-								<SettingPicker
-									name="Blood Type"
-									iconName={Icon.select({ ios: "drop.fill", android: import("@expo/material-symbols/opacity.xml") })}
-									isLast={false}
-									value={bloodType}
-									isOpen={bloodPickerVisible}
-									onClose={() => setBloodPickerVisible(false)}
-									onValueChange={(type) => {
-										setBloodType(type);
-										saveHealthField("bloodType", type);
-									}}
-									onPress={() => {
-										executeSecureAction(() => {
-											setBloodPickerVisible(true);
-										});
-									}}
-								/>
-								<SettingPageItem
-									name="Allergies"
-									iconName={Icon.select({ ios: "nosign", android: import("@expo/material-symbols/block.xml") })}
-									value={allergies}
-									showChevron={true}
-									isLast={true}
-									onPress={() => {
-										executeSecureAction(() => {
-											console.log("Opening allergies editor freely...");
-										});
 									}}
 								/>
 							</View>

@@ -14,6 +14,7 @@ export default function TabLayout() {
       <NativeTabs
           // Tints the active tab icons
           tintColor={activeScheme == "dark" ? "#BBFFB3" : "#25601D"}
+          labelVisibilityMode="labeled"
       >
         {/* Main Home Tab */}
         <NativeTabs.Trigger name="home">

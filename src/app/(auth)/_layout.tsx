@@ -9,6 +9,7 @@ export default function AuthLayout() {
         title: "", // Erase the text title completely
         headerTintColor: "#000000", // The color of your floating back arrow (e.g., black)
         headerShadowVisible: false, // Removes any potential bottom border lines
+        animation: "slide_from_right",
       }}
     >
       {/* The login screen will be the default page here */}

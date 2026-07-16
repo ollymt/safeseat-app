@@ -578,10 +578,10 @@ export default function Profile() {
 	return (
 		<SafeAreaView
 			style={{ flex: 1, backgroundColor: currentTheme.background }}
-			edges={['left', 'right']}
+			edges={Platform.OS == "ios" ? ['left', 'right'] : ['left', 'right', "top"]}
 		>
 			<ScrollView
-				contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
+				contentContainerStyle={[{ flexGrow: 1, paddingBottom: 40 }, Platform.OS == "android" && { marginTop: 50 }]}
 				showsVerticalScrollIndicator={true}
 				bounces={true}
 				automaticallyAdjustKeyboardInsets={true}
@@ -708,7 +708,7 @@ export default function Profile() {
 						<Text style={{ fontFamily: "Condensed-Bold", color: currentTheme.text, fontSize: 24, marginBottom: 10 }}>HEALTH INFORMATION</Text>
 
 						<View style={{ flexDirection: "row", gap: 10, borderColor: "#000", borderWidth: 0 }}>
-							<View style={[styles.fieldContainer, { flex: 2.5 }]}>
+							<View style={[styles.fieldContainer, { flex: 2.2 }]}>
 								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
 									BIRTHDAY
 								</Text>
@@ -755,13 +755,13 @@ export default function Profile() {
 									<TextBlock text={getFormattedDate()} />
 								}
 							</View>
-							<View style={[styles.fieldContainer, { flex: 1 }]}>
+							<View style={[styles.fieldContainer, { flex: .75 }]}>
 								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
 									AGE
 								</Text>
 								<TextBlock text={getAge()} />
 							</View>
-							<View style={[styles.fieldContainer, { flex: 1.5 }]}>
+							<View style={[styles.fieldContainer, { flex: 1.75 }]}>
 								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
 									ZODIAC
 								</Text>
