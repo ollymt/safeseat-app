@@ -97,7 +97,7 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
                                 })}
                             />
                         </Button>
-                        <Spacer />
+                        <Spacer flexible />
                         <Button
                             onPress={handleVerify}
                             variant={passwordInput && !isLoading ? "filled" : "outlined"}

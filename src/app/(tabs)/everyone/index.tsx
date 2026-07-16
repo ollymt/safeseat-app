@@ -3,20 +3,21 @@ import { Button, Host, Icon, Row, TextInput } from "@expo/ui";
 import { GlassView } from "expo-glass-effect";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
-  Dimensions,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  SectionList,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
+	Dimensions,
+	FlatList,
+	KeyboardAvoidingView,
+	Platform,
+	Pressable,
+	SectionList,
+	StyleSheet,
+	Text,
+	useColorScheme,
+	Keyboard,
+	View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState, useEffect } from "react";
 
 import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store";
@@ -30,9 +31,9 @@ import ContactCard from "@/components/contact-card";
 import ProfileCard from "@/components/profile-card";
 import SegmentedControl from "@expo/ui/community/segmented-control";
 import {
-  buttonBorderShape,
-  buttonStyle,
-  controlSize,
+	buttonBorderShape,
+	buttonStyle,
+	controlSize,
 } from "@expo/ui/swift-ui/modifiers";
 
 const { width: screenWidth } = Dimensions.get("window");
@@ -276,6 +277,24 @@ export default function Everyone() {
 
 	const isiOS = Platform.OS == "ios"
 
+	const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+
+	useEffect(() => {
+		const keyboardDidShowListener = Keyboard.addListener(
+			'keyboardDidShow',
+			() => setKeyboardVisible(true)
+		);
+		const keyboardDidHideListener = Keyboard.addListener(
+			'keyboardDidHide',
+			() => setKeyboardVisible(false)
+		);
+
+		return () => {
+			keyboardDidShowListener.remove();
+			keyboardDidHideListener.remove();
+		};
+	}, []);
+
 	return (
 		<SafeAreaView
 			style={{ flex: 1, backgroundColor: currentTheme.background }}
@@ -439,10 +458,13 @@ export default function Everyone() {
 				{/* 🌟 4. ABSOLUTE POSITIONED BAR (SHARED BY BOTH INDICES FOR UNIFORM LAYOUT) */}
 				<KeyboardAvoidingView
 					behavior={Platform.OS === "ios" ? "padding" : undefined}
-					keyboardVerticalOffset={50}
+					keyboardVerticalOffset={Platform.OS == "ios" ? 50 : 0}
 					style={{
 						position: "absolute",
-						bottom: isiOS ? 100 : 20,
+						// 🌟 DYNAMIC BOTTOM VALUE
+						bottom: isKeyboardVisible
+							? (Platform.OS == "ios" ? 116 : 40)
+							: (Platform.OS === "ios" ? 95 : 15),
 						left: 20,
 						right: 20,
 						zIndex: 10,
@@ -525,26 +547,26 @@ export default function Everyone() {
 							<>
 								{/* Keeps the button pushed cleanly to the right side */}
 								<View style={{ flex: 1 }} />
-								<Host matchContents ignoreSafeArea="keyboard">
-									<Button
-										variant="outlined"
-										modifiers={[
-											controlSize("large"),
-											buttonStyle("glass"),
-											buttonBorderShape("circle"),
-										]}
-										onPress={() => {
-											setAddProfileVisible(true);
-										}}
-									>
-										<Icon
-											name={Icon.select({
-												ios: "plus",
-												android: import("@expo/material-symbols/add.xml"),
-											})}
-										/>
-									</Button>
-								</Host>
+									<Host matchContents ignoreSafeArea="keyboard">
+										<Button
+											variant={Platform.OS == "ios" ? "outlined" : "filled"}
+											modifiers={[
+												controlSize("large"),
+												buttonStyle("glass"),
+												buttonBorderShape("circle"),
+											]}
+											onPress={() => {
+												setAddProfileVisible(true);
+											}}
+										>
+											<Icon
+												name={Icon.select({
+													ios: "plus",
+													android: import("@expo/material-symbols/add.xml"),
+												})}
+											/>
+										</Button>
+									</Host>
 							</>
 						)}
 					</View>

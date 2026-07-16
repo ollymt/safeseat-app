@@ -2,27 +2,27 @@ import Button from "@/components/button";
 import { Themes } from "@/constants/theme";
 import { Column, FieldGroup, Host, TextInput } from "@expo/ui";
 import {
-    frame,
-    scrollDisabled,
-    submitLabel,
+  frame,
+  scrollDisabled,
+  submitLabel,
 } from "@expo/ui/swift-ui/modifiers";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import {
-    EmailAuthProvider,
-    reauthenticateWithCredential,
-    updatePassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
 } from "firebase/auth";
 import { useState } from "react";
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    useColorScheme,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth } from "../../../firebase";
@@ -127,81 +127,74 @@ export default function ChangePass() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
-          showsVerticalScrollIndicator={false}
-          bounces={true}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={changepass.container}>
-            <View style={changepass.logoSection}>
-              <Text
-                style={[
-                  changepass.loginlogo,
-                  { color: currentTheme.text, textAlign: "center" },
-                ]}
-              >
-                Change Password
-              </Text>
-            </View>
+        <View style={[changepass.container, { borderWidth: 3, borderColor: currentTheme.text }, Platform.OS == "android" ? { marginTop: 60 } : { marginTop: 50 }]}>
+          <View style={changepass.logoSection}>
+            <Text
+              style={[
+                changepass.loginlogo,
+                { color: currentTheme.text, textAlign: "center" },
+              ]}
+            >
+              Change Password
+            </Text>
+          </View>
 
-            <View style={changepass.formSection}>
-              <Host
-                style={{
-                  borderColor: "#000",
-                  borderWidth: 0,
-                  height: 200, // 3. Changing from flex: 0.33 to a static height blocks collapse!
-                  width: "100%",
-                }}
+          <View style={changepass.formSection}>
+            <Host
+              style={{
+                borderColor: "#000",
+                borderWidth: 0,
+                height: 200, // 3. Changing from flex: 0.33 to a static height blocks collapse!
+                width: "100%",
+              }}
+            >
+              <Column
+                spacing={16}
+                modifiers={[frame({ maxWidth: Infinity })]}
               >
-                <Column
-                  spacing={16}
-                  modifiers={[frame({ maxWidth: Infinity })]}
-                >
-                  <FieldGroup modifiers={[scrollDisabled()]}>
-                    {/* 🛠️ Map each input field to its respective state function hooks */}
-                    <TextInput
-                      secureTextEntry={true}
-                      placeholder="Enter Old Password"
-                      defaultValue={oldPassword}
-                      modifiers={[submitLabel("next")]}
-                      onChangeText={setOldPassword}
-                    />
-                    <TextInput
-                      secureTextEntry={true}
-                      placeholder="Enter New Password"
-                      defaultValue={newPassword}
-                      modifiers={[submitLabel("next")]}
-                      onChangeText={setNewPassword}
-                    />
-                    <TextInput
-                      secureTextEntry={true}
-                      placeholder="Confirm New Password"
-                      defaultValue={confirmPassword}
-                      modifiers={[submitLabel("done")]}
-                      onChangeText={setConfirmPassword}
-                    />
-                  </FieldGroup>
-                </Column>
-              </Host>
-              <View style={{ paddingHorizontal: 20, marginTop: 10 }}>
-                {/* 🛠️ Connect function and handle loading states */}
-                <Button
-                  label={isLoading ? "Updating..." : "Change Password"}
-                  variant="primary"
-                  fullWidth={true}
-                  onPress={handleChangePassword}
-                  enabled={
-                    !isLoading &&
-                    oldPassword != "" &&
-                    newPassword != "" &&
-                    confirmPassword != ""
-                  }
-                />
-              </View>
+                <FieldGroup modifiers={[scrollDisabled()]}>
+                  {/* 🛠️ Map each input field to its respective state function hooks */}
+                  <TextInput
+                    secureTextEntry={true}
+                    placeholder="Enter Old Password"
+                    defaultValue={oldPassword}
+                    modifiers={[submitLabel("next")]}
+                    onChangeText={setOldPassword}
+                  />
+                  <TextInput
+                    secureTextEntry={true}
+                    placeholder="Enter New Password"
+                    defaultValue={newPassword}
+                    modifiers={[submitLabel("next")]}
+                    onChangeText={setNewPassword}
+                  />
+                  <TextInput
+                    secureTextEntry={true}
+                    placeholder="Confirm New Password"
+                    defaultValue={confirmPassword}
+                    modifiers={[submitLabel("done")]}
+                    onChangeText={setConfirmPassword}
+                  />
+                </FieldGroup>
+              </Column>
+            </Host>
+            <View style={{ paddingHorizontal: 20, marginTop: 10 }}>
+              {/* 🛠️ Connect function and handle loading states */}
+              <Button
+                label={isLoading ? "Updating..." : "Change Password"}
+                variant="primary"
+                fullWidth={true}
+                onPress={handleChangePassword}
+                enabled={
+                  !isLoading &&
+                  oldPassword != "" &&
+                  newPassword != "" &&
+                  confirmPassword != ""
+                }
+              />
             </View>
           </View>
-        </ScrollView>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

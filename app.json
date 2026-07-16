@@ -18,7 +18,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.ollymt.safeseatapp"
+      "package": "com.ollymt.safeseatapp",
+      "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
       "output": "static",
