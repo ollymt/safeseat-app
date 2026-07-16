@@ -3,16 +3,16 @@ import { Button, Host, Icon, Row, TextInput } from "@expo/ui";
 import { GlassView } from "expo-glass-effect";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
-	Dimensions,
-	FlatList,
-	KeyboardAvoidingView,
-	Platform,
-	Pressable,
-	SectionList,
-	StyleSheet,
-	Text,
-	useColorScheme,
-	View,
+  Dimensions,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  SectionList,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -30,9 +30,9 @@ import ContactCard from "@/components/contact-card";
 import ProfileCard from "@/components/profile-card";
 import SegmentedControl from "@expo/ui/community/segmented-control";
 import {
-	buttonBorderShape,
-	buttonStyle,
-	controlSize,
+  buttonBorderShape,
+  buttonStyle,
+  controlSize,
 } from "@expo/ui/swift-ui/modifiers";
 
 const { width: screenWidth } = Dimensions.get("window");
