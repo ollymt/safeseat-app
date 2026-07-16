@@ -1,31 +1,29 @@
 // components/AddProfileModal.tsx
 import { Themes } from "@/constants/theme";
 import {
-    BottomSheet,
-    Button,
-    Column,
-    FieldGroup,
-    Host,
-    Icon,
-    Picker,
-    Row,
-    Spacer,
-    Text,
-    TextInput,
+  BottomSheet,
+  Button,
+  Column,
+  FieldGroup,
+  Host,
+  Icon,
+  Picker,
+  Row,
+  Spacer,
+  Text,
+  TextInput,
 } from "@expo/ui";
 import {
-    ConfirmationDialog,
-    DatePicker,
-    Group,
-    Button as SwiftButton,
+  ConfirmationDialog,
+  DatePicker,
+  Button as SwiftButton,
 } from "@expo/ui/swift-ui";
 import {
-    buttonBorderShape,
-    buttonStyle,
-    controlSize,
-    presentationBackground,
-    presentationDetents,
-    submitLabel,
+  buttonBorderShape,
+  buttonStyle,
+  controlSize,
+  presentationDetents,
+  submitLabel,
 } from "@expo/ui/swift-ui/modifiers";
 import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store"; // 🌟 Import SecureStore
@@ -320,6 +318,285 @@ export default function AddProfileModal({
     }
   };
 
+  // 🌟 Modal body. `Column` is a native Compose view on Android (and SwiftUI on iOS),
+  // so it must be a direct child of <Host>/<BottomSheet> — no plain RN <View> in between.
+  // `style.backgroundColor` here is a cross-platform prop that Column translates to the
+  // right native modifier on each platform, so no Group/View wrapper is needed at all.
+  const renderModalContent = () => (
+    <Column
+      spacing={16}
+      alignment="center"
+      style={{
+        backgroundColor: activeScheme === "dark" ? "#1C1C1E" : "#F2F2F6",
+      }}
+    >
+      {/* 🧭 Header Navigation Row */}
+      <Row>
+        {/* 🌟 ConfirmationDialog is a SwiftUI-only component (no Android native view).
+                On Android we fall back to RN's Alert.alert for the same discard-confirm flow. */}
+        {Platform.OS === "ios" ? (
+          <ConfirmationDialog
+            title="Discard your progress?"
+            isPresented={discardConfirmVisible}
+            onIsPresentedChange={setDiscardConfirmVisible}
+            titleVisibility="visible"
+          >
+            <ConfirmationDialog.Trigger>
+              <Button
+                variant="outlined"
+                onPress={() => {
+                  if (hasUnsavedChanges) {
+                    setDiscardConfirmVisible(true);
+                  } else {
+                    onClose();
+                  }
+                }}
+                disabled={isLoading}
+                modifiers={[
+                  buttonStyle("glass"),
+                  controlSize("large"),
+                  buttonBorderShape("circle"),
+                ]}
+              >
+                <Icon
+                  name={Icon.select({
+                    ios: "xmark",
+                    android: import("@expo/material-symbols/close.xml"),
+                  })}
+                />
+              </Button>
+            </ConfirmationDialog.Trigger>
+            <ConfirmationDialog.Actions>
+              <SwiftButton
+                label="Discard"
+                role="destructive"
+                onPress={handleResetAndClose}
+              />
+              <SwiftButton
+                label="Cancel"
+                onPress={() => setDiscardConfirmVisible(false)}
+              />
+            </ConfirmationDialog.Actions>
+          </ConfirmationDialog>
+        ) : (
+          <Button
+            variant="outlined"
+            onPress={() => {
+              if (hasUnsavedChanges) {
+                Alert.alert("Discard your progress?", undefined, [
+                  {
+                    text: "Cancel",
+                    style: "cancel",
+                    onPress: () => setDiscardConfirmVisible(false),
+                  },
+                  {
+                    text: "Discard",
+                    style: "destructive",
+                    onPress: handleResetAndClose,
+                  },
+                ]);
+              } else {
+                onClose();
+              }
+            }}
+            disabled={isLoading}
+            modifiers={[
+              buttonStyle("glass"),
+              controlSize("large"),
+              buttonBorderShape("circle"),
+            ]}
+          >
+            <Icon
+              name={Icon.select({
+                ios: "xmark",
+                android: import("@expo/material-symbols/close.xml"),
+              })}
+            />
+          </Button>
+        )}
+        <Spacer />
+        <Button
+          onPress={handleSave}
+          variant={isFormInvalid ? "outlined" : "filled"}
+          modifiers={[
+            isFormInvalid
+              ? buttonStyle("glass")
+              : buttonStyle("borderedProminent"),
+            controlSize("large"),
+            buttonBorderShape("circle"),
+          ]}
+          disabled={isLoading || isFormInvalid}
+        >
+          <Icon
+            name={Icon.select({
+              ios: "checkmark",
+              android: import("@expo/material-symbols/check.xml"),
+            })}
+          />
+        </Button>
+      </Row>
+
+      <Column spacing={0} alignment="center">
+        <Text
+          textStyle={{
+            fontSize: 36,
+            color: currentTheme.text,
+            fontWeight: "bold",
+            textAlign: "center",
+          }}
+        >
+          New Profile
+        </Text>
+        <FieldGroup>
+          <FieldGroup.Section>
+            <TextInput
+              placeholder="Name"
+              editable={!isLoading}
+              onChangeText={setName}
+              // @ts-ignore
+              value={name}
+              modifiers={[submitLabel("next")]}
+              // @ts-ignore
+              textAlign="left"
+            />
+            <TextInput
+              placeholder="Icon URL (optional)"
+              editable={!isLoading}
+              onChangeText={setIcon}
+              // @ts-ignore
+              value={icon}
+              modifiers={[submitLabel("next")]}
+              // @ts-ignore
+              textAlign="left"
+            />
+            <TextInput
+              placeholder="Email"
+              editable={!isLoading}
+              onChangeText={setEmail}
+              // @ts-ignore
+              value={email}
+              modifiers={[submitLabel("next")]}
+              keyboardType="email-address"
+              // @ts-ignore
+              textAlign="left"
+            />
+            <TextInput
+              placeholder="Phone"
+              editable={!isLoading}
+              onChangeText={setPhone}
+              // @ts-ignore
+              value={phone}
+              modifiers={[submitLabel("next")]}
+              keyboardType="phone-pad"
+              // @ts-ignore
+              textAlign="left"
+            />
+            {Platform.OS == "ios" && (
+              <>
+                <DatePicker
+                  title="Birthday"
+                  selection={birthday}
+                  onDateChange={(date) => {
+                    setBirthday(date);
+                  }}
+                />
+              </>
+            )}
+          </FieldGroup.Section>
+
+          <FieldGroup.Section>
+            {isMetric ? (
+              <Row>
+                <TextInput
+                  placeholder="Height (cm)"
+                  editable={!isLoading}
+                  onChangeText={setHeightCm}
+                  // @ts-ignore
+                  value={heightCm}
+                  modifiers={[submitLabel("next")]}
+                  keyboardType="number-pad"
+                  // @ts-ignore
+                  textAlign="left"
+                />
+                <TextInput
+                  placeholder="Weight (kg)"
+                  editable={!isLoading}
+                  onChangeText={setWeightKg}
+                  // @ts-ignore
+                  value={weightKg}
+                  modifiers={[submitLabel("next")]}
+                  keyboardType="number-pad"
+                  // @ts-ignore
+                  textAlign="left"
+                />
+              </Row>
+            ) : (
+              <>
+                <Row>
+                  <TextInput
+                    placeholder="Height (ft)"
+                    editable={!isLoading}
+                    onChangeText={setHeightFt}
+                    // @ts-ignore
+                    value={heightFt}
+                    modifiers={[submitLabel("next")]}
+                    keyboardType="number-pad"
+                    // @ts-ignore
+                    textAlign="left"
+                  />
+                  <TextInput
+                    placeholder="Height (in)"
+                    editable={!isLoading}
+                    onChangeText={setHeightIn}
+                    // @ts-ignore
+                    value={heightIn}
+                    modifiers={[submitLabel("next")]}
+                    keyboardType="number-pad"
+                    // @ts-ignore
+                    textAlign="left"
+                  />
+                </Row>
+                <TextInput
+                  placeholder="Weight (lb)"
+                  editable={!isLoading}
+                  onChangeText={setWeightLb}
+                  // @ts-ignore
+                  value={weightLb}
+                  modifiers={[submitLabel("next")]}
+                  keyboardType="number-pad"
+                  // @ts-ignore
+                  textAlign="left"
+                />
+              </>
+            )}
+            {/* 🌟 Added alignment="center" to keep text and Picker on the same line */}
+            <Row alignment="center">
+              <Text>Blood Type</Text>
+              <Spacer />
+              <Picker
+                selectedValue={bloodType}
+                onValueChange={setBloodType}
+                appearance="menu"
+              >
+                {bloodTypes.map((b) => (
+                  <Picker.Item key={b.value} label={b.label} value={b.value} />
+                ))}
+              </Picker>
+            </Row>
+          </FieldGroup.Section>
+        </FieldGroup>
+        {/* 🌟 Inline visual alert when user selects an age under 18 */}
+        {isUnder18 && birthday && (
+          <Text
+            textStyle={{ fontSize: 13, color: "#FF3B30", textAlign: "center" }}
+          >
+            Profile holder must be at least 18 years old to use SafeSeat.
+          </Text>
+        )}
+      </Column>
+    </Column>
+  );
+
   return (
     <Host matchContents>
       <BottomSheet
@@ -327,290 +604,15 @@ export default function AddProfileModal({
         onDismiss={onClose}
         showDragIndicator={false}
         snapPoints={["full"]}
+        // 🌟 Sheet-presentation modifiers go on BottomSheet itself (its documented "modifiers"
+        // escape hatch), not on a wrapping <Group>. iOS only — Android sizing is handled by snapPoints.
+        modifiers={
+          Platform.OS === "ios"
+            ? [presentationDetents(["medium", "large"])]
+            : undefined
+        }
       >
-        <Group
-          modifiers={[
-            presentationDetents(["medium", "large"]),
-            activeScheme == "dark"
-              ? presentationBackground("#1C1C1E")
-              : presentationBackground("#F2F2F6"),
-          ]}
-        >
-          <Column spacing={16} alignment="center">
-            {/* 🧭 Header Navigation Row */}
-            <Row>
-              {/* 🌟 ConfirmationDialog is a SwiftUI-only component (no Android native view).
-                                On Android we fall back to RN's Alert.alert for the same discard-confirm flow. */}
-              {Platform.OS === "ios" ? (
-                <ConfirmationDialog
-                  title="Discard your progress?"
-                  isPresented={discardConfirmVisible}
-                  onIsPresentedChange={setDiscardConfirmVisible}
-                  titleVisibility="visible"
-                >
-                  <ConfirmationDialog.Trigger>
-                    <Button
-                      variant="outlined"
-                      onPress={() => {
-                        if (hasUnsavedChanges) {
-                          setDiscardConfirmVisible(true);
-                        } else {
-                          onClose();
-                        }
-                      }}
-                      disabled={isLoading}
-                      modifiers={[
-                        buttonStyle("glass"),
-                        controlSize("large"),
-                        buttonBorderShape("circle"),
-                      ]}
-                    >
-                      <Icon
-                        name={Icon.select({
-                          ios: "xmark",
-                          android: import("@expo/material-symbols/close.xml"),
-                        })}
-                      />
-                    </Button>
-                  </ConfirmationDialog.Trigger>
-                  <ConfirmationDialog.Actions>
-                    <SwiftButton
-                      label="Discard"
-                      role="destructive"
-                      onPress={handleResetAndClose}
-                    />
-                    <SwiftButton
-                      label="Cancel"
-                      onPress={() => setDiscardConfirmVisible(false)}
-                    />
-                  </ConfirmationDialog.Actions>
-                </ConfirmationDialog>
-              ) : (
-                <Button
-                  variant="outlined"
-                  onPress={() => {
-                    if (hasUnsavedChanges) {
-                      Alert.alert("Discard your progress?", undefined, [
-                        {
-                          text: "Cancel",
-                          style: "cancel",
-                          onPress: () => setDiscardConfirmVisible(false),
-                        },
-                        {
-                          text: "Discard",
-                          style: "destructive",
-                          onPress: handleResetAndClose,
-                        },
-                      ]);
-                    } else {
-                      onClose();
-                    }
-                  }}
-                  disabled={isLoading}
-                  modifiers={[
-                    buttonStyle("glass"),
-                    controlSize("large"),
-                    buttonBorderShape("circle"),
-                  ]}
-                >
-                  <Icon
-                    name={Icon.select({
-                      ios: "xmark",
-                      android: import("@expo/material-symbols/close.xml"),
-                    })}
-                  />
-                </Button>
-              )}
-              <Spacer />
-              <Button
-                onPress={handleSave}
-                variant={isFormInvalid ? "outlined" : "filled"}
-                modifiers={[
-                  isFormInvalid
-                    ? buttonStyle("glass")
-                    : buttonStyle("borderedProminent"),
-                  controlSize("large"),
-                  buttonBorderShape("circle"),
-                ]}
-                disabled={isLoading || isFormInvalid}
-              >
-                <Icon
-                  name={Icon.select({
-                    ios: "checkmark",
-                    android: import("@expo/material-symbols/check.xml"),
-                  })}
-                />
-              </Button>
-            </Row>
-
-            <Column spacing={0} alignment="center">
-              <Text
-                textStyle={{
-                  fontSize: 36,
-                  color: currentTheme.text,
-                  fontWeight: "bold",
-                  textAlign: "center",
-                }}
-              >
-                New Profile
-              </Text>
-              <FieldGroup>
-                <FieldGroup.Section>
-                  <TextInput
-                    placeholder="Name"
-                    editable={!isLoading}
-                    onChangeText={setName}
-                    // @ts-ignore
-                    value={name}
-                    modifiers={[submitLabel("next")]}
-                    // @ts-ignore
-                    textAlign="left"
-                  />
-                  <TextInput
-                    placeholder="Icon URL (optional)"
-                    editable={!isLoading}
-                    onChangeText={setIcon}
-                    // @ts-ignore
-                    value={icon}
-                    modifiers={[submitLabel("next")]}
-                    // @ts-ignore
-                    textAlign="left"
-                  />
-                  <TextInput
-                    placeholder="Email"
-                    editable={!isLoading}
-                    onChangeText={setEmail}
-                    // @ts-ignore
-                    value={email}
-                    modifiers={[submitLabel("next")]}
-                    keyboardType="email-address"
-                    // @ts-ignore
-                    textAlign="left"
-                  />
-                  <TextInput
-                    placeholder="Phone"
-                    editable={!isLoading}
-                    onChangeText={setPhone}
-                    // @ts-ignore
-                    value={phone}
-                    modifiers={[submitLabel("next")]}
-                    keyboardType="phone-pad"
-                    // @ts-ignore
-                    textAlign="left"
-                  />
-                  {Platform.OS == "ios" && (
-                    <>
-                      <DatePicker
-                        title="Birthday"
-                        selection={birthday}
-                        onDateChange={(date) => {
-                          setBirthday(date);
-                        }}
-                      />
-                    </>
-                  )}
-                </FieldGroup.Section>
-
-                <FieldGroup.Section>
-                  {isMetric ? (
-                    <Row>
-                      <TextInput
-                        placeholder="Height (cm)"
-                        editable={!isLoading}
-                        onChangeText={setHeightCm}
-                        // @ts-ignore
-                        value={heightCm}
-                        modifiers={[submitLabel("next")]}
-                        keyboardType="number-pad"
-                        // @ts-ignore
-                        textAlign="left"
-                      />
-                      <TextInput
-                        placeholder="Weight (kg)"
-                        editable={!isLoading}
-                        onChangeText={setWeightKg}
-                        // @ts-ignore
-                        value={weightKg}
-                        modifiers={[submitLabel("next")]}
-                        keyboardType="number-pad"
-                        // @ts-ignore
-                        textAlign="left"
-                      />
-                    </Row>
-                  ) : (
-                    <>
-                      <Row>
-                        <TextInput
-                          placeholder="Height (ft)"
-                          editable={!isLoading}
-                          onChangeText={setHeightFt}
-                          // @ts-ignore
-                          value={heightFt}
-                          modifiers={[submitLabel("next")]}
-                          keyboardType="number-pad"
-                          // @ts-ignore
-                          textAlign="left"
-                        />
-                        <TextInput
-                          placeholder="Height (in)"
-                          editable={!isLoading}
-                          onChangeText={setHeightIn}
-                          // @ts-ignore
-                          value={heightIn}
-                          modifiers={[submitLabel("next")]}
-                          keyboardType="number-pad"
-                          // @ts-ignore
-                          textAlign="left"
-                        />
-                      </Row>
-                      <TextInput
-                        placeholder="Weight (lb)"
-                        editable={!isLoading}
-                        onChangeText={setWeightLb}
-                        // @ts-ignore
-                        value={weightLb}
-                        modifiers={[submitLabel("next")]}
-                        keyboardType="number-pad"
-                        // @ts-ignore
-                        textAlign="left"
-                      />
-                    </>
-                  )}
-                  {/* 🌟 Added alignment="center" to keep text and Picker on the same line */}
-                  <Row alignment="center">
-                    <Text>Blood Type</Text>
-                    <Spacer />
-                    <Picker
-                      selectedValue={bloodType}
-                      onValueChange={setBloodType}
-                      appearance="menu"
-                    >
-                      {bloodTypes.map((b) => (
-                        <Picker.Item
-                          key={b.value}
-                          label={b.label}
-                          value={b.value}
-                        />
-                      ))}
-                    </Picker>
-                  </Row>
-                </FieldGroup.Section>
-              </FieldGroup>
-              {/* 🌟 Inline visual alert when user selects an age under 18 */}
-              {isUnder18 && birthday && (
-                <Text
-                  textStyle={{
-                    fontSize: 13,
-                    color: "#FF3B30",
-                    textAlign: "center",
-                  }}
-                >
-                  Profile holder must be at least 18 years old to use SafeSeat.
-                </Text>
-              )}
-            </Column>
-          </Column>
-        </Group>
+        {renderModalContent()}
       </BottomSheet>
     </Host>
   );
