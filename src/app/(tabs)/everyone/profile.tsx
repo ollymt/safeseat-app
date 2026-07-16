@@ -11,10 +11,11 @@ import {
 	View,
 	Animated,
 	Keyboard,
+	Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Button, Host, Picker, Row, TextInput } from "@expo/ui";
+import { Button, Host, Row, TextInput } from "@expo/ui";
 import { buttonBorderShape, buttonStyle, controlSize, keyboardType } from '@expo/ui/swift-ui/modifiers';
 
 import TextBlock from "@/components/text-block";
@@ -28,13 +29,75 @@ import * as Haptics from "expo-haptics";
 
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 
-import { DatePicker } from "@expo/ui/swift-ui";
 import { KeyboardAvoidingView } from "react-native";
 import { auth, db } from "../../../firebase";
 
 const { width: screenWidth } = Dimensions.get("window");
 
-const BLOOD_TYPE_OPTIONS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+const VALID_BLOOD_TYPES = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "NOT SET"];
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+const isLeapYear = (year: number): boolean => {
+	return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+};
+
+const daysInMonth = (year: number, month: number): number => {
+	const days = [31, isLeapYear(year) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+	return days[month - 1] ?? 31;
+};
+
+// Pure int validation, no Date object involved anywhere.
+const isValidDateParts = (year: number, month: number, day: number): boolean => {
+	if (isNaN(year) || isNaN(month) || isNaN(day)) return false;
+	if (month < 1 || month > 12) return false;
+	if (day < 1 || day > daysInMonth(year, month)) return false;
+	return true;
+};
+
+// Birthday is stored as three separate int64 fields in Firestore: birthYear,
+// birthMonth, birthDate. This pulls those out of whatever object we loaded
+// (cache or cloud), also tolerating an old combined "birthday" value for
+// backward compatibility with any pre-existing records.
+const extractBirthdayParts = (data: any): { year: number; month: number; day: number } | null => {
+	if (!data) return null;
+
+	const hasSeparateFields =
+		data.birthYear !== undefined && data.birthYear !== null &&
+		data.birthMonth !== undefined && data.birthMonth !== null &&
+		((data.birthDate !== undefined && data.birthDate !== null) ||
+			(data.birthDay !== undefined && data.birthDay !== null));
+
+	if (hasSeparateFields) {
+		const y = Number(data.birthYear);
+		const m = Number(data.birthMonth);
+		const d = Number(data.birthDate ?? data.birthDay);
+		return isValidDateParts(y, m, d) ? { year: y, month: m, day: d } : null;
+	}
+
+	// Legacy fallback for older cached/cloud records that stored a single
+	// combined "birthday" value instead of separate fields.
+	const legacy = data.birthday;
+	if (legacy && legacy !== "Not Set") {
+		if (typeof legacy === "object") {
+			const y = Number(legacy.birthYear ?? legacy.year);
+			const m = Number(legacy.birthMonth ?? legacy.month);
+			const d = Number(legacy.birthDay ?? legacy.day);
+			return isValidDateParts(y, m, d) ? { year: y, month: m, day: d } : null;
+		}
+		if (typeof legacy === "string") {
+			const match = legacy.match(/^(\d{4})-(\d{2})-(\d{2})/);
+			if (match) {
+				const y = parseInt(match[1], 10);
+				const m = parseInt(match[2], 10);
+				const d = parseInt(match[3], 10);
+				return isValidDateParts(y, m, d) ? { year: y, month: m, day: d } : null;
+			}
+		}
+	}
+
+	return null;
+};
 
 export default function Profile() {
 	const colorScheme = useColorScheme();
@@ -47,18 +110,31 @@ export default function Profile() {
 	const isSubProfile = !!profileId;
 	const cacheKey = isSubProfile ? `profile_${profileId}` : "user_health_profile";
 
+	// Original data references for checking discard state changes
+	const originalDataRef = useRef<any>({});
+
 	// 1. Core Account States
 	const [userName, setUserName] = useState<string>("Guest");
 	const [userIcon, setUserIcon] = useState<string>("");
 	const [userEmail, setUserEmail] = useState<string>("Not Set");
 	const [userPhone, setUserPhone] = useState<string>("Not Set");
 
-	// 2. Health Metrics States (Stored as pure numeric strings in metric/cm/kg internally)
+	// 2. Health Metrics States
 	const [height, setHeight] = useState<string>("Not Set");
 	const [weight, setWeight] = useState<string>("Not Set");
 	const [bloodType, setBloodType] = useState<string>("Not Set");
 	const [allergies, setAllergies] = useState<string>("None Stored");
-	const [birthday, setBirthday] = useState<string>("Not Set");
+
+	// Birthday kept as three fully separate fields — mirrors Firestore's
+	// birthYear / birthMonth / birthDate int64 schema. Never combined into a
+	// Date object or a single date string.
+	const [birthYear, setBirthYear] = useState<string>("");
+	const [birthMonth, setBirthMonth] = useState<string>("");
+	const [birthDate, setBirthDate] = useState<string>("");
+
+	// Imperial height split local editing states
+	const [tempFeet, setTempFeet] = useState<string>("");
+	const [tempInches, setTempInches] = useState<string>("");
 
 	// 3. Unit Preference State
 	const [isMetric, setIsMetric] = useState<boolean>(true);
@@ -83,15 +159,46 @@ export default function Profile() {
 			const cachedHealth = await SecureStore.getItemAsync(cacheKey);
 			if (cachedHealth) {
 				const localData = JSON.parse(cachedHealth);
-				setUserName(localData.name || "Guest");
-				setUserIcon(localData.icon || localData.pfp || "Not Set");
-				setUserEmail(localData.email || "Not Set");
-				setUserPhone(localData.phone || "Not Set");
-				setBirthday(localData.birthday || "Not Set");
-				setHeight(localData.height || "Not Set");
-				setWeight(localData.weight || "Not Set");
-				setBloodType(localData.bloodType || "Not Set");
-				setAllergies(localData.allergies || "None Stored");
+				const bdayParts = extractBirthdayParts(localData);
+
+				const loadedData = {
+					name: localData.name || "Guest",
+					icon: localData.icon || localData.pfp || "Not Set",
+					email: localData.email || "Not Set",
+					phone: localData.phone || "Not Set",
+					birthYear: bdayParts ? bdayParts.year : null,
+					birthMonth: bdayParts ? bdayParts.month : null,
+					birthDate: bdayParts ? bdayParts.day : null,
+					height: localData.height || "Not Set",
+					weight: localData.weight || "Not Set",
+					bloodType: localData.bloodType || "Not Set",
+					allergies: localData.allergies || "None Stored",
+				};
+
+				originalDataRef.current = loadedData;
+
+				setUserName(loadedData.name);
+				setUserIcon(loadedData.icon);
+				setUserEmail(loadedData.email);
+				setUserPhone(loadedData.phone);
+				setBirthYear(bdayParts ? String(bdayParts.year) : "");
+				setBirthMonth(bdayParts ? String(bdayParts.month) : "");
+				setBirthDate(bdayParts ? String(bdayParts.day) : "");
+				setHeight(loadedData.height);
+				setWeight(loadedData.weight);
+				setBloodType(loadedData.bloodType);
+				setAllergies(loadedData.allergies);
+
+				// Parse Height into separate inputs if imperial
+				const cmVal = parseFloat(loadedData.height.replace(/[^0-9.]/g, ""));
+				if (!isNaN(cmVal)) {
+					const totalInches = cmVal / 2.54;
+					setTempFeet(String(Math.floor(totalInches / 12)));
+					setTempInches(String(Math.round(totalInches % 12)));
+				} else {
+					setTempFeet("");
+					setTempInches("");
+				}
 			}
 
 			const settingsDocRef = doc(db, "users", currentUser.uid, "settings", "preferences");
@@ -124,35 +231,53 @@ export default function Profile() {
 				const iconVal = cloudData.icon || "Not Set";
 				const emailVal = cloudData.email || "Not Set";
 				const phoneVal = cloudData.phone || "Not Set";
-				const bdayVal = cloudData.birthday || "Not Set";
+
+				const bdayParts = extractBirthdayParts(cloudData);
 
 				const heightVal = cloudData.heightCm !== undefined ? `${cloudData.heightCm}` : (cloudData.height || "Not Set");
 				const weightVal = cloudData.weightKg !== undefined ? `${cloudData.weightKg}` : (cloudData.weight || "Not Set");
 				const bloodVal = cloudData.bloodType || "Not Set";
 				const allergyVal = cloudData.allergies || "None Stored";
 
-				setUserName(nameVal);
-				setUserIcon(iconVal);
-				setUserEmail(emailVal);
-				setUserPhone(phoneVal);
-				setBirthday(bdayVal);
-				setHeight(heightVal);
-				setWeight(weightVal);
-				setBloodType(bloodVal);
-				setAllergies(allergyVal);
-
-				const combinedProfile = {
+				const loadedCloudData = {
 					name: nameVal,
 					icon: iconVal,
 					email: emailVal,
 					phone: phoneVal,
-					birthday: bdayVal,
+					birthYear: bdayParts ? bdayParts.year : null,
+					birthMonth: bdayParts ? bdayParts.month : null,
+					birthDate: bdayParts ? bdayParts.day : null,
 					height: heightVal,
 					weight: weightVal,
 					bloodType: bloodVal,
 					allergies: allergyVal,
 				};
-				await SecureStore.setItemAsync(cacheKey, JSON.stringify(combinedProfile));
+
+				originalDataRef.current = loadedCloudData;
+
+				setUserName(nameVal);
+				setUserIcon(iconVal);
+				setUserEmail(emailVal);
+				setUserPhone(phoneVal);
+				setBirthYear(bdayParts ? String(bdayParts.year) : "");
+				setBirthMonth(bdayParts ? String(bdayParts.month) : "");
+				setBirthDate(bdayParts ? String(bdayParts.day) : "");
+				setHeight(heightVal);
+				setWeight(weightVal);
+				setBloodType(bloodVal);
+				setAllergies(allergyVal);
+
+				const cmVal = parseFloat(heightVal.replace(/[^0-9.]/g, ""));
+				if (!isNaN(cmVal)) {
+					const totalInches = cmVal / 2.54;
+					setTempFeet(String(Math.floor(totalInches / 12)));
+					setTempInches(String(Math.round(totalInches % 12)));
+				} else {
+					setTempFeet("");
+					setTempInches("");
+				}
+
+				await SecureStore.setItemAsync(cacheKey, JSON.stringify(loadedCloudData));
 			}
 		} catch (error) {
 			console.error("Error syncing cache with Firestore:", error);
@@ -165,17 +290,137 @@ export default function Profile() {
 		}, [loadAllUserData]),
 	);
 
+	// Reactively translate separate Imperial Feet/Inches inputs back to Metric (cm) for standard DB compatibility
+	useEffect(() => {
+		if (!isMetric && editMode) {
+			const feetNum = parseFloat(tempFeet);
+			const inchesNum = parseFloat(tempInches || "0");
+
+			if (!isNaN(feetNum) && feetNum >= 0) {
+				const totalInches = (feetNum * 12) + (isNaN(inchesNum) ? 0 : inchesNum);
+				const computedCm = totalInches * 2.54;
+				setHeight(String(Math.round(computedCm * 10) / 10)); // Maintain 1 decimal place accuracy
+			} else if (tempFeet === "" && tempInches === "") {
+				setHeight("Not Set");
+			}
+		}
+	}, [tempFeet, tempInches, isMetric, editMode]);
+
+	// Validation engine: Controls state of the Save button
+	const validateForm = () => {
+		// 1. Blood Type Validation
+		const cleanBloodType = bloodType.trim().toUpperCase();
+		if (cleanBloodType !== "" && !VALID_BLOOD_TYPES.includes(cleanBloodType)) {
+			return false;
+		}
+
+		// 2. Birthday validation
+		const yVal = birthYear.trim();
+		const mVal = birthMonth.trim();
+		const dVal = birthDate.trim();
+
+		if (yVal !== "" || mVal !== "" || dVal !== "") {
+			const y = parseInt(yVal, 10);
+			const m = parseInt(mVal, 10);
+			const d = parseInt(dVal, 10);
+
+			if (!isValidDateParts(y, m, d)) return false;
+
+			const currentYear = new Date().getFullYear();
+			if (y < 1900 || y > currentYear) return false;
+		}
+
+		// 3. Imperial Height Inputs Validation
+		if (!isMetric) {
+			const fVal = tempFeet.trim();
+			const iVal = tempInches.trim();
+
+			if (fVal !== "" || iVal !== "") {
+				const f = parseFloat(fVal);
+				const i = parseFloat(iVal || "0");
+
+				if (isNaN(f) || f < 0 || f > 10) return false;
+				if (isNaN(i) || i < 0 || i >= 12) return false;
+			}
+		}
+
+		return true;
+	};
+
+	const isFormValid = validateForm();
+
+	const hasUnsavedChanges = () => {
+		const orig = originalDataRef.current;
+		const origYear = orig.birthYear !== null && orig.birthYear !== undefined ? String(orig.birthYear) : "";
+		const origMonth = orig.birthMonth !== null && orig.birthMonth !== undefined ? String(orig.birthMonth) : "";
+		const origDay = orig.birthDate !== null && orig.birthDate !== undefined ? String(orig.birthDate) : "";
+
+		const origHeightCm = parseFloat(orig.height.replace(/[^0-9.]/g, ""));
+		let origFeet = "";
+		let origInches = "";
+		if (!isNaN(origHeightCm)) {
+			const totalInches = origHeightCm / 2.54;
+			origFeet = String(Math.floor(totalInches / 12));
+			origInches = String(Math.round(totalInches % 12));
+		}
+
+		return (
+			userName !== orig.name ||
+			userEmail !== orig.email ||
+			userPhone !== orig.phone ||
+			height !== orig.height ||
+			weight !== orig.weight ||
+			bloodType !== orig.bloodType ||
+			allergies !== orig.allergies ||
+			birthYear !== origYear ||
+			birthMonth !== origMonth ||
+			birthDate !== origDay ||
+			(!isMetric && (tempFeet !== origFeet || tempInches !== origInches))
+		);
+	};
+
+	const handleCancelEdit = () => {
+		if (hasUnsavedChanges()) {
+			Alert.alert(
+				"Discard Changes?",
+				"You have unsaved changes. Are you sure you want to discard them?",
+				[
+					{ text: "Keep Editing", style: "cancel" },
+					{
+						text: "Discard",
+						style: "destructive",
+						onPress: () => {
+							loadAllUserData();
+							setEditMode(false);
+						}
+					}
+				]
+			);
+		} else {
+			setEditMode(false);
+		}
+	};
+
 	const handleSaveChanges = async () => {
+		if (!isFormValid) return;
+
 		try {
 			const currentUser = auth.currentUser;
 			if (!currentUser) return;
+
+			const y = parseInt(birthYear, 10);
+			const m = parseInt(birthMonth, 10);
+			const d = parseInt(birthDate, 10);
+			const validBday = isValidDateParts(y, m, d);
 
 			const updatedProfile = {
 				name: userName,
 				icon: userIcon,
 				email: userEmail,
 				phone: userPhone,
-				birthday: birthday,
+				birthYear: validBday ? y : null,
+				birthMonth: validBday ? m : null,
+				birthDate: validBday ? d : null,
 				height: height,
 				weight: weight,
 				bloodType: bloodType,
@@ -187,13 +432,17 @@ export default function Profile() {
 			const cleanHeightNum = height !== "Not Set" ? parseFloat(height.replace(/[^0-9.]/g, "")) : null;
 			const cleanWeightNum = weight !== "Not Set" ? parseFloat(weight.replace(/[^0-9.]/g, "")) : null;
 
+			// Firestore schema stores birthday as three separate int64 fields —
+			// birthYear, birthMonth, birthDate — no combined date value.
 			const firestorePayload: any = {
 				name: userName,
 				email: userEmail,
 				phone: userPhone,
-				birthday: birthday,
 				bloodType: bloodType,
 				allergies: allergies,
+				birthYear: validBday ? y : null,
+				birthMonth: validBday ? m : null,
+				birthDate: validBday ? d : null,
 			};
 
 			if (cleanHeightNum !== null && !isNaN(cleanHeightNum)) {
@@ -245,38 +494,40 @@ export default function Profile() {
 	};
 
 	const getFormattedDate = () => {
-		if (!birthday || birthday === "Not Set") return "Not Set";
-		const parsedDate = new Date(birthday);
-		if (isNaN(parsedDate.getTime())) return birthday;
-		return new Intl.DateTimeFormat('en-US', {
-			month: 'short',
-			day: '2-digit',
-			year: 'numeric'
-		}).format(parsedDate);
+		const y = parseInt(birthYear, 10);
+		const m = parseInt(birthMonth, 10);
+		const d = parseInt(birthDate, 10);
+		if (!isValidDateParts(y, m, d)) return "Not Set";
+		return `${MONTH_NAMES[m - 1]} ${String(d).padStart(2, "0")}, ${y}`;
 	};
 
 	const getAge = () => {
-		if (!birthday || birthday === "Not Set") return "Not Set";
-		const birthDate = new Date(birthday);
-		if (isNaN(birthDate.getTime())) return "Not Set";
+		const y = parseInt(birthYear, 10);
+		const m = parseInt(birthMonth, 10);
+		const d = parseInt(birthDate, 10);
+		if (!isValidDateParts(y, m, d)) return "Not Set";
 
-		const today = new Date();
-		let age = today.getFullYear() - birthDate.getFullYear();
-		const monthDifference = today.getMonth() - birthDate.getMonth();
+		// Only reads today's y/m/d off the system clock — never constructs a
+		// Date for the birthday itself, so there's no timezone round-trip.
+		const now = new Date();
+		const todayYear = now.getFullYear();
+		const todayMonth = now.getMonth() + 1;
+		const todayDay = now.getDate();
 
-		if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birthDate.getDate())) {
+		let age = todayYear - y;
+		const monthDifference = todayMonth - m;
+
+		if (monthDifference < 0 || (monthDifference === 0 && todayDay < d)) {
 			age--;
 		}
 		return age.toString();
 	};
 
 	const getZodiacSign = () => {
-		if (!birthday || birthday === "Not Set") return "Not Set";
-		const birthDate = new Date(birthday);
-		if (isNaN(birthDate.getTime())) return "Not Set";
-
-		const month = birthDate.getMonth() + 1;
-		const day = birthDate.getDate();
+		const y = parseInt(birthYear, 10);
+		const month = parseInt(birthMonth, 10);
+		const day = parseInt(birthDate, 10);
+		if (!isValidDateParts(y, month, day)) return "Not Set";
 
 		if ((month === 3 && day >= 21) || (month === 4 && day <= 19)) return "Aries";
 		if ((month === 4 && day >= 20) || (month === 5 && day <= 20)) return "Taurus";
@@ -305,9 +556,6 @@ export default function Profile() {
 		}
 	};
 
-	const bloodTypeIndex = BLOOD_TYPE_OPTIONS.indexOf(bloodType.toUpperCase());
-
-	// inside your component:
 	const [keyboardHeight, setKeyboardHeight] = useState(0);
 
 	useEffect(() => {
@@ -357,20 +605,21 @@ export default function Profile() {
 											buttonBorderShape("capsule")]}
 										onPress={() => {
 											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-											loadAllUserData(); // Reset to current db state
-											setEditMode(false);
+											handleCancelEdit();
 										}}
 									/>
 									<Button
 										label="Save"
 										variant="filled"
+										// @ts-ignore
+										disabled={!isFormValid}
 										modifiers={[
 											controlSize("small"),
 											buttonStyle("borderedProminent"),
 											buttonBorderShape("capsule")]}
 										onPress={() => {
 											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-											handleSaveChanges(); // Actually triggers save to Firestore!
+											handleSaveChanges();
 										}}
 									/>
 								</Row> :
@@ -402,10 +651,10 @@ export default function Profile() {
 							{editMode ?
 								<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
 									<Host matchContents>
-										<TextInput 
+										<TextInput
 											// @ts-ignore
-											value={userName} 
-											onChangeText={setUserName} 
+											value={userName}
+											onChangeText={setUserName}
 											placeholder="Name" />
 									</Host>
 								</View>
@@ -421,11 +670,11 @@ export default function Profile() {
 							{editMode ?
 								<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
 									<Host matchContents>
-										<TextInput 
+										<TextInput
 											// @ts-ignore
-											value={userEmail} 
-											onChangeText={setUserEmail} 
-											placeholder="Email" 
+											value={userEmail}
+											onChangeText={setUserEmail}
+											placeholder="Email"
 											modifiers={[keyboardType("email-address")]} />
 									</Host>
 								</View>
@@ -441,11 +690,11 @@ export default function Profile() {
 							{editMode ?
 								<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
 									<Host matchContents>
-										<TextInput 
+										<TextInput
 											// @ts-ignore
-											value={userPhone} 
-											onChangeText={setUserPhone} 
-											placeholder="Phone Number" 
+											value={userPhone}
+											onChangeText={setUserPhone}
+											placeholder="Phone Number"
 											modifiers={[keyboardType("phone-pad")]} />
 									</Host>
 								</View>
@@ -459,19 +708,48 @@ export default function Profile() {
 						<Text style={{ fontFamily: "Condensed-Bold", color: currentTheme.text, fontSize: 24, marginBottom: 10 }}>HEALTH INFORMATION</Text>
 
 						<View style={{ flexDirection: "row", gap: 10, borderColor: "#000", borderWidth: 0 }}>
-							<View style={[styles.fieldContainer, { flex: 2 }]}>
+							<View style={[styles.fieldContainer, { flex: 2.5 }]}>
 								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
 									BIRTHDAY
 								</Text>
 								{editMode ?
-									<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
-										<Host matchContents>
-											<DatePicker
-												selection={birthday && birthday !== "Not Set" ? new Date(birthday) : new Date()}
-												onDateChange={(date) => setBirthday(date.toISOString())}
-												displayedComponents={["date"]}
-											/>
-										</Host>
+									<View style={{ flexDirection: "row", gap: 6 }}>
+										{/* Month Input */}
+										<View style={[styles.textInput, { backgroundColor: currentTheme.element, flex: 1 }]}>
+											<Host matchContents>
+												<TextInput
+													// @ts-ignore
+													value={birthMonth}
+													onChangeText={(val) => setBirthMonth(val.replace(/[^0-9]/g, ""))}
+													placeholder="MM"
+													modifiers={[keyboardType("number-pad")]}
+												/>
+											</Host>
+										</View>
+										{/* Day Input */}
+										<View style={[styles.textInput, { backgroundColor: currentTheme.element, flex: 1 }]}>
+											<Host matchContents>
+												<TextInput
+													// @ts-ignore
+													value={birthDate}
+													onChangeText={(val) => setBirthDate(val.replace(/[^0-9]/g, ""))}
+													placeholder="DD"
+													modifiers={[keyboardType("number-pad")]}
+												/>
+											</Host>
+										</View>
+										{/* Year Input */}
+										<View style={[styles.textInput, { backgroundColor: currentTheme.element, flex: 1.5 }]}>
+											<Host matchContents>
+												<TextInput
+													// @ts-ignore
+													value={birthYear}
+													onChangeText={(val) => setBirthYear(val.replace(/[^0-9]/g, ""))}
+													placeholder="YYYY"
+													modifiers={[keyboardType("number-pad")]}
+												/>
+											</Host>
+										</View>
 									</View>
 									:
 									<TextBlock text={getFormattedDate()} />
@@ -483,34 +761,63 @@ export default function Profile() {
 								</Text>
 								<TextBlock text={getAge()} />
 							</View>
-							<View style={[styles.fieldContainer, { flex: 2 }]}>
+							<View style={[styles.fieldContainer, { flex: 1.5 }]}>
 								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
-									ZODIAC SIGN
+									ZODIAC
 								</Text>
 								<TextBlock text={getZodiacSign()} />
 							</View>
 						</View>
 
 						<View style={{ flexDirection: "row", gap: 10, borderColor: "#000", borderWidth: 0 }}>
-							<View style={[styles.fieldContainer, { flex: 1 }]}>
+							<View style={[styles.fieldContainer, { flex: 1.2 }]}>
 								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
-									HEIGHT {isMetric ? "(CM)" : "(IN)"}
+									HEIGHT {isMetric ? "(CM)" : "(FT / IN)"}
 								</Text>
-								{editMode ?
-									<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
-										<Host matchContents>
-											<TextInput
-												// @ts-ignore
-												value={height === "Not Set" ? "" : height}
-												onChangeText={setHeight}
-												placeholder={isMetric ? "e.g. 175" : "e.g. 68"}
-												modifiers={[keyboardType("decimal-pad")]}
-											/>
-										</Host>
-									</View>
-									:
+								{editMode ? (
+									isMetric ? (
+										<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
+											<Host matchContents>
+												<TextInput
+													// @ts-ignore
+													value={height === "Not Set" ? "" : height}
+													onChangeText={setHeight}
+													placeholder="e.g. 175"
+													modifiers={[keyboardType("decimal-pad")]}
+												/>
+											</Host>
+										</View>
+									) : (
+										<View style={{ flexDirection: "row", gap: 6 }}>
+											{/* Feet Input */}
+											<View style={[styles.textInput, { backgroundColor: currentTheme.element, flex: 1 }]}>
+												<Host matchContents>
+													<TextInput
+														// @ts-ignore
+														value={tempFeet}
+														onChangeText={(val) => setTempFeet(val.replace(/[^0-9]/g, ""))}
+														placeholder="Feet"
+														modifiers={[keyboardType("number-pad")]}
+													/>
+												</Host>
+											</View>
+											{/* Inches Input */}
+											<View style={[styles.textInput, { backgroundColor: currentTheme.element, flex: 1 }]}>
+												<Host matchContents>
+													<TextInput
+														// @ts-ignore
+														value={tempInches}
+														onChangeText={(val) => setTempInches(val.replace(/[^0-9]/g, ""))}
+														placeholder="Inches"
+														modifiers={[keyboardType("number-pad")]}
+													/>
+												</Host>
+											</View>
+										</View>
+									)
+								) : (
 									<TextBlock text={getDisplayHeight()} />
-								}
+								)}
 							</View>
 							<View style={[styles.fieldContainer, { flex: 1 }]}>
 								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
@@ -541,12 +848,12 @@ export default function Profile() {
 							{editMode ?
 								<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
 									<Host matchContents>
-										<Picker
+										<TextInput
 											// @ts-ignore
-											options={BLOOD_TYPE_OPTIONS}
-											selectedIndex={bloodTypeIndex === -1 ? 0 : bloodTypeIndex}
-											onOptionSelected={({ nativeEvent: { index } }) => setBloodType(BLOOD_TYPE_OPTIONS[index])}
-											variant="segmented"
+											value={bloodType === "Not Set" ? "" : bloodType}
+											onChangeText={setBloodType}
+											placeholder="e.g. A+, O-, AB+"
+											autoCapitalize="characters"
 										/>
 									</Host>
 								</View>
@@ -622,10 +929,10 @@ const styles = StyleSheet.create({
 		fontSize: 13
 	},
 	textInput: {
-		width: "100%",            // Force the wrapper to take up the full horizontal space
-		minHeight: 46,            // Give it a solid native tap target height
-		justifyContent: "center", // Vertically center the internal Host and TextInput
-		paddingHorizontal: 12,    // Left & right space inside the input block
+		width: "100%",
+		minHeight: 46,
+		justifyContent: "center",
+		paddingHorizontal: 12,
 		borderRadius: 8,
 	}
 });

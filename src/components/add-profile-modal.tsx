@@ -1,12 +1,12 @@
 // components/AddProfileModal.tsx
 import { Themes } from "@/constants/theme";
-import { BottomSheet, Button, Column, FieldGroup, Host, Icon, Row, Spacer, Text, TextInput, Picker } from "@expo/ui";
-import { ConfirmationDialog, Button as SwiftButton, DatePicker, Group } from "@expo/ui/swift-ui";
+import { BottomSheet, Button, Column, FieldGroup, Host, Icon, Row, Spacer, Text, TextInput } from "@expo/ui";
+import { ConfirmationDialog, Button as SwiftButton, Group } from "@expo/ui/swift-ui";
 import { buttonBorderShape, buttonStyle, controlSize, presentationBackground, presentationDetents, submitLabel } from "@expo/ui/swift-ui/modifiers";
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
-import { StyleSheet, useColorScheme, Platform, Alert } from "react-native";
-import * as SecureStore from "expo-secure-store"; // 🌟 Import SecureStore
+import { StyleSheet, useColorScheme, Alert } from "react-native";
+import * as SecureStore from "expo-secure-store";
 
 // 🛠️ Firebase Imports
 import { auth, db } from "../firebase";
@@ -18,8 +18,8 @@ type Props = {
     onSuccess?: () => void;
 };
 
+// Standardized list of blood types for validation
 const bloodTypes = [
-    { label: "Not Set", value: "none" },
     { label: "A+", value: "a+" },
     { label: "A-", value: "a-" },
     { label: "B+", value: "b+" },
@@ -30,6 +30,36 @@ const bloodTypes = [
     { label: "O-", value: "o-" },
 ];
 
+// 🌟 Pure math helper: Check if leap year
+const isLeapYear = (year: number): boolean => {
+    return (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+};
+
+// 🌟 Manual calendar checker: Validates days in months (February / Leap Year safe)
+const isValidDate = (year: number, month: number, day: number): boolean => {
+    const currentYear = new Date().getFullYear(); // Only using Date to get current year ceiling
+    if (year < 1900 || year > currentYear) return false;
+    if (month < 1 || month > 12) return false;
+
+    const daysInMonths = [
+        31,
+        isLeapYear(year) ? 29 : 28, // Feb leap year toggle
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31
+    ];
+
+    const maxDays = daysInMonths[month - 1];
+    return day >= 1 && day <= maxDays;
+};
+
 export default function AddProfileModal({ visible, onClose, onSuccess }: Props) {
     const [isLoading, setIsLoading] = useState(false);
 
@@ -37,9 +67,13 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
     const [icon, setIcon] = useState("");
     const [email, setEmail] = useState("");
     const [phone, setPhone] = useState("");
-    const [birthday, setBirthday] = useState(new Date());
 
-    const [isMetric, setIsMetric] = useState(true); // 🌟 Defaults to true, syncs dynamically with SecureStore
+    // Controlled string states for easy input typing
+    const [birthYear, setBirthYear] = useState("");
+    const [birthMonth, setBirthMonth] = useState("");
+    const [birthDate, setBirthDate] = useState("");
+
+    const [isMetric, setIsMetric] = useState(true);
 
     const [heightCm, setHeightCm] = useState("");
     const [heightFt, setHeightFt] = useState("");
@@ -48,7 +82,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
     const [weightKg, setWeightKg] = useState("");
     const [weightLb, setWeightLb] = useState("");
 
-    const [bloodType, setBloodType] = useState("none");
+    const [bloodType, setBloodType] = useState("");
 
     const colorScheme = useColorScheme();
     const activeScheme = colorScheme === "dark" ? "dark" : "light";
@@ -56,67 +90,46 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
 
     const [discardConfirmVisible, setDiscardConfirmVisible] = useState(false);
 
-    // 🌟 Load unit settings dynamically when modal is shown
-    // Update this block in components/AddProfileModal.tsx
-    // 🌟 Load unit settings dynamically when modal is shown
     useEffect(() => {
         if (visible) {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
             const loadUnitPreference = async () => {
-                let localValueFound = false;
-
                 try {
-                    // Layer 1: Check SecureStore (Instant & Offline-friendly)
                     const savedPrivacyString = await SecureStore.getItemAsync("user_privacy_prefs");
-                    console.log("[Modal] Raw savedPrivacyString loaded:", savedPrivacyString);
-
                     if (savedPrivacyString) {
                         const savedPrivacy = JSON.parse(savedPrivacyString);
-
-                        // Check for both key variations just in case (useMetric or isMetric)
                         const targetKey = savedPrivacy.useMetric !== undefined ? savedPrivacy.useMetric : savedPrivacy.isMetric;
 
                         if (targetKey !== undefined) {
                             const normalizedMetric = targetKey === true || targetKey === "true";
-                            console.log("[Modal] Layer 1 (Cache) success. Setting isMetric to:", normalizedMetric);
                             setIsMetric(normalizedMetric);
-                            localValueFound = true;
                         }
                     }
                 } catch (error) {
                     console.error("Failed to read SecureStore in modal:", error);
                 }
 
-                // Layer 2: Cloud Fallback / Direct Sync verification
                 try {
                     const currentUser = auth.currentUser;
                     if (currentUser) {
-                        console.log("[Modal] Syncing with Firestore subcollection for direct confirmation...");
                         const settingsDocRef = doc(db, "users", currentUser.uid, "settings", "preferences");
                         const settingsDocSnap = await getDoc(settingsDocRef);
 
                         if (settingsDocSnap.exists()) {
                             const settingsData = settingsDocSnap.data();
-                            console.log("[Modal] Layer 2 (Firestore) data fetched:", settingsData);
-
-                            // Check all potential field names coming from your subcollection
                             const cloudMetricVal = settingsData.useMetric !== undefined ? settingsData.useMetric : settingsData.isMetric;
 
                             if (cloudMetricVal !== undefined) {
                                 const normalizedMetric = cloudMetricVal === true || cloudMetricVal === "true";
-                                console.log("[Modal] Applying current Firestore value to state:", normalizedMetric);
-
                                 setIsMetric(normalizedMetric);
 
-                                // Refresh the local cache immediately to flush out old configurations
                                 const combinedPrivacy = {
                                     useMetric: normalizedMetric,
                                     consent: settingsData.consent ?? true,
                                     emergencyEscalation: settingsData.emergencyEscalation ?? true,
                                 };
                                 await SecureStore.setItemAsync("user_privacy_prefs", JSON.stringify(combinedPrivacy));
-                                return;
                             }
                         }
                     }
@@ -129,7 +142,6 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
         }
     }, [visible]);
 
-    // Helper functions to safely check numeric inputs
     const parseNum = (val: string) => parseFloat(val) || 0;
 
     const hasUnsavedChanges =
@@ -137,19 +149,47 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
         icon !== "" ||
         email !== "" ||
         phone !== "" ||
+        birthMonth !== "" ||
+        birthDate !== "" ||
+        birthYear !== "" ||
+        bloodType !== "" ||
         parseNum(heightCm) > 0 ||
         parseNum(heightFt) > 0 ||
         parseNum(heightIn) > 0 ||
         parseNum(weightKg) > 0 ||
         parseNum(weightLb) > 0;
 
-    // 🌟 Birthday Validation: Must be at least 18 years old
+    const parsedYear = parseInt(birthYear, 10);
+    const parsedMonth = parseInt(birthMonth, 10);
+    const parsedDate = parseInt(birthDate, 10);
+
+    // 🌟 1. Validate Month, Day, Year bounds (Leap-year safe)
+    const isValidDateInput = isValidDate(parsedYear, parsedMonth, parsedDate);
+
+    // 🌟 2. Pure Arithmetic Age Check (No date objects for comparisons)
     const isUnder18 = (() => {
-        if (!birthday) return true;
+        if (!isValidDateInput) return true;
+
         const today = new Date();
-        const ageLimitDate = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
-        return birthday > ageLimitDate;
+        const currentYear = today.getFullYear();
+        const currentMonth = today.getMonth() + 1; // 1-12 range
+        const currentDay = today.getDate();
+
+        const age = currentYear - parsedYear;
+
+        if (age > 18) return false;
+        if (age < 18) return true;
+
+        // If they are exactly 18, compare birthday month and day to today
+        if (parsedMonth < currentMonth) return false;
+        if (parsedMonth > currentMonth) return true;
+
+        return parsedDate > currentDay; // If birth day has not occurred yet this month, they are under 18
     })();
+
+    // 🌟 3. Blood Type String Validation
+    const normalizedBloodInput = bloodType.trim().toLowerCase();
+    const isBloodTypeInvalid = bloodType.trim() !== "" && !bloodTypes.some(t => t.value === normalizedBloodInput);
 
     const isHeightInvalid = isMetric
         ? parseNum(heightCm) <= 0
@@ -163,8 +203,10 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
         name.trim() === "" ||
         email.trim() === "" ||
         phone.trim() === "" ||
-        !birthday ||
-        isUnder18 || // 🌟 Enforced 18+ limit
+        !isValidDateInput ||
+        isUnder18 ||
+        isBloodTypeInvalid ||
+        bloodType.trim() === "" ||
         isHeightInvalid ||
         isWeightInvalid;
 
@@ -173,19 +215,19 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
         setIcon("");
         setEmail("");
         setPhone("");
-        setBirthday(new Date());
+        setBirthYear("");
+        setBirthMonth("");
+        setBirthDate("");
         setHeightCm("");
         setHeightFt("");
         setHeightIn("");
         setWeightKg("");
         setWeightLb("");
-        setBloodType("none");
+        setBloodType("");
         setDiscardConfirmVisible(false);
         onClose();
     };
 
-    // 🌟 Save Logic directly connecting to Firestore Subcollection
-    // 🌟 Save Logic directly connecting to Firestore Subcollection with auto-conversion
     const handleSave = async () => {
         const currentUser = auth.currentUser;
         if (!currentUser) {
@@ -198,7 +240,6 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
         try {
             const subcollectionRef = collection(db, "users", currentUser.uid, "profiles");
 
-            // 🧮 Conversion Logic
             let finalHeightCm = 0;
             let finalWeightKg = 0;
 
@@ -206,24 +247,28 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                 finalHeightCm = parseNum(heightCm);
                 finalWeightKg = parseNum(weightKg);
             } else {
-                // Imperial to Metric conversion
                 const totalInches = (parseNum(heightFt) * 12) + parseNum(heightIn);
-                finalHeightCm = Math.round((totalInches * 2.54) * 10) / 10; // Round to 1 decimal place
-
-                finalWeightKg = Math.round((parseNum(weightLb) * 0.45359237) * 10) / 10; // Round to 1 decimal place
+                finalHeightCm = Math.round((totalInches * 2.54) * 10) / 10;
+                finalWeightKg = Math.round((parseNum(weightLb) * 0.45359237) * 10) / 10;
             }
 
+            // 🌟 Stored strictly as integers & strings
             await addDoc(subcollectionRef, {
                 name: name.trim(),
                 icon: icon.trim() || null,
                 email: email.trim(),
                 phone: phone.trim(),
-                birthday: birthday.toISOString(),
-                bloodType: bloodType,
-                // Saving both values strictly normalized to Metric system values
+
+                // Integers
+                birthYear: parsedYear,
+                birthMonth: parsedMonth,
+                birthDate: parsedDate,
+
+                // String
+                bloodType: normalizedBloodInput.toUpperCase(),
+
                 heightCm: finalHeightCm,
                 weightKg: finalWeightKg,
-                // Keeps a readable layout backup string based on what they initially input
                 displayHeight: isMetric ? `${heightCm} cm` : `${heightFt} ft ${heightIn} in`,
                 displayWeight: isMetric ? `${weightKg} kg` : `${weightLb} lb`,
                 createdAt: new Date().toISOString()
@@ -253,7 +298,6 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                     (activeScheme == "dark") ? presentationBackground("#1C1C1E") : presentationBackground("#F2F2F6")
                 ]}>
                     <Column spacing={16} alignment="center">
-                        {/* 🧭 Header Navigation Row */}
                         <Row>
                             <ConfirmationDialog
                                 title="Discard your progress?"
@@ -364,17 +408,43 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                                         // @ts-ignore
                                         textAlign="left"
                                     />
-                                    {Platform.OS == "ios" &&
-                                        <>
-                                            <DatePicker
-                                                title="Birthday"
-                                                selection={birthday}
-                                                onDateChange={date => {
-                                                    setBirthday(date);
-                                                }}
-                                            />
-                                        </>
-                                    }
+                                    <Row>
+                                        <Text>Birthday</Text>
+                                        <Spacer />
+                                        <TextInput
+                                            placeholder="MM"
+                                            editable={!isLoading}
+                                            // @ts-ignore
+                                            value={birthMonth}
+                                            onChangeText={setBirthMonth}
+                                            modifiers={[submitLabel("next")]}
+                                            keyboardType="number-pad"
+                                            textAlign="center"
+                                            maxLength={2}
+                                        />
+                                        <TextInput
+                                            placeholder="DD"
+                                            editable={!isLoading}
+                                            // @ts-ignore
+                                            value={birthDate}
+                                            onChangeText={setBirthDate}
+                                            modifiers={[submitLabel("next")]}
+                                            keyboardType="number-pad"
+                                            textAlign="center"
+                                            maxLength={2}
+                                        />
+                                        <TextInput
+                                            placeholder="YYYY"
+                                            editable={!isLoading}
+                                            // @ts-ignore
+                                            value={birthYear}
+                                            onChangeText={setBirthYear}
+                                            modifiers={[submitLabel("next")]}
+                                            keyboardType="number-pad"
+                                            textAlign="center"
+                                            maxLength={4}
+                                        />
+                                    </Row>
                                 </FieldGroup.Section>
 
                                 <FieldGroup.Section>
@@ -433,35 +503,45 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                                                 placeholder="Weight (lb)"
                                                 editable={!isLoading}
                                                 onChangeText={setWeightLb}
-                                                    // @ts-ignore
+                                                // @ts-ignore
                                                 value={weightLb}
                                                 modifiers={[submitLabel("next")]}
                                                 keyboardType="number-pad"
-                                                    // @ts-ignore
+                                                // @ts-ignore
                                                 textAlign="left"
                                             />
                                         </>
                                     )}
-                                    {/* 🌟 Added alignment="center" to keep text and Picker on the same line */}
                                     <Row alignment="center">
-                                        <Text>Blood Type</Text>
-                                        <Spacer />
-                                        <Picker
-                                            selectedValue={bloodType}
-                                            onValueChange={setBloodType}
-                                            appearance="menu"
-                                        >
-                                            {bloodTypes.map((b) => (
-                                                <Picker.Item key={b.value} label={b.label} value={b.value} />
-                                            ))}
-                                        </Picker>
+                                        <TextInput
+                                            placeholder="Blood Type (e.g. O+)"
+                                            editable={!isLoading}
+                                            onChangeText={setBloodType}
+                                            // @ts-ignore
+                                            value={bloodType}
+                                            modifiers={[submitLabel("done")]}
+                                            // @ts-ignore
+                                            textAlign="left"
+                                            maxLength={3}
+                                        />
                                     </Row>
                                 </FieldGroup.Section>
                             </FieldGroup>
-                            {/* 🌟 Inline visual alert when user selects an age under 18 */}
-                            {isUnder18 && birthday && (
-                                <Text textStyle={{ fontSize: 13, color: "#FF3B30", textAlign: "center" }}>
-                                    Profile holder must be at least 18 years old to use SafeSeat.
+
+                            {/* 🌟 Diagnostic warnings */}
+                            {birthYear !== "" && birthMonth !== "" && birthDate !== "" && !isValidDateInput && (
+                                <Text textStyle={{ fontSize: 13, color: "#FF3B30", textAlign: "center", marginTop: 8 }}>
+                                    Please enter a valid calendar date.
+                                </Text>
+                            )}
+                            {isValidDateInput && isUnder18 && (
+                                <Text textStyle={{ fontSize: 13, color: "#FF3B30", textAlign: "center", marginTop: 8 }}>
+                                    Profile holder must be at least 18 years old.
+                                </Text>
+                            )}
+                            {isBloodTypeInvalid && (
+                                <Text textStyle={{ fontSize: 13, color: "#FF3B30", textAlign: "center", marginTop: 8 }}>
+                                    Please enter a valid blood type (A, B, AB, O with +/-).
                                 </Text>
                             )}
                         </Column>
