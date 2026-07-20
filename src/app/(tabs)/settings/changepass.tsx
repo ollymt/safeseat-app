@@ -127,7 +127,7 @@ export default function ChangePass() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
-        <View style={[changepass.container, { borderWidth: 3, borderColor: currentTheme.text }, Platform.OS == "android" ? { marginTop: 60 } : { marginTop: 50 }]}>
+        <View style={[changepass.container, { borderWidth: 0, borderColor: currentTheme.text }, Platform.OS == "android" ? { marginTop: 60 } : { marginTop: 50 }]}>
           <View style={changepass.logoSection}>
             <Text
               style={[

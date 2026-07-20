@@ -3,12 +3,12 @@ import { useFocusEffect, useRouter } from "expo-router";
 import {
 	Alert,
 	Dimensions,
+	Platform,
 	ScrollView,
 	StyleSheet,
 	Text,
 	useColorScheme,
 	View,
-	Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -18,9 +18,7 @@ import { useCallback, useState } from "react";
 import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store";
 
-import SettingDatePickerItem from "@/components/setting-date-picker";
 import SettingPageItem from "@/components/setting-page-item";
-import SettingPicker from "@/components/setting-picker";
 import SettingSwitch from "@/components/setting-switch";
 
 import PasswordVerifyModal from "@/components/PasswordVerifyModal";
@@ -59,22 +57,21 @@ export default function Settings() {
 	const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 	const [bloodPickerVisible, setBloodPickerVisible] = useState(false);
 
+	const handleMetricToggle = async (newVal: boolean) => {
+		setIsMetric(newVal);
+		try {
+			console.log("set is metric to ", newVal); // 👈 Use newVal instead of stale isMetric
+			const currentObjRaw = await SecureStore.getItemAsync("user_privacy_prefs");
+			const currentObj = currentObjRaw ? JSON.parse(currentObjRaw) : {};
+			currentObj.useMetric = newVal; // 👈 Correctly saves newVal
+			await SecureStore.setItemAsync("user_privacy_prefs", JSON.stringify(currentObj));
+		} catch (error) {
+			console.error("Failed to save metric preference locally:", error);
+		}
+	};
+
 	const loadAllUserData = useCallback(async () => {
 		try {
-			// 1. LOAD INSTANTLY FROM LOCAL STORAGE CACHES
-			const savedHealthDataString = await SecureStore.getItemAsync("user_health_profile");
-			if (savedHealthDataString) {
-				const savedHealth = JSON.parse(savedHealthDataString);
-				if (savedHealth.name) setUserName(savedHealth.name);
-				if (savedHealth.email) setUserEmail(savedHealth.email);
-				if (savedHealth.phone) setUserPhone(savedHealth.phone);
-				if (savedHealth.birthday) setBirthday(savedHealth.birthday);
-				if (savedHealth.height) setHeight(savedHealth.height);
-				if (savedHealth.weight) setWeight(savedHealth.weight);
-				if (savedHealth.bloodType) setBloodType(savedHealth.bloodType);
-				if (savedHealth.allergies) setAllergies(savedHealth.allergies);
-			}
-
 			// 🌟 Inside loadAllUserData()...
 
 			// 1. First, load your local settings as normal.
@@ -110,10 +107,11 @@ export default function Settings() {
 					const currentLocalPrivacy = currentLocalPrivacyRaw ? JSON.parse(currentLocalPrivacyRaw) : {};
 
 					const combinedPrivacy = {
+						...currentLocalPrivacy,
 						consent: settingsData.consent ?? true,
 						emergencyEscalation: settingsData.emergencyEscalation ?? true,
 					};
-					await SecureStore.setItemAsync("user_privacy_prefs", JSON.stringify(combinedPrivacy));
+					await SecureStore.setItemAsync("user_privacy_prefs", JSON.stringify(combinedPrivacy));;
 				}
 			}
 		} catch (error) {
@@ -190,11 +188,6 @@ export default function Settings() {
 			const lbsValue = Math.round(kgValue * 2.20462);
 			return `${lbsValue} lbs`;
 		}
-	};
-
-	const handleMetricToggle = async (newVal: boolean) => {
-		setIsMetric(newVal);
-		await savePrivacyField("useMetric", newVal);
 	};
 
 	const executeSecureAction = async (action: () => void) => {
@@ -366,7 +359,7 @@ export default function Settings() {
 						{/* FOOTER */}
 						<View style={{ paddingHorizontal: 10 }}>
 							<Text style={[styles.caption, { color: currentTheme.textSecondary }]}>
-								v.26w29d4r02 • made with 💚 by safeseat team
+								v.26w30d2r01 • made with 💚 by safeseat team
 							</Text>
 						</View>
 					</View>

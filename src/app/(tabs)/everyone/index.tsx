@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import {
 	Dimensions,
 	FlatList,
+	Keyboard,
 	KeyboardAvoidingView,
 	Platform,
 	Pressable,
@@ -12,12 +13,11 @@ import {
 	StyleSheet,
 	Text,
 	useColorScheme,
-	Keyboard,
 	View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { useCallback, useMemo, useRef, useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store";
@@ -26,6 +26,7 @@ import * as SecureStore from "expo-secure-store";
 import { collection, doc, getDoc, getDocs } from "firebase/firestore";
 import { auth, db } from "../../../firebase";
 
+import AddContactModal from "@/components/add-contact-modal";
 import AddProfileModal from "@/components/add-profile-modal";
 import ContactCard from "@/components/contact-card";
 import ProfileCard from "@/components/profile-card";
@@ -81,6 +82,7 @@ export default function Everyone() {
 	>([]);
 
 	const [addProfileVisible, setAddProfileVisible] = useState(false);
+	const [addContactVisible, setAddContactVisible] = useState(false);
 
 	const searchInputRef = useRef<any>(null);
 
@@ -149,8 +151,12 @@ export default function Everyone() {
 						JSON.stringify(combinedProfile),
 					);
 
+					// Preserve the existing local useMetric value — it's device-only and never stored in Firestore
+					const existingPrivacyRaw = await SecureStore.getItemAsync("user_privacy_prefs");
+					const existingPrivacy = existingPrivacyRaw ? JSON.parse(existingPrivacyRaw) : {};
+
 					const combinedPrivacy = {
-						useMetric: cloudData.useMetric ?? true,
+						...existingPrivacy,
 						consent: cloudData.consent ?? true,
 						emergencyEscalation: cloudData.emergencyEscalation ?? true,
 					};
@@ -230,13 +236,20 @@ export default function Everyone() {
 							id: doc.id,
 							name: data.name || "Unknown Name",
 							phone: data.phone || "No Phone Number",
-							hierarchy: Number(data.hierarchy) || 5, // fallback to lowest priority if undefined
+							hierarchy: data.hierarchy != null && !isNaN(Number(data.hierarchy)) && Number(data.hierarchy) > 0
+								? Number(data.hierarchy)
+								: 0, // 0 means "unset" — do NOT default to 5
 						};
 					},
 				);
 
-				// 🌟 Sort by hierarchy (1-5 ascending, meaning Priority 1 comes first)
-				loadedContacts.sort((a, b) => a.hierarchy - b.hierarchy);
+				// 🌟 Sort by hierarchy (1-5 ascending), unset (0) always last
+				loadedContacts.sort((a, b) => {
+					if (a.hierarchy === 0 && b.hierarchy === 0) return 0;
+					if (a.hierarchy === 0) return 1;  // a is unset, push it after b
+					if (b.hierarchy === 0) return -1; // b is unset, push it after a
+					return a.hierarchy - b.hierarchy; // normal ascending sort
+				});
 				setEmergencyContacts(loadedContacts);
 			}
 		} catch (error) {
@@ -335,7 +348,7 @@ export default function Everyone() {
 							keyExtractor={(item) => item.id}
 							onRefresh={loadAllUserData}
 							refreshing={refreshing}
-							contentContainerStyle={Platform.OS == "android" ? { marginTop: 0, paddingBottom: 70 } : { marginTop: 0, paddingBottom: 160}}
+							contentContainerStyle={Platform.OS == "android" ? { marginTop: 0, paddingBottom: 70 } : { marginTop: 0, paddingBottom: 160 }}
 							stickySectionHeadersEnabled={false}
 							showsVerticalScrollIndicator={false}
 							showsHorizontalScrollIndicator={false}
@@ -413,7 +426,7 @@ export default function Everyone() {
 							onRefresh={loadAllUserData}
 							refreshing={refreshing}
 							showsVerticalScrollIndicator={false}
-							contentContainerStyle={{ paddingBottom: 0 }}
+							contentContainerStyle={{ paddingBottom: 0, gap: 10 }}
 							renderItem={({ item, index }) => (
 								<View
 									style={{
@@ -431,15 +444,12 @@ export default function Everyone() {
 										name={item.name}
 										phone={item.phone}
 										order={
-											item.hierarchy == 1
-												? "primary"
-												: item.hierarchy == 2
-													? "secondary"
-													: item.hierarchy == 3
-														? "tertiary"
-														: item.hierarchy == 4
-															? "quaternary"
-															: "quinary"
+											item.hierarchy === 1 ? "primary"
+												: item.hierarchy === 2 ? "secondary"
+													: item.hierarchy === 3 ? "tertiary"
+														: item.hierarchy === 4 ? "quaternary"
+															: item.hierarchy === 5 ? "quinary"
+																: "none"
 										}
 									/>
 								</View>
@@ -547,26 +557,26 @@ export default function Everyone() {
 							<>
 								{/* Keeps the button pushed cleanly to the right side */}
 								<View style={{ flex: 1 }} />
-									<Host matchContents ignoreSafeArea="keyboard">
-										<Button
-											variant={Platform.OS == "ios" ? "outlined" : "filled"}
-											modifiers={[
-												controlSize("large"),
-												buttonStyle("glass"),
-												buttonBorderShape("circle"),
-											]}
-											onPress={() => {
-												setAddProfileVisible(true);
-											}}
-										>
-											<Icon
-												name={Icon.select({
-													ios: "plus",
-													android: import("@expo/material-symbols/add.xml"),
-												})}
-											/>
-										</Button>
-									</Host>
+								<Host matchContents ignoreSafeArea="keyboard">
+									<Button
+										variant={Platform.OS == "ios" ? "outlined" : "filled"}
+										modifiers={[
+											controlSize("large"),
+											buttonStyle("glass"),
+											buttonBorderShape("circle"),
+										]}
+										onPress={() => {
+											setAddContactVisible(true);
+										}}
+									>
+										<Icon
+											name={Icon.select({
+												ios: "plus",
+												android: import("@expo/material-symbols/add.xml"),
+											})}
+										/>
+									</Button>
+								</Host>
 							</>
 						)}
 					</View>
@@ -576,6 +586,13 @@ export default function Everyone() {
 					visible={addProfileVisible}
 					onClose={() => {
 						setAddProfileVisible(false);
+					}}
+				/>
+
+				<AddContactModal
+					visible={addContactVisible}
+					onClose={() => {
+						setAddContactVisible(false);
 					}}
 				/>
 			</View>

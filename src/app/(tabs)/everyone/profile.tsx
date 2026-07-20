@@ -653,7 +653,7 @@ export default function Profile() {
 									<Host matchContents>
 										<TextInput
 											// @ts-ignore
-											value={userName}
+											defaultValue={userName}
 											onChangeText={setUserName}
 											placeholder="Name" />
 									</Host>
@@ -672,7 +672,7 @@ export default function Profile() {
 									<Host matchContents>
 										<TextInput
 											// @ts-ignore
-											value={userEmail}
+											defaultValue={userEmail}
 											onChangeText={setUserEmail}
 											placeholder="Email"
 											modifiers={[keyboardType("email-address")]} />
@@ -692,7 +692,7 @@ export default function Profile() {
 									<Host matchContents>
 										<TextInput
 											// @ts-ignore
-											value={userPhone}
+											defaultValue={userPhone}
 											onChangeText={setUserPhone}
 											placeholder="Phone Number"
 											modifiers={[keyboardType("phone-pad")]} />
@@ -719,10 +719,10 @@ export default function Profile() {
 											<Host matchContents>
 												<TextInput
 													// @ts-ignore
-													value={birthMonth}
+													defaultValue={birthMonth}
 													onChangeText={(val) => setBirthMonth(val.replace(/[^0-9]/g, ""))}
 													placeholder="MM"
-													modifiers={[keyboardType("number-pad")]}
+													modifiers={[keyboardType("decimal-pad")]}
 												/>
 											</Host>
 										</View>
@@ -731,10 +731,10 @@ export default function Profile() {
 											<Host matchContents>
 												<TextInput
 													// @ts-ignore
-													value={birthDate}
+													defaultValue={birthDate}
 													onChangeText={(val) => setBirthDate(val.replace(/[^0-9]/g, ""))}
 													placeholder="DD"
-													modifiers={[keyboardType("number-pad")]}
+													modifiers={[keyboardType("decimal-pad")]}
 												/>
 											</Host>
 										</View>
@@ -743,10 +743,10 @@ export default function Profile() {
 											<Host matchContents>
 												<TextInput
 													// @ts-ignore
-													value={birthYear}
+													defaultValue={birthYear}
 													onChangeText={(val) => setBirthYear(val.replace(/[^0-9]/g, ""))}
 													placeholder="YYYY"
-													modifiers={[keyboardType("number-pad")]}
+													modifiers={[keyboardType("decimal-pad")]}
 												/>
 											</Host>
 										</View>
@@ -780,7 +780,7 @@ export default function Profile() {
 											<Host matchContents>
 												<TextInput
 													// @ts-ignore
-													value={height === "Not Set" ? "" : height}
+													defaultValue={height === "Not Set" ? "" : height}
 													onChangeText={setHeight}
 													placeholder="e.g. 175"
 													modifiers={[keyboardType("decimal-pad")]}
@@ -794,10 +794,10 @@ export default function Profile() {
 												<Host matchContents>
 													<TextInput
 														// @ts-ignore
-														value={tempFeet}
+														defaultValue={tempFeet}
 														onChangeText={(val) => setTempFeet(val.replace(/[^0-9]/g, ""))}
 														placeholder="Feet"
-														modifiers={[keyboardType("number-pad")]}
+														modifiers={[keyboardType("decimal-pad")]}
 													/>
 												</Host>
 											</View>
@@ -806,10 +806,10 @@ export default function Profile() {
 												<Host matchContents>
 													<TextInput
 														// @ts-ignore
-														value={tempInches}
+														defaultValue={tempInches}
 														onChangeText={(val) => setTempInches(val.replace(/[^0-9]/g, ""))}
 														placeholder="Inches"
-														modifiers={[keyboardType("number-pad")]}
+														modifiers={[keyboardType("decimal-pad")]}
 													/>
 												</Host>
 											</View>
@@ -828,7 +828,7 @@ export default function Profile() {
 										<Host matchContents>
 											<TextInput
 												// @ts-ignore
-												value={weight === "Not Set" ? "" : weight}
+												defaultValue={weight === "Not Set" ? "" : weight}
 												onChangeText={setWeight}
 												placeholder={isMetric ? "e.g. 70" : "e.g. 154"}
 												modifiers={[keyboardType("decimal-pad")]}
@@ -850,7 +850,7 @@ export default function Profile() {
 									<Host matchContents>
 										<TextInput
 											// @ts-ignore
-											value={bloodType === "Not Set" ? "" : bloodType}
+											defaultValue={bloodType === "Not Set" ? "" : bloodType}
 											onChangeText={setBloodType}
 											placeholder="e.g. A+, O-, AB+"
 											autoCapitalize="characters"
@@ -871,7 +871,7 @@ export default function Profile() {
 									<Host matchContents>
 										<TextInput
 											// @ts-ignore
-											value={allergies === "None Stored" ? "" : allergies}
+											defaultValue={allergies === "None Stored" ? "" : allergies}
 											onChangeText={setAllergies}
 											placeholder="e.g. Peanuts, Penicillin"
 										/>

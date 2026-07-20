@@ -5,14 +5,14 @@ import { MenuView } from '@expo/ui/community/menu';
 import { Pressable, StyleSheet, Text, useColorScheme, View, Linking, Alert } from "react-native";
 import { useRouter } from "expo-router";
 
-import * as Haptics from "expo-haptics"
+import * as Haptics from "expo-haptics";
 
 type ContactCardProps = {
-    name: string
-    phone: string
-    order: "primary" | "secondary" | "tertiary" | "quaternary" | "quinary"
+    name: string;
+    phone: string;
+    order: "primary" | "secondary" | "tertiary" | "quaternary" | "quinary" | "none";
     onPress?: () => void;
-}
+};
 
 export default function ContactCard({
     name,
@@ -24,7 +24,27 @@ export default function ContactCard({
     const activeScheme = colorScheme === "dark" ? "dark" : "light";
     const currentTheme = Themes[activeScheme];
 
-    const router = useRouter()
+    const router = useRouter();
+
+    // 🌟 Helper function to determine badge/border color based on order
+    const getOrderColor = () => {
+        switch (order) {
+            case "primary":
+                return currentTheme.warnBttn;
+            case "secondary":
+                return currentTheme.yellow;
+            case "tertiary":
+                return currentTheme.primaryBttn;
+            case "quaternary":
+                return currentTheme.blue;
+            case "quinary":
+                return currentTheme.purple;
+            default:
+                return currentTheme.textSecondary; // 🌟 Defaults to textSecondary when priority is not set
+        }
+    };
+
+    const accentColor = getOrderColor();
 
     // 1. Trigger a Phone Call
     const handleMakeCall = async (phoneNumber: string) => {
@@ -43,7 +63,6 @@ export default function ContactCard({
 
     // 2. Trigger a Text Message (SMS)
     const handleSendSMS = async (phoneNumber: string, messageBody?: string) => {
-        // You can optionally pre-fill text content using the 'body' query parameter
         const url = messageBody
             ? `sms:${phoneNumber}?body=${encodeURIComponent(messageBody)}`
             : `sms:${phoneNumber}`;
@@ -64,7 +83,6 @@ export default function ContactCard({
         <MenuView
             shouldOpenOnLongPress={true}
             title={""}
-            // 🛠️ FIX: Map your native long-press selection event ids to functions
             onPressAction={({ nativeEvent }) => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
@@ -77,8 +95,7 @@ export default function ContactCard({
                         break;
                     case 'edit':
                         console.log("Edit requested for:", name);
-                        router.navigate("/settings")
-                        // Add your edit logic routing here
+                        router.navigate("/settings");
                         break;
                     default:
                         break;
@@ -97,20 +114,25 @@ export default function ContactCard({
                         backgroundColor: currentTheme.element,
                         flexDirection: "row",
                         borderWidth: 2,
-                        borderColor: order == "primary" ? currentTheme.warnBttn : order == "secondary" ? currentTheme.yellow : order == "tertiary" ? currentTheme.primaryBttn : order == "quaternary" ? currentTheme.blue : order == "quinary" ? currentTheme.purple : currentTheme.text
+                        borderColor: accentColor // 🌟 Applied dynamic accent color
                     }
                 ]}
             >
                 <View style={{ flex: 1 }}>
-                    <Text style={[contcard.orderLabel, { color: order == "primary" ? currentTheme.warnBttn : order == "secondary" ? currentTheme.yellow : order == "tertiary" ? currentTheme.primaryBttn : order == "quaternary" ? currentTheme.blue : order == "quinary" ? currentTheme.purple : currentTheme.text }]}>{order.toUpperCase()}</Text>
+                    <Text style={[contcard.orderLabel, { color: accentColor }]}>
+                        {order.toUpperCase()}
+                    </Text>
                     <Text style={[contcard.contName, { color: currentTheme.text }]}>{name}</Text>
                     <Text style={[contcard.numLabel, { color: currentTheme.text }]}>{phone}</Text>
                 </View>
                 <View style={{ alignItems: "center", justifyContent: "center", borderWidth: 0, borderColor: "#fff", marginRight: 10 }}>
-                    <Pressable style={{ backgroundColor: currentTheme.primaryBttn, padding: 8, borderRadius: 100 }} onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-                        handleMakeCall(phone)
-                    }}>
+                    <Pressable
+                        style={{ backgroundColor: currentTheme.primaryBttn, padding: 8, borderRadius: 100 }}
+                        onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                            handleMakeCall(phone);
+                        }}
+                    >
                         <Host matchContents>
                             <Icon
                                 name={Icon.select({
@@ -124,7 +146,7 @@ export default function ContactCard({
                 </View>
             </View>
         </MenuView>
-    )
+    );
 }
 
 const contcard = StyleSheet.create({
@@ -145,4 +167,4 @@ const contcard = StyleSheet.create({
         fontFamily: "Body-Bold",
         fontSize: 18
     }
-})
+});
