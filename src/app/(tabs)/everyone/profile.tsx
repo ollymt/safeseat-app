@@ -1,17 +1,16 @@
 import { Themes } from "@/constants/theme";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import {
+	Alert,
 	Dimensions,
 	Image,
+	Keyboard,
 	Platform,
 	ScrollView,
 	StyleSheet,
 	Text,
 	useColorScheme,
-	View,
-	Animated,
-	Keyboard,
-	Alert,
+	View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -19,7 +18,7 @@ import { Button, Host, Row, TextInput } from "@expo/ui";
 import { buttonBorderShape, buttonStyle, controlSize, keyboardType } from '@expo/ui/swift-ui/modifiers';
 
 import TextBlock from "@/components/text-block";
-import { useCallback, useState, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import PasswordVerifyModal from "@/components/PasswordVerifyModal";
 import { isSessionValid } from "@/utils/securitySession";
@@ -29,7 +28,6 @@ import * as Haptics from "expo-haptics";
 
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 
-import { KeyboardAvoidingView } from "react-native";
 import { auth, db } from "../../../firebase";
 
 const { width: screenWidth } = Dimensions.get("window");
@@ -53,6 +51,26 @@ const isValidDateParts = (year: number, month: number, day: number): boolean => 
 	if (month < 1 || month > 12) return false;
 	if (day < 1 || day > daysInMonth(year, month)) return false;
 	return true;
+};
+
+// Pure arithmetic age check — no Date object round-trips for the birthday itself.
+const isUnder18Parts = (year: number, month: number, day: number): boolean => {
+	if (!isValidDateParts(year, month, day)) return true;
+
+	const today = new Date();
+	const currentYear = today.getFullYear();
+	const currentMonth = today.getMonth() + 1;
+	const currentDay = today.getDate();
+
+	const age = currentYear - year;
+
+	if (age > 18) return false;
+	if (age < 18) return true;
+
+	if (month < currentMonth) return false;
+	if (month > currentMonth) return true;
+
+	return day > currentDay;
 };
 
 // Birthday is stored as three separate int64 fields in Firestore: birthYear,
@@ -308,6 +326,23 @@ export default function Profile() {
 
 	// Validation engine: Controls state of the Save button
 	const validateForm = () => {
+		// 0. Required fields — everything except allergies must be filled in
+		if (userName.trim() === "") return false;
+		if (userEmail.trim() === "" || userEmail === "Not Set") return false;
+		if (userPhone.trim() === "" || userPhone === "Not Set") return false;
+
+		if (birthYear.trim() === "" || birthMonth.trim() === "" || birthDate.trim() === "") return false;
+
+		if (bloodType.trim() === "" || bloodType === "Not Set") return false;
+
+		if (isMetric) {
+			if (height.trim() === "" || height === "Not Set") return false;
+			if (weight.trim() === "" || weight === "Not Set") return false;
+		} else {
+			if (tempFeet.trim() === "" || tempInches.trim() === "") return false;
+			if (weight.trim() === "" || weight === "Not Set") return false;
+		}
+
 		// 1. Blood Type Validation
 		const cleanBloodType = bloodType.trim().toUpperCase();
 		if (cleanBloodType !== "" && !VALID_BLOOD_TYPES.includes(cleanBloodType)) {
@@ -328,6 +363,9 @@ export default function Profile() {
 
 			const currentYear = new Date().getFullYear();
 			if (y < 1900 || y > currentYear) return false;
+
+			// 🌟 Reject under-18 birthdays
+			if (isUnder18Parts(y, m, d)) return false;
 		}
 
 		// 3. Imperial Height Inputs Validation
@@ -713,44 +751,70 @@ export default function Profile() {
 									BIRTHDAY
 								</Text>
 								{editMode ?
-									<View style={{ flexDirection: "row", gap: 6 }}>
-										{/* Month Input */}
-										<View style={[styles.textInput, { backgroundColor: currentTheme.element, flex: 1 }]}>
-											<Host matchContents>
-												<TextInput
-													// @ts-ignore
-													defaultValue={birthMonth}
-													onChangeText={(val) => setBirthMonth(val.replace(/[^0-9]/g, ""))}
-													placeholder="MM"
-													modifiers={[keyboardType("decimal-pad")]}
-												/>
-											</Host>
+									<>
+										<View style={{ flexDirection: "row", gap: 6 }}>
+											{/* Month Input */}
+											<View style={[styles.textInput, { backgroundColor: currentTheme.element, flex: 1 }]}>
+												<Host matchContents>
+													<TextInput
+														// @ts-ignore
+														defaultValue={birthMonth}
+														onChangeText={(val) => setBirthMonth(val.replace(/[^0-9]/g, ""))}
+														placeholder="MM"
+														modifiers={[keyboardType("decimal-pad")]}
+													/>
+												</Host>
+											</View>
+											{/* Day Input */}
+											<View style={[styles.textInput, { backgroundColor: currentTheme.element, flex: 1 }]}>
+												<Host matchContents>
+													<TextInput
+														// @ts-ignore
+														defaultValue={birthDate}
+														onChangeText={(val) => setBirthDate(val.replace(/[^0-9]/g, ""))}
+														placeholder="DD"
+														modifiers={[keyboardType("decimal-pad")]}
+													/>
+												</Host>
+											</View>
+											{/* Year Input */}
+											<View style={[styles.textInput, { backgroundColor: currentTheme.element, flex: 1.5 }]}>
+												<Host matchContents>
+													<TextInput
+														// @ts-ignore
+														defaultValue={birthYear}
+														onChangeText={(val) => setBirthYear(val.replace(/[^0-9]/g, ""))}
+														placeholder="YYYY"
+														modifiers={[keyboardType("decimal-pad")]}
+													/>
+												</Host>
+											</View>
 										</View>
-										{/* Day Input */}
-										<View style={[styles.textInput, { backgroundColor: currentTheme.element, flex: 1 }]}>
-											<Host matchContents>
-												<TextInput
-													// @ts-ignore
-													defaultValue={birthDate}
-													onChangeText={(val) => setBirthDate(val.replace(/[^0-9]/g, ""))}
-													placeholder="DD"
-													modifiers={[keyboardType("decimal-pad")]}
-												/>
-											</Host>
-										</View>
-										{/* Year Input */}
-										<View style={[styles.textInput, { backgroundColor: currentTheme.element, flex: 1.5 }]}>
-											<Host matchContents>
-												<TextInput
-													// @ts-ignore
-													defaultValue={birthYear}
-													onChangeText={(val) => setBirthYear(val.replace(/[^0-9]/g, ""))}
-													placeholder="YYYY"
-													modifiers={[keyboardType("decimal-pad")]}
-												/>
-											</Host>
-										</View>
-									</View>
+
+										{/* 👇 NEW: warning goes here, right after the row of three inputs */}
+										{(() => {
+											const y = parseInt(birthYear, 10);
+											const m = parseInt(birthMonth, 10);
+											const d = parseInt(birthDate, 10);
+											const hasAllParts = birthYear !== "" && birthMonth !== "" && birthDate !== "";
+											if (!hasAllParts) return null;
+											if (!isValidDateParts(y, m, d)) {
+												return (
+													<Text style={{ fontSize: 12, color: "#FF3B30", marginTop: 4 }}>
+														Please enter a valid calendar date.
+													</Text>
+												);
+											}
+											if (isUnder18Parts(y, m, d)) {
+												return (
+													<Text style={{ fontSize: 12, color: "#FF3B30", marginTop: 4 }}>
+														Profile holder must be at least 18 years old.
+													</Text>
+												);
+											}
+											return null;
+										})()}
+									</>
 									:
 									<TextBlock text={getFormattedDate()} />
 								}

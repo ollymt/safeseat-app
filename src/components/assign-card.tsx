@@ -1,3 +1,4 @@
+// components/assign-card.tsx
 import { Themes } from "@/constants/theme";
 import { Host, Icon } from "@expo/ui";
 import {
@@ -9,18 +10,27 @@ import {
   Image,
 } from "react-native";
 
+type Profile = {
+  id: string;
+  name: string;
+  icon?: string;
+  isAccountOwner?: boolean;
+};
+
 type AssignCardProps = {
   seatNo: number;
   seatCode: string;
+  assignedProfile?: Profile | null;
   name?: string;
   pfp?: string;
   onPress: () => void;
 };
 
-// 1. Fixed name conflict: changed function name from AssignCardProps to AssignCard
+
 export default function AssignCard({
   seatNo,
   seatCode,
+  assignedProfile,
   name,
   pfp,
   onPress,
@@ -29,36 +39,70 @@ export default function AssignCard({
   const activeScheme = colorScheme === "dark" ? "dark" : "light";
   const currentTheme = Themes[activeScheme];
 
+  const displayName = assignedProfile?.name ?? name;
+  const displayIcon = assignedProfile?.icon ?? pfp;
+
+  // Green outline when a seat is assigned; subtle gray dashed outline when unassigned
+  const borderColor = displayName ? currentTheme.primaryBttn : currentTheme.textSecondary;
+
   return (
-    // 2. Wired up your onPress handler and dynamic theme styles
     <Pressable
       onPress={onPress}
       style={[
         assigncard.baseCard,
-        { backgroundColor: currentTheme.element, borderColor: currentTheme.textSecondary },
+        {
+          backgroundColor: currentTheme.element,
+          borderColor,
+          borderStyle: displayName ? "solid" : "dashed",
+        },
       ]}
     >
-      {/* 3. Fixed nested ternary layout syntax */}
-      {name ? (
-        pfp ? (
-          <Image source={{ uri: pfp }} style={assigncard.avatar} />
-        ) : (
-          <Text style={[assigncard.monogram, { color: currentTheme.text }]}>
-            {name.charAt(0).toUpperCase()}
+      {displayName ? (
+        <View style={assigncard.profileContainer}>
+          {displayIcon ? (
+            <Image
+              source={{ uri: displayIcon }}
+              style={[
+                assigncard.avatar,
+                { borderColor: currentTheme.primaryBttn, borderWidth: 2 },
+              ]}
+            />
+          ) : (
+            <View
+              style={[
+                assigncard.avatarFallback,
+                { backgroundColor: currentTheme.primaryBttn },
+              ]}
+            >
+              <Text style={[assigncard.monogram, { color: "#FFFFFF" }]}>
+                {displayName.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
+          <Text
+            numberOfLines={1}
+            style={[assigncard.profileName, { color: currentTheme.text }]}
+          >
+            {displayName}
           </Text>
-        )
+          <Text style={[assigncard.seatCode, { color: currentTheme.textSecondary }]}>
+            {seatCode.toUpperCase()}
+          </Text>
+        </View>
       ) : (
         <View style={assigncard.iconContainer}>
           <Host matchContents>
             <Icon
               name={Icon.select({
                 ios: "plus",
-                android: import("@expo/material-symbols/add.xml"), // Adjusted to common material name format
+                android: import("@expo/material-symbols/add.xml"),
               })}
               color={currentTheme.textSecondary}
             />
           </Host>
-          <Text style={[ assigncard.seatCode, { color: currentTheme.textSecondary } ]}>{seatCode.toUpperCase()}</Text>
+          <Text style={[assigncard.seatCode, { color: currentTheme.textSecondary }]}>
+            {seatCode.toUpperCase()}
+          </Text>
         </View>
       )}
     </Pressable>
@@ -68,22 +112,41 @@ export default function AssignCard({
 const assigncard = StyleSheet.create({
   baseCard: {
     flex: 1,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 2,
-    borderStyle: "dashed",
     justifyContent: "center",
     alignItems: "center",
-    overflow: "hidden", // Ensures profile picture respects border radius
+    overflow: "hidden",
+    padding: 8,
+  },
+  profileContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    width: "100%",
   },
   avatar: {
-    width: "100%",
-    height: "100%",
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     resizeMode: "cover",
   },
+  avatarFallback: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   monogram: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "600",
-    fontFamily: "Body-Bold",
+  },
+  profileName: {
+    fontSize: 14,
+    fontWeight: "600",
+    textAlign: "center",
+    paddingHorizontal: 4,
   },
   iconContainer: {
     justifyContent: "center",
@@ -91,6 +154,6 @@ const assigncard = StyleSheet.create({
     gap: 8,
   },
   seatCode: {
-    fontFamily: "Condensed-Bold",
-  }
+    fontSize: 12,
+  },
 });

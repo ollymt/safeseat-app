@@ -4,13 +4,13 @@ import { BottomSheet, Button, Column, FieldGroup, Host, Icon, Row, Spacer, Text,
 import { ConfirmationDialog, Button as SwiftButton } from "@expo/ui/swift-ui";
 import { buttonBorderShape, buttonStyle, controlSize, submitLabel } from "@expo/ui/swift-ui/modifiers";
 import * as Haptics from "expo-haptics";
-import { useEffect, useState } from "react";
-import { StyleSheet, useColorScheme, Alert, Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
+import { useEffect, useState } from "react";
+import { Alert, Platform, StyleSheet, useColorScheme } from "react-native";
 
 // 🛠️ Firebase Imports
+import { addDoc, collection, doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
-import { collection, addDoc, doc, getDoc } from "firebase/firestore";
 
 type Props = {
     visible: boolean;
@@ -444,7 +444,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                                 <Row alignment="center">
                                     <Text>Birthday</Text>
                                     <Spacer flexible />
-                                    <Row spacing={8} style={{ width: 180, justifyContent: 'flex-end' }}>
+                                    <Row spacing={8} style={{ width: 180 }}>
                                         <TextInput
                                             placeholder="MM"
                                             editable={!isLoading}
@@ -634,17 +634,17 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
 
                         {/* 🌟 Diagnostic warnings */}
                         {birthYear !== "" && birthMonth !== "" && birthDate !== "" && !isValidDateInput && (
-                            <Text textStyle={{ fontSize: 13, color: "#FF3B30", textAlign: "center", marginTop: 8 }}>
+                            <Text textStyle={{ fontSize: 13, color: "#FF3B30", textAlign: "center" }}>
                                 Please enter a valid calendar date.
                             </Text>
                         )}
                         {isValidDateInput && isUnder18 && (
-                            <Text textStyle={{ fontSize: 13, color: "#FF3B30", textAlign: "center", marginTop: 8 }}>
+                            <Text textStyle={{ fontSize: 13, color: "#FF3B30", textAlign: "center" }}>
                                 Profile holder must be at least 18 years old.
                             </Text>
                         )}
                         {isBloodTypeInvalid && (
-                            <Text textStyle={{ fontSize: 13, color: "#FF3B30", textAlign: "center", marginTop: 8 }}>
+                            <Text textStyle={{ fontSize: 13, color: "#FF3B30", textAlign: "center" }}>
                                 Please enter a valid blood type (A, B, AB, O with +/-).
                             </Text>
                         )}
