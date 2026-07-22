@@ -1,23 +1,41 @@
 import { Themes } from "@/constants/theme";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import {
-  StyleSheet,
-  useColorScheme,
-  Text,
-  View,
-  Dimensions,
   ScrollView,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
 
-import { Column, Host } from "@expo/ui";
-
-import { BottomTabInset, MaxContentWidth, Spacing } from "@/constants/theme";
-
-import * as Haptics from "expo-haptics"
 import SeatCard from "@/components/seat-card";
+import Button from "@/components/button";
 
-const { width: screenWidth } = Dimensions.get("window");
+type Profile = {
+  id: string;
+  name: string;
+  photoURL?: string;
+  icon?: string;
+  isAccountOwner?: boolean;
+};
+
+export type SeatState = "empty" | "assigned" | "safe" | "warning" | "emergency";
+
+const SEAT_ASSIGNMENTS_KEY = "seatAssignments";
+const IS_LOCKED_IN_KEY = "isLockedIn";
+const SEAT_STATUSES_KEY = "seatStatuses";
+
+const SEAT_ROLES: Record<number, string> = {
+  1: "driver",
+  2: "passenger",
+  3: "l backseat",
+  4: "c backseat",
+  5: "r backseat",
+};
 
 export default function Home() {
   const colorScheme = useColorScheme();
@@ -26,25 +44,120 @@ export default function Home() {
 
   const router = useRouter();
 
+  const [isLockedIn, setIsLockedIn] = useState<boolean>(false);
+  const [assignments, setAssignments] = useState<Record<number, Profile>>({});
+  const [seatStatuses, setSeatStatuses] = useState<Record<number, SeatState>>({});
+
+  // 📥 Fetch locked state and seat data whenever page comes into focus
+  const loadData = useCallback(async () => {
+    try {
+      const [rawLockedIn, rawAssignments, rawStatuses] = await Promise.all([
+        AsyncStorage.getItem(IS_LOCKED_IN_KEY),
+        AsyncStorage.getItem(SEAT_ASSIGNMENTS_KEY),
+        AsyncStorage.getItem(SEAT_STATUSES_KEY),
+      ]);
+
+      const locked = rawLockedIn ? JSON.parse(rawLockedIn) : false;
+      setIsLockedIn(locked);
+
+      if (rawAssignments) {
+        setAssignments(JSON.parse(rawAssignments));
+      } else {
+        setAssignments({});
+      }
+
+      if (rawStatuses) {
+        setSeatStatuses(JSON.parse(rawStatuses));
+      } else {
+        setSeatStatuses({});
+      }
+    } catch (error) {
+      console.error("Failed to load home state from device:", error);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  // Derive card status state
+  const getSeatState = (seatNo: number): SeatState => {
+    const profile = assignments[seatNo];
+    if (!profile) return "empty";
+    return seatStatuses[seatNo] ?? "safe";
+  };
+
   return (
     <SafeAreaView
       style={{
         flex: 1,
         backgroundColor: currentTheme.background,
       }}
-      edges={['left', 'right']}
+      edges={["left", "right"]}
     >
       <View style={[styles.container, { marginTop: 40 }]}>
         <Text style={[styles.pageHeader, { color: currentTheme.text }]}>
           Home
         </Text>
-        <View style={{ gap: 10, marginTop: 10 }}>
-          <SeatCard seatNo={1} name="Spruce" state="safe" onPress={() => {}} />
-          <SeatCard seatNo={2} name="Jack" state="warning" onPress={() => {}} />
-          <SeatCard seatNo={3} name="Maverick" state="emergency" onPress={() => {}} />
-          <SeatCard seatNo={4} state="empty" onPress={() => {}} />
-          <SeatCard seatNo={5} state="empty" onPress={() => {}} />
-        </View>
+
+        {isLockedIn ? (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 40 }}
+          >
+            <View style={{ gap: 10, marginTop: 10 }}>
+              {[1, 2, 3, 4, 5].map((seatNo) => {
+                const profile = assignments[seatNo];
+                const state = getSeatState(seatNo);
+
+                return (
+                  <SeatCard
+                    key={seatNo}
+                    seatNo={seatNo}
+                    role={SEAT_ROLES[seatNo]}
+                    name={profile?.name}
+                    pfp={profile?.icon ?? profile?.photoURL}
+                    state={state}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                  />
+                );
+              })}
+            </View>
+          </ScrollView>
+        ) : (
+          <View style={styles.unlockedContainer}>
+            <Text
+              style={[
+                styles.unlockedTitle,
+                { color: currentTheme.text },
+              ]}
+            >
+              Trip Not Locked In
+            </Text>
+            <Text
+              style={[
+                styles.unlockedSubtitle,
+                { color: currentTheme.textSecondary },
+              ]}
+            >
+              Assign passengers to seats and tap "Lock In" on the Assign page to start monitoring.
+            </Text>
+            <View style={{ width: "100%", marginTop: 24 }}>
+              <Button
+                label="Go to Assign"
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  router.push("/assign");
+                }}
+                fullWidth={true}
+              />
+            </View>
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -56,24 +169,28 @@ const styles = StyleSheet.create({
     width: "100%",
     padding: 20,
     borderWidth: 0,
-    borderColor: "#fff"
-  },
-  logoSection: {
-    height: "35%", // Reduced slightly to give more room for keyboard space
-    alignItems: "center",
-    justifyContent: "flex-end",
-  },
-  formSection: {
-    width: "100%",
-    flex: 1,
-  },
-  loginlogo: {
-    fontSize: 60,
-    fontFamily: "Logo-Font",
-    textAlign: "center",
+    borderColor: "#fff",
   },
   pageHeader: {
     fontSize: 40,
     fontFamily: "Logo-Font",
-  }
+  },
+  unlockedContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  unlockedTitle: {
+    fontSize: 22,
+    fontFamily: "Body-Bold",
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  unlockedSubtitle: {
+    fontSize: 15,
+    textAlign: "center",
+    lineHeight: 22,
+  },
 });

@@ -1,6 +1,7 @@
 // components/assign-card.tsx
 import { Themes } from "@/constants/theme";
 import { Host, Icon } from "@expo/ui";
+import { opacity } from "@expo/ui/swift-ui/modifiers";
 import {
   Pressable,
   StyleSheet,
@@ -23,6 +24,8 @@ type AssignCardProps = {
   assignedProfile?: Profile | null;
   name?: string;
   pfp?: string;
+  locked?: boolean
+  state: string
   onPress: () => void;
 };
 
@@ -33,6 +36,8 @@ export default function AssignCard({
   assignedProfile,
   name,
   pfp,
+  state = "empty",
+  locked = true,
   onPress,
 }: AssignCardProps) {
   const colorScheme = useColorScheme();
@@ -52,7 +57,14 @@ export default function AssignCard({
         assigncard.baseCard,
         {
           backgroundColor: currentTheme.element,
-          borderColor,
+          borderColor: state == "safe"
+            ? currentTheme.primaryBttn
+            : state == "warning"
+              ? currentTheme.yellow
+              : state == "emergency"
+                ? currentTheme.warnBttn
+                : currentTheme.text,
+          opacity: state == "empty" ? 0.5 : 1,
           borderStyle: displayName ? "solid" : "dashed",
         },
       ]}
@@ -64,7 +76,17 @@ export default function AssignCard({
               source={{ uri: displayIcon }}
               style={[
                 assigncard.avatar,
-                { borderColor: currentTheme.primaryBttn, borderWidth: 2 },
+                {
+                  borderColor: state == "safe"
+                    ? currentTheme.primaryBttn
+                    : state == "warning"
+                      ? currentTheme.yellow
+                      : state == "emergency"
+                        ? currentTheme.warnBttn
+                        : currentTheme.text,
+
+                  borderWidth: 2
+                },
               ]}
             />
           ) : (
@@ -74,7 +96,7 @@ export default function AssignCard({
                 { backgroundColor: currentTheme.primaryBttn },
               ]}
             >
-              <Text style={[assigncard.monogram, { color: "#FFFFFF" }]}>
+              <Text style={[assigncard.monogram, { color: currentTheme.primaryBttnText }]}>
                 {displayName.charAt(0).toUpperCase()}
               </Text>
             </View>
@@ -105,6 +127,19 @@ export default function AssignCard({
           </Text>
         </View>
       )}
+      <Text style={{
+        color: state == "safe"
+          ? currentTheme.primaryBttn
+          : state == "warning"
+            ? currentTheme.yellow
+            : state == "emergency"
+              ? currentTheme.warnBttn
+              : currentTheme.text,
+
+        fontFamily: "Body-Bold",
+        fontSize: 16,
+        marginTop: 4
+      }}>{state.toUpperCase()}</Text>
     </Pressable>
   );
 }

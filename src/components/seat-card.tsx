@@ -12,6 +12,7 @@ type SeatCardProps = {
   seatNo: number;
   name?: string;
   state?: "safe" | "warning" | "emergency" | "empty" ;
+  role?: string;
   onPress: () => void;
 };
 
@@ -19,6 +20,7 @@ export default function SeatCard({
   seatNo,
   name = "empty",
   state = "empty",
+  role,
   onPress,
 }: SeatCardProps) {
   const colorScheme = useColorScheme();
@@ -58,6 +60,14 @@ export default function SeatCard({
           borderColor: "#fff",
         }}
       >
+        {role &&
+        <Text
+          style={[seatcard.stateName, { color: currentTheme.textSecondary }]}
+        >
+          {role.toUpperCase()}
+        </Text>
+        }
+        
         <Text style={[seatcard.name, { color: currentTheme.text, textTransform: "capitalize" }]}>
           {name}
         </Text>
