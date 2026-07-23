@@ -359,7 +359,7 @@ export default function Settings() {
 						{/* FOOTER */}
 						<View style={{ paddingHorizontal: 10 }}>
 							<Text style={[styles.caption, { color: currentTheme.textSecondary }]}>
-								v.26w30d2r01 • made with 💚 by safeseat team
+								v.26w30d5r01 • made with 💚 by safeseat team
 							</Text>
 						</View>
 					</View>

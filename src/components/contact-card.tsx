@@ -137,7 +137,7 @@ export default function ContactCard({
                             <Icon
                                 name={Icon.select({
                                     ios: "phone.fill",
-                                    android: import("@expo/material-symbols/phone_enabled.xml")
+                                    android: import("@expo/material-symbols/call.xml")
                                 })}
                                 color={currentTheme.primaryBttnText}
                             />

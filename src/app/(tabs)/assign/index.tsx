@@ -16,6 +16,7 @@ import * as Haptics from "expo-haptics";
 import { useCallback, useState } from "react";
 
 import Button from "@/components/button";
+import EmergencytModal from "@/components/emergency-modal";
 
 type Profile = {
 	id: string;
@@ -159,6 +160,16 @@ export default function Assign() {
 	const updateSeatStatus = async (seatNo: number, status: "safe" | "warning" | "emergency") => {
 		const updatedStatuses = { ...seatStatuses, [seatNo]: status };
 		setSeatStatuses(updatedStatuses);
+
+		// Clear dismissal so a new emergency on this seat shows the modal again
+		if (status === "emergency") {
+			setDismissedSeats((prev) => {
+				const next = new Set(prev);
+				next.delete(seatNo);
+				return next;
+			});
+		}
+
 		try {
 			await AsyncStorage.setItem(SEAT_STATUSES_KEY, JSON.stringify(updatedStatuses));
 		} catch (error) {
@@ -216,6 +227,19 @@ export default function Assign() {
 			setAssignModalVisible(true);
 		}
 	};
+
+	const [dismissedSeats, setDismissedSeats] = useState<Set<number>>(new Set());
+
+	const emergencySeat = isLockedIn
+		? SEATS.find(
+			({ seatNo }) =>
+				seatStatuses[seatNo] === "emergency" &&
+				assignments[seatNo] &&
+				!dismissedSeats.has(seatNo)
+		)
+		: undefined;
+
+	const emergencyProfile = emergencySeat ? assignments[emergencySeat.seatNo] : undefined;
 
 	return (
 		<SafeAreaView
@@ -292,6 +316,7 @@ export default function Assign() {
 							onPress={handleUnlock}
 							fullWidth={true}
 							variant="warn"
+							glass={false}
 						/>
 					) : (
 						<Button
@@ -300,6 +325,7 @@ export default function Assign() {
 							fullWidth={true}
 							variant="primary"
 							enabled={hasAssignedSeats}
+							glass={false}
 						/>
 					)}
 				</View>
@@ -314,6 +340,20 @@ export default function Assign() {
 						handleSeatAssigned(seatNum, profile);
 					}}
 				/>
+
+				{emergencySeat && emergencyProfile && (
+					<EmergencytModal
+						seat={emergencySeat.seatNo}
+						visible={true}
+						onClose={() =>
+							setDismissedSeats((prev) => new Set(prev).add(emergencySeat.seatNo))
+						}
+						id={emergencyProfile.id}
+						name={emergencyProfile.name}
+						icon={emergencyProfile.photoURL ?? emergencyProfile.icon}
+						isAccountOwner={emergencyProfile.isAccountOwner}
+					/>
+				)}
 			</View>
 		</SafeAreaView>
 	);

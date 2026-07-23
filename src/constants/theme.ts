@@ -35,7 +35,7 @@ export const Themes = {
     backgroundElement: "#212225",
     backgroundSelected: "#2E3135",
     textSecondary: "#B0B4BA",
-    primaryBttn: "#BBFFB3",
+    primaryBttn: "#BBFFB3", // BBFFB3
     primaryBttnText: "#000000",
     secondaryBttn: "#444444",
     secondaryBttnText: "#ffffff",

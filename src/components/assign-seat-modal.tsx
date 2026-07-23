@@ -317,7 +317,7 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
                                                     <Icon
                                                         name={Icon.select({
                                                             ios: "checkmark",
-                                                            android: import("@expo/material-symbols/check-circle.xml"),
+                                                            android: import("@expo/material-symbols/check.xml"),
                                                         })}
                                                     />
                                                 )}
