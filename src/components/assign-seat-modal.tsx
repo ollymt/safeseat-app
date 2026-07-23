@@ -303,7 +303,7 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
                                             key={profile.id}
                                             onPress={() => handleSelectProfile(profile.id)}
                                             // @ts-ignore
-                                            variant={"plain"}
+                                            variant={"text"}
                                         >
                                             <Row spacing={12} alignment="center">
                                                 {/* @ts-ignore */}
