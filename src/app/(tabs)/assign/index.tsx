@@ -1,11 +1,11 @@
 import { Themes } from "@/constants/theme";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
-	Alert,
-	StyleSheet,
-	Text,
-	useColorScheme,
-	View
+    Alert,
+    StyleSheet,
+    Text,
+    useColorScheme,
+    View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 

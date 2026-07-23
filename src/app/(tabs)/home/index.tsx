@@ -4,17 +4,17 @@ import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
-	ScrollView,
-	StyleSheet,
-	Text,
-	useColorScheme,
-	View,
+    ScrollView,
+    StyleSheet,
+    Text,
+    useColorScheme,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import SeatCard from "@/components/seat-card";
 import Button from "@/components/button";
 import EmergencytModal from "@/components/emergency-modal";
+import SeatCard from "@/components/seat-card";
 import { Host, Icon } from "@expo/ui";
 
 type Profile = {

@@ -1,23 +1,34 @@
 // components/AssignSeatModal.tsx
 import { Themes } from "@/constants/theme";
-import { BottomSheet, Host, Icon, Row, Spacer } from "@expo/ui";
+import {
+    BottomSheet,
+    Column,
+    Host,
+    Icon,
+    List,
+    Row,
+    Spacer,
+    Button as UIButton,
+    Text as UIText,
+} from "@expo/ui";
+import {
+    buttonBorderShape,
+    buttonStyle,
+    controlSize,
+} from "@expo/ui/swift-ui/modifiers";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Ionicons } from "@expo/vector-icons";
+import { GlassView } from "expo-glass-effect";
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
 import {
     ActivityIndicator,
     Image,
     Linking,
-    ScrollView,
     StyleSheet,
     Text,
-    Pressable,
     useColorScheme,
     View,
 } from "react-native";
-
-import { Button as UIButton } from "@expo/ui";
 
 import Button from "@/components/button";
 import { collection, getDocs } from "firebase/firestore";
@@ -27,7 +38,7 @@ interface EmergencyContact {
     id: string;
     name: string;
     phone: string;
-    hierarchy: number;
+    hierarchy: number; // 1-5
 }
 
 type Props = {
@@ -93,6 +104,7 @@ export default function EmergencyModal({
         }
     }, [visible, seat]);
 
+    // 📥 Fetch contacts matching the exact schema from Everyone screen
     const fetchAppEmergencyContacts = async () => {
         setLoadingContacts(true);
         let loadedContacts: EmergencyContact[] = [];
@@ -100,6 +112,7 @@ export default function EmergencyModal({
         try {
             const currentUser = auth.currentUser;
             if (currentUser) {
+                // Query users/{uid}/emergencyContacts
                 const contactsRef = collection(
                     db,
                     "users",
@@ -122,6 +135,7 @@ export default function EmergencyModal({
                     };
                 });
 
+                // Sort by hierarchy (1-5 ascending), unset (0) last
                 loadedContacts.sort((a, b) => {
                     if (a.hierarchy === 0 && b.hierarchy === 0) return 0;
                     if (a.hierarchy === 0) return 1;
@@ -129,6 +143,7 @@ export default function EmergencyModal({
                     return a.hierarchy - b.hierarchy;
                 });
 
+                // Sync local cache
                 if (loadedContacts.length > 0) {
                     await AsyncStorage.setItem(
                         LOCAL_EMERGENCY_CONTACTS_KEY,
@@ -137,6 +152,7 @@ export default function EmergencyModal({
                 }
             }
 
+            // Fallback to AsyncStorage if offline or Firestore is empty
             if (loadedContacts.length === 0) {
                 const cached = await AsyncStorage.getItem(LOCAL_EMERGENCY_CONTACTS_KEY);
                 if (cached) {
@@ -161,25 +177,17 @@ export default function EmergencyModal({
         fetchAppEmergencyContacts();
     };
 
-    const handleCall = async (phoneNumber: string) => {
-        try {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-            const cleanNumber = phoneNumber.replace(/[^0-9+]/g, "");
-            const url = `tel:${cleanNumber}`;
-            const supported = await Linking.canOpenURL(url);
-            if (supported) {
-                await Linking.openURL(url);
-            }
-        } catch (e) {
-            console.error("Failed to make phone call:", e);
-        }
+    const handleCall = (phoneNumber: string) => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        const cleanNumber = phoneNumber.replace(/[^0-9+]/g, "");
+        Linking.openURL(`tel:${cleanNumber}`);
     };
 
     if (!visible) return null;
 
     return (
         <View style={styles.glassViewCont}>
-            <View style={[styles.glassView, { backgroundColor: currentTheme.backgroundElement, borderWidth: 0, borderColor: currentTheme.text }]}>
+            <GlassView style={styles.glassView}>
                 {/* Header Content */}
                 <View style={styles.headerRow}>
                     {icon ? (
@@ -198,11 +206,16 @@ export default function EmergencyModal({
                     <Button variant="warn" onPress={() => { }} fullWidth={true}>
                         <View style={styles.buttonContent}>
                             <View style={styles.iconContainer}>
-                                <Ionicons
-                                    name="warning"
-                                    color={currentTheme.primaryBttnText}
-                                    size={30}
-                                />
+                                <Host matchContents>
+                                    <Icon
+                                        name={Icon.select({
+                                            ios: "light.beacon.max.fill",
+                                            android: import("@expo/material-symbols/siren.xml"),
+                                        })}
+                                        color={currentTheme.primaryBttnText}
+                                        size={36}
+                                    />
+                                </Host>
                             </View>
                             <Text
                                 style={[
@@ -222,11 +235,16 @@ export default function EmergencyModal({
                     >
                         <View style={styles.buttonContent}>
                             <View style={styles.iconContainer}>
-                                <Ionicons
-                                    name="call"
-                                    color={currentTheme.primaryBttnText}
-                                    size={30}
-                                />
+                                <Host matchContents>
+                                    <Icon
+                                        name={Icon.select({
+                                            ios: "phone.fill",
+                                            android: import("@expo/material-symbols/call.xml"),
+                                        })}
+                                        color={currentTheme.primaryBttnText}
+                                        size={36}
+                                    />
+                                </Host>
                             </View>
                             <Text
                                 style={[
@@ -240,109 +258,107 @@ export default function EmergencyModal({
                     </Button>
                 </View>
                 <View style={{ width: "100%", borderBottomLeftRadius: 16, borderBottomRightRadius: 16, overflow: "hidden" }}>
-                    <Button
-                        label="Dismiss"
-                        variant="secondary"
-                        onPress={onClose}
-                        fullWidth={true}
-                    />
+                <Button
+                    label="Dismiss"
+                    variant="secondary"
+                    onPress={onClose}
+                    fullWidth={true}
+                />
                 </View>
-            </View>
+            </GlassView>
 
-            {/*
-               ANDROID FIX:
-               The previous version mixed native @expo/ui components (Column, Row,
-               UIButton, UIText, Icon) directly inside a React Native <ScrollView>.
-               RN's layout system and Android's Compose interop don't reliably agree
-               on measurement when nested that way, which is what caused the crash
-               on "Call Emergency Contact". BottomSheet itself is still the native
-               @expo/ui component (needed for native sheet behavior), but everything
-               rendered *inside* it below is now plain React Native — no more
-               crossing native -> RN -> native boundaries. Icons were also switched
-               from the `android: import("...")` pattern (which passes an unresolved
-               Promise as the icon source) to @expo/vector-icons, which resolves
-               synchronously on both platforms.
-            */}
-            <BottomSheet
-                isPresented={econMenuVisible}
-                onDismiss={() => setEconMenuVisible(false)}
-                snapPoints={["full"]}
-                showDragIndicator={false}
-            >
-                <View style={{ paddingHorizontal: 16, paddingVertical: 12, width: "100%", alignItems: "center" }}>
-                    <View style={{ width: "100%", flexDirection: "row", justifyContent: "flex-end" }}>
-                        <Host matchContents>
-                            <Row alignment="start">
-                            <UIButton variant="outlined" onPress={() => setEconMenuVisible(false)}>
-                                <Icon name={Icon.select({
-                                    ios: "xmark",
-                                    android: import("@expo/material-symbols/close.xml")
-                                })}/>
+            {/* Contacts Selection Sheet */}
+            <Host>
+                <BottomSheet
+                    isPresented={econMenuVisible}
+                    onDismiss={() => setEconMenuVisible(false)}
+                    snapPoints={["half"]}
+                    showDragIndicator={false}
+                >
+                    <Column alignment="center" style={{ paddingHorizontal: 0 }} spacing={16}>
+                        <Row style={{ width: "100%" }}>
+                            <UIButton
+                                variant="outlined"
+                                onPress={() => setEconMenuVisible(false)}
+                                modifiers={[
+                                    buttonStyle("glass"),
+                                    controlSize("large"),
+                                    buttonBorderShape("circle"),
+                                ]}
+                            >
+                                <Icon
+                                    name={Icon.select({
+                                        ios: "xmark",
+                                        android: import("@expo/material-symbols/close.xml"),
+                                    })}
+                                />
                             </UIButton>
-                            <Spacer />
-                            </Row>
-                        </Host>
-                    </View>
+                            <Spacer flexible />
+                        </Row>
 
-                    <Text
-                        style={{
-                            color: currentTheme.text,
-                            fontSize: 24,
-                            fontWeight: "bold",
-                            textAlign: "center",
-                            marginBottom: 12,
-                        }}
-                    >
-                        Select Emergency Contact
-                    </Text>
-
-                    {loadingContacts ? (
-                        <ActivityIndicator
-                            size="large"
-                            color={currentTheme.text}
-                            style={{ marginVertical: 20 }}
-                        />
-                    ) : contacts.length > 0 ? (
-                        <ScrollView style={{ width: "100%", maxHeight: 300, borderRadius: 16 }} contentContainerStyle={{ gap: 0 }}>
-                            {contacts.map((contact) => (
-                                <Pressable
-                                    key={contact.id}
-                                    onPress={() => handleCall(contact.phone)}
-                                    style={[
-                                        styles.contactRow,
-                                        { backgroundColor: currentTheme.element, borderBottomWidth: 0, borderColor: currentTheme.secondaryBttn },
-                                    ]}
-                                >
-                                    <Host matchContents>
-                                        <Icon name={Icon.select({
-                                            ios: "phone.fill",
-                                            android: import("@expo/material-symbols/call.xml")
-                                        })} />
-                                    </Host>
-                                    <View style={{ marginLeft: 12 }}>
-                                        <Text style={{ color: currentTheme.text, fontSize: 18, fontWeight: "bold" }}>
-                                            {contact.name}
-                                        </Text>
-                                        <Text style={{ color: currentTheme.text, fontSize: 14 }}>
-                                            {contact.phone}
-                                        </Text>
-                                    </View>
-                                </Pressable>
-                            ))}
-                        </ScrollView>
-                    ) : (
-                        <Text
-                            style={{
-                                color: currentTheme.textSecondary || "#888",
-                                fontSize: 16,
+                        <UIText
+                            textStyle={{
+                                color: currentTheme.text,
+                                fontSize: 28,
+                                fontWeight: "bold",
                                 textAlign: "center",
                             }}
                         >
-                            No emergency contacts added yet.
-                        </Text>
-                    )}
-                </View>
-            </BottomSheet>
+                            Select Emergency Contact
+                        </UIText>
+
+                        {loadingContacts ? (
+                            <ActivityIndicator
+                                size="large"
+                                color={currentTheme.text}
+                                style={{ marginVertical: 0 }}
+                            />
+                        ) : contacts.length > 0 ? (
+                            <List>
+                                {contacts.map((contact) => {
+                                    const rankLabel = HIERARCHY_LABELS[contact.hierarchy];
+                                    return (
+                                        <UIButton
+                                            key={contact.id}
+                                            onPress={() => handleCall(contact.phone)}
+                                            modifiers={[buttonStyle("plain"), controlSize("large")]}
+                                        >
+                                            <Row alignment="center" style={{ width: "100%" }} spacing={12}>
+                                                <Icon
+                                                    name={Icon.select({
+                                                        ios: "phone.circle.fill",
+                                                        android: import("@expo/material-symbols/call.xml"),
+                                                    })}
+                                                    size={30}
+                                                />
+                                                <Column alignment="start">
+                                                    <UIText textStyle={{ fontSize: 20, fontWeight: "bold" }}>
+                                                        {contact.name}
+                                                    </UIText>
+                                                    <UIText textStyle={{ fontSize: 16 }}>
+                                                            {contact.phone}
+                                                    </UIText>
+                                                </Column>
+                                            </Row>
+                                        </UIButton>
+                                    );
+                                })}
+                            </List>
+                        ) : (
+                            <UIText
+                                textStyle={{
+                                    color: currentTheme.textSecondary || "#888",
+                                    fontSize: 16,
+                                    textAlign: "center",
+                                }}
+                            >
+                                No emergency contacts added yet.
+                            </UIText>
+                        )}
+                        <Spacer flexible />
+                    </Column>
+                </BottomSheet>
+            </Host>
         </View>
     );
 }
@@ -353,12 +369,12 @@ const styles = StyleSheet.create({
         flexDirection: "column",
         gap: 16,
         alignItems: "center",
-        borderRadius: 16,
+        borderRadius: 36,
         padding: 20,
     },
     glassViewCont: {
         position: "absolute",
-        bottom: 20,
+        bottom: 70,
         left: 20,
         right: 20,
         zIndex: 1000,
@@ -395,7 +411,6 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         alignItems: "center",
         height: 24,
-        width: 24,
     },
     buttonText: {
         fontFamily: "Body-Bold",
@@ -406,21 +421,5 @@ const styles = StyleSheet.create({
         height: 24,
         overflow: "visible",
         paddingTop: 2,
-    },
-    closeButton: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        borderWidth: StyleSheet.hairlineWidth,
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    contactRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        width: "100%",
-        paddingVertical: 10,
-        paddingHorizontal: 12,
-        borderWidth: StyleSheet.hairlineWidth,
     },
 });
