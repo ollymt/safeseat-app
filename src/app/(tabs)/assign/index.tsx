@@ -12,14 +12,14 @@ import Button from "@/components/button";
 import EmergencytModal from "@/components/emergency-modal";
 
 import {
-	addDoc,
-	arrayUnion,
-	collection,
-	deleteField,
-	doc,
-	onSnapshot,
-	setDoc,
-	updateDoc,
+  addDoc,
+  arrayUnion,
+  collection,
+  deleteField,
+  doc,
+  onSnapshot,
+  setDoc,
+  updateDoc,
 } from "firebase/firestore";
 import { auth, db } from "../../../firebase";
 
@@ -343,10 +343,22 @@ export default function Assign() {
       );
 
       if (profile) {
+        // 🛠️ Firestore rejects `undefined` field values outright (unlike
+        // `null`, which is fine). Since Profile.photoURL/icon/isAccountOwner
+        // are optional and may genuinely be undefined on some profiles,
+        // sanitize them to null/false before writing, or setDoc throws.
+        const sanitizedProfile = {
+          id: profile.id,
+          name: profile.name,
+          photoURL: profile.photoURL ?? null,
+          icon: profile.icon ?? null,
+          isAccountOwner: profile.isAccountOwner ?? false,
+        };
+
         await setDoc(
           tripDocRef,
           {
-            assignments: { [String(seatNumber)]: profile },
+            assignments: { [String(seatNumber)]: sanitizedProfile },
           },
           { merge: true },
         );
