@@ -1,17 +1,23 @@
-import { Themes } from "@/constants/theme";
-import { GlassView } from "expo-glass-effect";
+import { Gradients, Materials, Themes } from "@/constants/theme";
 import * as Haptics from "expo-haptics";
 import { Pressable, StyleSheet, Text, useColorScheme, View } from "react-native";
+import { GlossSurface } from "@/components/skeuo";
 
 type ButtonProps = {
-	variant?: "primary" | "secondary" | "warn" | "tertiary"; // Using literal types instead of generic string prevents typing bugs!
+	variant?: "primary" | "secondary" | "warn" | "tertiary";
 	label?: string;
-	enabled?: boolean; // Made optional with ? so it defaults nicely
-	fullWidth?: boolean; // Made optional with ? so it defaults nicely
+	enabled?: boolean;
+	fullWidth?: boolean;
 	onPress: () => void;
 	style?: any;
 	children?: any;
-	glass?: boolean;
+	glass?: boolean; // kept for API compatibility, unused (no native glass here)
+};
+
+const TONE_BY_VARIANT: Record<string, readonly string[]> = {
+	primary: Gradients.glossGreen,
+	warn: Gradients.glossRed,
+	secondary: Gradients.glossTan,
 };
 
 export default function Button({
@@ -22,102 +28,80 @@ export default function Button({
 	onPress,
 	style,
 	children,
-	glass = false,
 }: ButtonProps) {
 	const colorScheme = useColorScheme();
 	const activeScheme = colorScheme === "dark" ? "dark" : "light";
 	const currentTheme = Themes[activeScheme];
 
 	const handlePress = () => {
-		// Triggers a light, crisp native tap feel
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-		// Then fire the regular onPress action passed by the parent screen
 		onPress();
 	};
 
-	const containerStyle = [
-		style,
-		button.baseButton,
-		fullWidth && { width: "100%" as const }, // Wired up the fullWidth check dynamically
-		{ alignItems: "center" as const, justifyContent: "center" as const },
-		// Dynamic styling check
-		variant === "primary"
-			? { backgroundColor: currentTheme.primaryBttn }
-			: variant === "secondary"
-				? { backgroundColor: currentTheme.secondaryBttn }
-				: variant === "warn"
-					? { backgroundColor: currentTheme.warnBttn }
-					: { backgroundColor: "transparent" }, // Fixed the "varian" typo to point to warn
+	if (variant === "tertiary") {
+		// A plain engraved-text link, no leather/plastic body.
+		return (
+			<Pressable
+				onPress={handlePress}
+				disabled={!enabled}
+				style={[fullWidth && { width: "100%" }, { alignItems: "center", opacity: enabled ? 1 : 0.5 }, style]}
+			>
+				{children}
+				{label && (
+					<Text style={[button.baseText, { color: currentTheme.primaryBttn, textDecorationLine: "underline" }]}>
+						{label}
+					</Text>
+				)}
+			</Pressable>
+		);
+	}
 
-		!enabled && button.disabledButton, // Applies opacity if disabled is passed
-	];
+	const tone = TONE_BY_VARIANT[variant] ?? Gradients.glossGreen;
+	const textColor =
+		variant === "secondary" ? currentTheme.secondaryBttnText : currentTheme.primaryBttnText;
 
-	const textStyle = [
-		button.baseText,
-		variant === "primary" || variant === "warn"
-			? { color: currentTheme.primaryBttnText, fontWeight: "bold" as const }
-			: variant === "secondary"
-				? { color: currentTheme.text }
-				: { color: currentTheme.primaryBttn },
-
-		!enabled && button.disabledText,
-	];
-
-	const content = (
-		<Pressable
-			style={{ width: "100%", alignItems: "center" }}
-			onPress={handlePress}
-			disabled={!enabled} // Wired up the native disabled state
+	return (
+		<GlossSurface
+			tone={tone}
+			style={[button.baseButton, fullWidth && { width: "100%" }, !enabled && button.disabledButton, style]}
 		>
-			{children}
-			{label && <Text style={textStyle}>{label}</Text>}
-		</Pressable>
-	);
-
-	return glass ? (
-		<GlassView style={containerStyle}>{content}</GlassView>
-	) : (
-		<View style={containerStyle}>{content}</View>
+			<Pressable
+				style={{ width: "100%", alignItems: "center", justifyContent: "center", paddingVertical: 15 }}
+				onPress={handlePress}
+				disabled={!enabled}
+			>
+				{children}
+				{label && (
+					<Text
+						style={[
+							button.baseText,
+							{
+								color: textColor,
+								textShadowColor: "rgba(0,0,0,0.35)",
+								textShadowOffset: { width: 0, height: 1 },
+								textShadowRadius: 1,
+							},
+						]}
+					>
+						{label}
+					</Text>
+				)}
+			</Pressable>
+		</GlossSurface>
 	);
 }
 
 const button = StyleSheet.create({
 	disabledButton: {
-		opacity: 0.5,
+		opacity: 0.45,
 	},
 	baseButton: {
-		padding: 16,
-		borderRadius: 100,
-		alignItems: "center", // Centers text inside horizontal capsules
+		alignItems: "center",
 		justifyContent: "center",
 	},
-	primaryButton: {
-		backgroundColor: "#25601D",
-	},
-	secondaryButton: {
-		backgroundColor: "#cccccc",
-	},
-	warnButton: {
-		backgroundColor: "#f5425d",
-	},
-	disabledText: {
-		opacity: 0.5,
-	},
 	baseText: {
-		fontSize: 16,
-		fontWeight: "600",
-	},
-	primaryText: {
-		color: "#ffffff",
-		fontFamily: "Body-Bold",
-	},
-	secondaryText: {
-		color: "#000000",
-		fontFamily: "Body-Medium",
-	},
-	warnText: {
-		color: "#ffffff",
-		fontFamily: "Body-Medium",
+		fontSize: 17,
+		fontWeight: "800",
+		letterSpacing: 0.3,
 	},
 });

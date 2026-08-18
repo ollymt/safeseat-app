@@ -1,6 +1,5 @@
 // components/AssignSeatModal.tsx
 import { Themes } from "@/constants/theme";
-import { BottomSheet, Host, Icon, Row, Spacer } from "@expo/ui";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -9,6 +8,7 @@ import {
     ActivityIndicator,
     Image,
     Linking,
+    Modal,
     ScrollView,
     StyleSheet,
     Text,
@@ -17,9 +17,8 @@ import {
     View,
 } from "react-native";
 
-import { Button as UIButton } from "@expo/ui";
-
 import Button from "@/components/button";
+import { LeatherPanel, PaperCard } from "@/components/skeuo";
 import { collection, getDocs } from "firebase/firestore";
 import { auth, db } from "../firebase";
 
@@ -179,16 +178,16 @@ export default function EmergencyModal({
 
     return (
         <View style={styles.glassViewCont}>
-            <View style={[styles.glassView, { backgroundColor: currentTheme.backgroundElement, borderWidth: 0, borderColor: currentTheme.text }]}>
+            <LeatherPanel style={[styles.glassView, { borderColor: "#D8543F", borderWidth: 2 }]}>
                 {/* Header Content */}
                 <View style={styles.headerRow}>
                     {icon ? (
                         <Image
                             source={{ uri: icon }}
-                            style={[styles.avatar, { borderColor: currentTheme.text }]}
+                            style={[styles.avatar, { borderColor: "#C9A227" }]}
                         />
                     ) : null}
-                    <Text style={[styles.titleText, { color: currentTheme.text }]}>
+                    <Text style={[styles.titleText, { color: "#F1E3C6" }]}>
                         {name} is having an emergency!
                     </Text>
                 </View>
@@ -247,7 +246,7 @@ export default function EmergencyModal({
                         fullWidth={true}
                     />
                 </View>
-            </View>
+            </LeatherPanel>
 
             {/*
                ANDROID FIX:
@@ -263,86 +262,59 @@ export default function EmergencyModal({
                Promise as the icon source) to @expo/vector-icons, which resolves
                synchronously on both platforms.
             */}
-            <BottomSheet
-                isPresented={econMenuVisible}
-                onDismiss={() => setEconMenuVisible(false)}
-                snapPoints={["full"]}
-                showDragIndicator={false}
+            <Modal
+                visible={econMenuVisible}
+                animationType="slide"
+                transparent
+                onRequestClose={() => setEconMenuVisible(false)}
             >
-                <View style={{ paddingHorizontal: 16, paddingVertical: 12, width: "100%", alignItems: "center" }}>
-                    <View style={{ width: "100%", flexDirection: "row", justifyContent: "flex-end" }}>
-                        <Host matchContents>
-                            <Row alignment="start">
-                            <UIButton variant="outlined" onPress={() => setEconMenuVisible(false)}>
-                                <Icon name={Icon.select({
-                                    ios: "xmark",
-                                    android: import("@expo/material-symbols/close.xml")
-                                })}/>
-                            </UIButton>
-                            <Spacer />
-                            </Row>
-                        </Host>
-                    </View>
+                <View style={styles.contactSheetBackdrop}>
+                    <LeatherPanel style={styles.contactSheet} inset={10}>
+                        <View style={{ width: "100%", flexDirection: "row", justifyContent: "flex-end" }}>
+                            <Pressable onPress={() => setEconMenuVisible(false)} style={styles.closeCircle}>
+                                <Ionicons name="close" size={18} color="#F1E3C6" />
+                            </Pressable>
+                        </View>
 
-                    <Text
-                        style={{
-                            color: currentTheme.text,
-                            fontSize: 24,
-                            fontWeight: "bold",
-                            textAlign: "center",
-                            marginBottom: 12,
-                        }}
-                    >
-                        Select Emergency Contact
-                    </Text>
-
-                    {loadingContacts ? (
-                        <ActivityIndicator
-                            size="large"
-                            color={currentTheme.text}
-                            style={{ marginVertical: 20 }}
-                        />
-                    ) : contacts.length > 0 ? (
-                        <ScrollView style={{ width: "100%", maxHeight: 300, borderRadius: 16 }} contentContainerStyle={{ gap: 0 }}>
-                            {contacts.map((contact) => (
-                                <Pressable
-                                    key={contact.id}
-                                    onPress={() => handleCall(contact.phone)}
-                                    style={[
-                                        styles.contactRow,
-                                        { backgroundColor: currentTheme.element, borderBottomWidth: 0, borderColor: currentTheme.secondaryBttn },
-                                    ]}
-                                >
-                                    <Host matchContents>
-                                        <Icon name={Icon.select({
-                                            ios: "phone.fill",
-                                            android: import("@expo/material-symbols/call.xml")
-                                        })} />
-                                    </Host>
-                                    <View style={{ marginLeft: 12 }}>
-                                        <Text style={{ color: currentTheme.text, fontSize: 18, fontWeight: "bold" }}>
-                                            {contact.name}
-                                        </Text>
-                                        <Text style={{ color: currentTheme.text, fontSize: 14 }}>
-                                            {contact.phone}
-                                        </Text>
-                                    </View>
-                                </Pressable>
-                            ))}
-                        </ScrollView>
-                    ) : (
-                        <Text
-                            style={{
-                                color: currentTheme.textSecondary || "#888",
-                                fontSize: 16,
-                                textAlign: "center",
-                            }}
-                        >
-                            No emergency contacts added yet.
+                        <Text style={styles.contactSheetTitle}>
+                            Select Emergency Contact
                         </Text>
-                    )}
+
+                        {loadingContacts ? (
+                            <ActivityIndicator
+                                size="large"
+                                color="#F1E3C6"
+                                style={{ marginVertical: 20 }}
+                            />
+                        ) : contacts.length > 0 ? (
+                            <ScrollView style={{ width: "100%", maxHeight: 340 }} contentContainerStyle={{ gap: 8 }}>
+                                {contacts.map((contact) => (
+                                    <PaperCard key={contact.id} style={{ padding: 0 }}>
+                                        <Pressable
+                                            onPress={() => handleCall(contact.phone)}
+                                            style={styles.contactRow}
+                                        >
+                                            <Ionicons name="call" size={20} color={currentTheme.primaryBttn} />
+                                            <View style={{ marginLeft: 12 }}>
+                                                <Text style={{ color: currentTheme.text, fontSize: 18, fontWeight: "800" }}>
+                                                    {contact.name}
+                                                </Text>
+                                                <Text style={{ color: currentTheme.textSecondary, fontSize: 14 }}>
+                                                    {contact.phone}
+                                                </Text>
+                                            </View>
+                                        </Pressable>
+                                    </PaperCard>
+                                ))}
+                            </ScrollView>
+                        ) : (
+                            <Text style={styles.contactSheetEmpty}>
+                                No emergency contacts added yet.
+                            </Text>
+                        )}
+                    </LeatherPanel>
                 </View>
-            </BottomSheet>
+            </Modal>
         </View>
     );
 }
@@ -419,8 +391,42 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         width: "100%",
-        paddingVertical: 10,
-        paddingHorizontal: 12,
-        borderWidth: StyleSheet.hairlineWidth,
+        paddingVertical: 14,
+        paddingHorizontal: 14,
+    },
+    contactSheetBackdrop: {
+        flex: 1,
+        justifyContent: "flex-end",
+        backgroundColor: "rgba(0,0,0,0.55)",
+    },
+    contactSheet: {
+        width: "100%",
+        maxHeight: "80%",
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 20,
+        paddingBottom: 34,
+    },
+    contactSheetTitle: {
+        color: "#F1E3C6",
+        fontSize: 22,
+        fontWeight: "800",
+        textAlign: "center",
+        marginBottom: 14,
+    },
+    contactSheetEmpty: {
+        color: "#C9AC7C",
+        fontSize: 16,
+        textAlign: "center",
+    },
+    closeCircle: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: "rgba(255,255,255,0.08)",
+        alignItems: "center",
+        justifyContent: "center",
+        borderWidth: 1,
+        borderColor: "rgba(255,255,255,0.2)",
     },
 });

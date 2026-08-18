@@ -14,8 +14,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Button, Host, Row, TextInput } from "@expo/ui";
-import { buttonBorderShape, buttonStyle, controlSize, keyboardType } from '@expo/ui/swift-ui/modifiers';
+import Button from "@/components/button";
+import SkeuoInput from "@/components/skeuo-input";
+import { LinenBackground, LeatherPanel, PaperCard } from "@/components/skeuo";
 
 import TextBlock from "@/components/text-block";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -614,357 +615,301 @@ export default function Profile() {
 	}, []);
 
 	return (
-		<SafeAreaView
-			style={{ flex: 1, backgroundColor: currentTheme.background }}
-			edges={Platform.OS == "ios" ? ['left', 'right'] : ['left', 'right', "top"]}
-		>
-			<ScrollView
-				contentContainerStyle={[{ flexGrow: 1, paddingBottom: 40 }, Platform.OS == "android" && { marginTop: 50 }]}
-				showsVerticalScrollIndicator={true}
-				bounces={true}
-				automaticallyAdjustKeyboardInsets={true}
-				keyboardShouldPersistTaps="handled"
+		<LinenBackground>
+			<SafeAreaView
+				style={{ flex: 1 }}
+				edges={Platform.OS == "ios" ? ['left', 'right'] : ['left', 'right', "top"]}
 			>
-				<View style={[styles.container, { marginTop: -20, paddingBottom: 100 }]}>
-					<View style={{ flexDirection: "column", alignItems: "center", marginBottom: 0 }}>
-						<Image source={userIcon === "Not Set" || userIcon === "" || userIcon === null ? { uri: "https://pbs.twimg.com/media/C8SFjSYWAAA6452.jpg" } : { uri: userIcon }} style={{ width: 150, height: 150, borderRadius: 75 }} />
-						<Text style={[styles.pageHeader, { color: currentTheme.text, flex: 1 }]}>
-							{userName.split(" ")[0]}
-						</Text>
-						<Host matchContents>
-							{editMode ?
-								<Row spacing={8}>
+				<ScrollView
+					contentContainerStyle={[{ flexGrow: 1, paddingBottom: 40 }, Platform.OS == "android" && { marginTop: 50 }]}
+					showsVerticalScrollIndicator={true}
+					bounces={true}
+					automaticallyAdjustKeyboardInsets={true}
+					keyboardShouldPersistTaps="handled"
+				>
+					<View style={[styles.container, { marginTop: -20, paddingBottom: 100 }]}>
+						<View style={{ flexDirection: "column", alignItems: "center", marginBottom: 0 }}>
+							<View style={styles.avatarFrame}>
+								<Image source={userIcon === "Not Set" || userIcon === "" || userIcon === null ? { uri: "https://pbs.twimg.com/media/C8SFjSYWAAA6452.jpg" } : { uri: userIcon }} style={{ width: 150, height: 150, borderRadius: 75 }} />
+							</View>
+							<Text style={[styles.pageHeader, { color: currentTheme.text, flex: 1 }]}>
+								{userName.split(" ")[0]}
+							</Text>
+							<View style={{ marginTop: 10 }}>
+								{editMode ?
+									<View style={{ flexDirection: "row", gap: 8 }}>
+										<Button
+											label="Cancel"
+											variant="secondary"
+											onPress={() => {
+												Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+												handleCancelEdit();
+											}}
+										/>
+										<Button
+											label="Save"
+											variant="primary"
+											enabled={isFormValid}
+											onPress={() => {
+												Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+												handleSaveChanges();
+											}}
+										/>
+									</View> :
 									<Button
-										label="Cancel"
-										variant="outlined"
-										modifiers={[
-											controlSize("small"),
-											buttonStyle("glass"),
-											buttonBorderShape("capsule")]}
+										label="Edit Profile"
+										variant="secondary"
 										onPress={() => {
-											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-											handleCancelEdit();
+											executeSecureAction(() => {
+												Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+												setEditMode(true);
+											});
 										}}
-									/>
-									<Button
-										label="Save"
-										variant="filled"
-										// @ts-ignore
-										disabled={!isFormValid}
-										modifiers={[
-											controlSize("small"),
-											buttonStyle("borderedProminent"),
-											buttonBorderShape("capsule")]}
-										onPress={() => {
-											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-											handleSaveChanges();
-										}}
-									/>
-								</Row> :
-								<Button
-									label="Edit Profile"
-									variant="outlined"
-									modifiers={[
-										controlSize("small"),
-										buttonStyle("glass"),
-										buttonBorderShape("capsule")]}
-									onPress={() => {
-										executeSecureAction(() => {
-											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-											setEditMode(true);
-										});
-									}}
-								/>}
-						</Host>
-					</View>
-					<View style={{ borderColor: currentTheme.textSecondary, borderWidth: 1, opacity: 0.5, marginVertical: 20 }} />
-					<View style={{ gap: 10 }}>
-
-						<Text style={{ fontFamily: "Condensed-Bold", color: currentTheme.text, fontSize: 24, marginTop: 10 }}>PERSONAL INFORMATION</Text>
-
-						<View style={styles.fieldContainer}>
-							<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
-								NAME
-							</Text>
-							{editMode ?
-								<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
-									<Host matchContents>
-										<TextInput
-											// @ts-ignore
-											defaultValue={userName}
-											onChangeText={setUserName}
-											placeholder="Name" />
-									</Host>
-								</View>
-								:
-								<TextBlock text={userName} />
-							}
+									/>}
+							</View>
 						</View>
+						<View style={{ borderColor: currentTheme.textSecondary, borderWidth: 1, opacity: 0.5, marginVertical: 20 }} />
+						<View style={{ gap: 10 }}>
 
-						<View style={styles.fieldContainer}>
-							<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
-								EMAIL
-							</Text>
-							{editMode ?
-								<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
-									<Host matchContents>
-										<TextInput
-											// @ts-ignore
-											defaultValue={userEmail}
-											onChangeText={setUserEmail}
-											placeholder="Email"
-											modifiers={[keyboardType("email-address")]} />
-									</Host>
-								</View>
-								:
-								<TextBlock text={userEmail} />
-							}
-						</View>
+							<Text style={{ fontWeight: "800", letterSpacing: 0.5, color: currentTheme.text, fontSize: 22, marginTop: 10 }}>PERSONAL INFORMATION</Text>
 
-						<View style={styles.fieldContainer}>
-							<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
-								PHONE NUMBER
-							</Text>
-							{editMode ?
-								<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
-									<Host matchContents>
-										<TextInput
-											// @ts-ignore
-											defaultValue={userPhone}
-											onChangeText={setUserPhone}
-											placeholder="Phone Number"
-											modifiers={[keyboardType("phone-pad")]} />
-									</Host>
-								</View>
-								:
-								<TextBlock text={userPhone} />
-							}
-						</View>
-
-						<View style={{ borderColor: currentTheme.textSecondary, borderWidth: 1, opacity: 0.5, marginVertical: 10 }} />
-
-						<Text style={{ fontFamily: "Condensed-Bold", color: currentTheme.text, fontSize: 24, marginBottom: 10 }}>HEALTH INFORMATION</Text>
-
-						<View style={{ flexDirection: "row", gap: 10, borderColor: "#000", borderWidth: 0 }}>
-							<View style={[styles.fieldContainer, { flex: 2.2 }]}>
+							<View style={styles.fieldContainer}>
 								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
-									BIRTHDAY
+									NAME
 								</Text>
 								{editMode ?
-									<>
-										<View style={{ flexDirection: "row", gap: 6 }}>
-											{/* Month Input */}
-											<View style={[styles.textInput, { backgroundColor: currentTheme.element, flex: 1 }]}>
-												<Host matchContents>
-													<TextInput
-														// @ts-ignore
+									<SkeuoInput
+										defaultValue={userName}
+										onChangeText={setUserName}
+										placeholder="Name"
+									/>
+									:
+									<TextBlock text={userName} />
+								}
+							</View>
+
+							<View style={styles.fieldContainer}>
+								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
+									EMAIL
+								</Text>
+								{editMode ?
+									<SkeuoInput
+										defaultValue={userEmail}
+										onChangeText={setUserEmail}
+										placeholder="Email"
+										keyboardType="email-address"
+									/>
+									:
+									<TextBlock text={userEmail} />
+								}
+							</View>
+
+							<View style={styles.fieldContainer}>
+								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
+									PHONE NUMBER
+								</Text>
+								{editMode ?
+									<SkeuoInput
+										defaultValue={userPhone}
+										onChangeText={setUserPhone}
+										placeholder="Phone Number"
+										keyboardType="phone-pad"
+									/>
+									:
+									<TextBlock text={userPhone} />
+								}
+							</View>
+
+							<View style={{ borderColor: currentTheme.textSecondary, borderWidth: 1, opacity: 0.5, marginVertical: 10 }} />
+
+							<Text style={{ fontWeight: "800", letterSpacing: 0.5, color: currentTheme.text, fontSize: 22, marginBottom: 10 }}>HEALTH INFORMATION</Text>
+
+							<View style={{ flexDirection: "row", gap: 10, borderColor: "#000", borderWidth: 0 }}>
+								<View style={[styles.fieldContainer, { flex: 2.2 }]}>
+									<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
+										BIRTHDAY
+									</Text>
+									{editMode ?
+										<>
+											<View style={{ flexDirection: "row", gap: 6 }}>
+												{/* Month Input */}
+												<View style={{ flex: 1 }}>
+													<SkeuoInput
 														defaultValue={birthMonth}
 														onChangeText={(val) => setBirthMonth(val.replace(/[^0-9]/g, ""))}
 														placeholder="MM"
-														modifiers={[keyboardType("decimal-pad")]}
+														keyboardType="decimal-pad"
 													/>
-												</Host>
-											</View>
-											{/* Day Input */}
-											<View style={[styles.textInput, { backgroundColor: currentTheme.element, flex: 1 }]}>
-												<Host matchContents>
-													<TextInput
-														// @ts-ignore
+												</View>
+												{/* Day Input */}
+												<View style={{ flex: 1 }}>
+													<SkeuoInput
 														defaultValue={birthDate}
 														onChangeText={(val) => setBirthDate(val.replace(/[^0-9]/g, ""))}
 														placeholder="DD"
-														modifiers={[keyboardType("decimal-pad")]}
+														keyboardType="decimal-pad"
 													/>
-												</Host>
-											</View>
-											{/* Year Input */}
-											<View style={[styles.textInput, { backgroundColor: currentTheme.element, flex: 1.5 }]}>
-												<Host matchContents>
-													<TextInput
-														// @ts-ignore
+												</View>
+												{/* Year Input */}
+												<View style={{ flex: 1.5 }}>
+													<SkeuoInput
 														defaultValue={birthYear}
 														onChangeText={(val) => setBirthYear(val.replace(/[^0-9]/g, ""))}
 														placeholder="YYYY"
-														modifiers={[keyboardType("decimal-pad")]}
+														keyboardType="decimal-pad"
 													/>
-												</Host>
+												</View>
 											</View>
-										</View>
 
-										{/* 👇 NEW: warning goes here, right after the row of three inputs */}
-										{(() => {
-											const y = parseInt(birthYear, 10);
-											const m = parseInt(birthMonth, 10);
-											const d = parseInt(birthDate, 10);
-											const hasAllParts = birthYear !== "" && birthMonth !== "" && birthDate !== "";
-											if (!hasAllParts) return null;
-											if (!isValidDateParts(y, m, d)) {
-												return (
-													<Text style={{ fontSize: 12, color: "#FF3B30", marginTop: 4 }}>
-														Please enter a valid calendar date.
-													</Text>
-												);
-											}
-											if (isUnder18Parts(y, m, d)) {
-												return (
-													<Text style={{ fontSize: 12, color: "#FF3B30", marginTop: 4 }}>
-														Profile holder must be at least 18 years old.
-													</Text>
-												);
-											}
-											return null;
-										})()}
-									</>
-									:
-									<TextBlock text={getFormattedDate()} />
-								}
+											{/* 👇 NEW: warning goes here, right after the row of three inputs */}
+											{(() => {
+												const y = parseInt(birthYear, 10);
+												const m = parseInt(birthMonth, 10);
+												const d = parseInt(birthDate, 10);
+												const hasAllParts = birthYear !== "" && birthMonth !== "" && birthDate !== "";
+												if (!hasAllParts) return null;
+												if (!isValidDateParts(y, m, d)) {
+													return (
+														<Text style={{ fontSize: 12, color: "#FF3B30", marginTop: 4 }}>
+															Please enter a valid calendar date.
+														</Text>
+													);
+												}
+												if (isUnder18Parts(y, m, d)) {
+													return (
+														<Text style={{ fontSize: 12, color: "#FF3B30", marginTop: 4 }}>
+															Profile holder must be at least 18 years old.
+														</Text>
+													);
+												}
+												return null;
+											})()}
+										</>
+										:
+										<TextBlock text={getFormattedDate()} />
+									}
+								</View>
+								<View style={[styles.fieldContainer, { flex: .75 }]}>
+									<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
+										AGE
+									</Text>
+									<TextBlock text={getAge()} />
+								</View>
+								<View style={[styles.fieldContainer, { flex: 1.75 }]}>
+									<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
+										ZODIAC
+									</Text>
+									<TextBlock text={getZodiacSign()} />
+								</View>
 							</View>
-							<View style={[styles.fieldContainer, { flex: .75 }]}>
-								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
-									AGE
-								</Text>
-								<TextBlock text={getAge()} />
-							</View>
-							<View style={[styles.fieldContainer, { flex: 1.75 }]}>
-								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
-									ZODIAC
-								</Text>
-								<TextBlock text={getZodiacSign()} />
-							</View>
-						</View>
 
-						<View style={{ flexDirection: "row", gap: 10, borderColor: "#000", borderWidth: 0 }}>
-							<View style={[styles.fieldContainer, { flex: 1.2 }]}>
-								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
-									HEIGHT {isMetric ? "(CM)" : "(FT / IN)"}
-								</Text>
-								{editMode ? (
-									isMetric ? (
-										<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
-											<Host matchContents>
-												<TextInput
-													// @ts-ignore
-													defaultValue={height === "Not Set" ? "" : height}
-													onChangeText={setHeight}
-													placeholder="e.g. 175"
-													modifiers={[keyboardType("decimal-pad")]}
-												/>
-											</Host>
-										</View>
-									) : (
-										<View style={{ flexDirection: "row", gap: 6 }}>
-											{/* Feet Input */}
-											<View style={[styles.textInput, { backgroundColor: currentTheme.element, flex: 1 }]}>
-												<Host matchContents>
-													<TextInput
-														// @ts-ignore
+							<View style={{ flexDirection: "row", gap: 10, borderColor: "#000", borderWidth: 0 }}>
+								<View style={[styles.fieldContainer, { flex: 1.2 }]}>
+									<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
+										HEIGHT {isMetric ? "(CM)" : "(FT / IN)"}
+									</Text>
+									{editMode ? (
+										isMetric ? (
+											<SkeuoInput
+												defaultValue={height === "Not Set" ? "" : height}
+												onChangeText={setHeight}
+												placeholder="e.g. 175"
+												keyboardType="decimal-pad"
+											/>
+										) : (
+											<View style={{ flexDirection: "row", gap: 6 }}>
+												{/* Feet Input */}
+												<View style={{ flex: 1 }}>
+													<SkeuoInput
 														defaultValue={tempFeet}
 														onChangeText={(val) => setTempFeet(val.replace(/[^0-9]/g, ""))}
 														placeholder="Feet"
-														modifiers={[keyboardType("decimal-pad")]}
+														keyboardType="decimal-pad"
 													/>
-												</Host>
-											</View>
-											{/* Inches Input */}
-											<View style={[styles.textInput, { backgroundColor: currentTheme.element, flex: 1 }]}>
-												<Host matchContents>
-													<TextInput
-														// @ts-ignore
+												</View>
+												{/* Inches Input */}
+												<View style={{ flex: 1 }}>
+													<SkeuoInput
 														defaultValue={tempInches}
 														onChangeText={(val) => setTempInches(val.replace(/[^0-9]/g, ""))}
 														placeholder="Inches"
-														modifiers={[keyboardType("decimal-pad")]}
+														keyboardType="decimal-pad"
 													/>
-												</Host>
+												</View>
 											</View>
-										</View>
-									)
-								) : (
-									<TextBlock text={getDisplayHeight()} />
-								)}
+										)
+									) : (
+										<TextBlock text={getDisplayHeight()} />
+									)}
+								</View>
+								<View style={[styles.fieldContainer, { flex: 1 }]}>
+									<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
+										WEIGHT {isMetric ? "(KG)" : "(LB)"}
+									</Text>
+									{editMode ?
+										<SkeuoInput
+											defaultValue={weight === "Not Set" ? "" : weight}
+											onChangeText={setWeight}
+											placeholder={isMetric ? "e.g. 70" : "e.g. 154"}
+											keyboardType="decimal-pad"
+										/>
+										:
+										<TextBlock text={getDisplayWeight()} />
+									}
+								</View>
 							</View>
-							<View style={[styles.fieldContainer, { flex: 1 }]}>
+
+							<View style={styles.fieldContainer}>
 								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
-									WEIGHT {isMetric ? "(KG)" : "(LB)"}
+									BLOOD TYPE
 								</Text>
 								{editMode ?
-									<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
-										<Host matchContents>
-											<TextInput
-												// @ts-ignore
-												defaultValue={weight === "Not Set" ? "" : weight}
-												onChangeText={setWeight}
-												placeholder={isMetric ? "e.g. 70" : "e.g. 154"}
-												modifiers={[keyboardType("decimal-pad")]}
-											/>
-										</Host>
-									</View>
+									<SkeuoInput
+										defaultValue={bloodType === "Not Set" ? "" : bloodType}
+										onChangeText={setBloodType}
+										placeholder="e.g. A+, O-, AB+"
+										autoCapitalize="characters"
+									/>
 									:
-									<TextBlock text={getDisplayWeight()} />
+									<TextBlock text={bloodType.toUpperCase()} />
+								}
+							</View>
+
+							<View style={styles.fieldContainer}>
+								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
+									ALLERGIES
+								</Text>
+								{editMode ?
+									<SkeuoInput
+										defaultValue={allergies === "None Stored" ? "" : allergies}
+										onChangeText={setAllergies}
+										placeholder="e.g. Peanuts, Penicillin"
+									/>
+									:
+									<TextBlock text={allergies === "" ? "None Stored" : allergies} />
 								}
 							</View>
 						</View>
 
-						<View style={styles.fieldContainer}>
-							<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
-								BLOOD TYPE
-							</Text>
-							{editMode ?
-								<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
-									<Host matchContents>
-										<TextInput
-											// @ts-ignore
-											defaultValue={bloodType === "Not Set" ? "" : bloodType}
-											onChangeText={setBloodType}
-											placeholder="e.g. A+, O-, AB+"
-											autoCapitalize="characters"
-										/>
-									</Host>
-								</View>
-								:
-								<TextBlock text={bloodType.toUpperCase()} />
-							}
-						</View>
-
-						<View style={styles.fieldContainer}>
-							<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
-								ALLERGIES
-							</Text>
-							{editMode ?
-								<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
-									<Host matchContents>
-										<TextInput
-											// @ts-ignore
-											defaultValue={allergies === "None Stored" ? "" : allergies}
-											onChangeText={setAllergies}
-											placeholder="e.g. Peanuts, Penicillin"
-										/>
-									</Host>
-								</View>
-								:
-								<TextBlock text={allergies === "" ? "None Stored" : allergies} />
-							}
-						</View>
-					</View>
-
-					<PasswordVerifyModal
-						visible={authModalVisible}
-						onClose={() => {
-							setAuthModalVisible(false);
-							setPendingAction(null);
-						}}
-						onSuccess={() => {
-							setAuthModalVisible(false);
-							if (pendingAction) {
-								pendingAction();
+						<PasswordVerifyModal
+							visible={authModalVisible}
+							onClose={() => {
+								setAuthModalVisible(false);
 								setPendingAction(null);
-							}
-						}}
-					/>
+							}}
+							onSuccess={() => {
+								setAuthModalVisible(false);
+								if (pendingAction) {
+									pendingAction();
+									setPendingAction(null);
+								}
+							}}
+						/>
 
-				</View>
-			</ScrollView>
-		</SafeAreaView>
+					</View>
+				</ScrollView>
+			</SafeAreaView>
+		</LinenBackground>
 	);
 }
 
@@ -979,16 +924,27 @@ const styles = StyleSheet.create({
 		width: "100%",
 	},
 	pageHeader: {
-		fontSize: 40,
-		fontFamily: "Logo-Font",
+		fontSize: 32,
+		fontWeight: "800",
+		marginTop: 10,
+	},
+	avatarFrame: {
+		padding: 5,
+		borderRadius: 80,
+		borderWidth: 3,
+		borderColor: "#C9A227",
+		shadowColor: "#000",
+		shadowOffset: { width: 0, height: 3 },
+		shadowOpacity: 0.35,
+		shadowRadius: 6,
 	},
 	infoLabel: {
-		fontFamily: "Condensed-Bold",
 		fontSize: 14,
+		fontWeight: "700",
+		letterSpacing: 0.5,
 		margin: 0,
 	},
 	caption: {
-		fontFeatureSettings: "Body-Medium",
 		opacity: 0.8,
 		fontSize: 13
 	},

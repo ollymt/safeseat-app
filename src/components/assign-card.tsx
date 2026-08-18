@@ -1,7 +1,6 @@
 // components/assign-card.tsx
 import { Themes } from "@/constants/theme";
-import { Host, Icon } from "@expo/ui";
-import { opacity } from "@expo/ui/swift-ui/modifiers";
+import { Ionicons } from "@expo/vector-icons";
 import {
   Pressable,
   StyleSheet,
@@ -113,15 +112,7 @@ export default function AssignCard({
         </View>
       ) : (
         <View style={assigncard.iconContainer}>
-          <Host matchContents>
-            <Icon
-              name={Icon.select({
-                ios: "plus",
-                android: import("@expo/material-symbols/add.xml"),
-              })}
-              color={currentTheme.textSecondary}
-            />
-          </Host>
+          <Ionicons name="add" size={20} color={currentTheme.textSecondary} />
           <Text style={[assigncard.seatCode, { color: currentTheme.textSecondary }]}>
             {seatCode.toUpperCase()}
           </Text>

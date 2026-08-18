@@ -1,12 +1,6 @@
 import React from "react";
-import {
-    StyleSheet,
-    TextInput,
-    View,
-    Platform,
-    PlatformColor,
-    useColorScheme,
-} from "react-native";
+import { StyleSheet, TextInput, View, useColorScheme } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { Themes } from "@/constants/theme";
 
 type Props = {
@@ -24,49 +18,15 @@ export default function AdaptiveSearchBar({
     const isDark = colorScheme === "dark";
     const currentTheme = Themes[isDark ? "dark" : "light"];
 
-    // 🎨 iOS Liquid Glass Styles
-    const iosGlassColor = isDark
-        ? PlatformColor("systemChromeMaterialDark")
-        : PlatformColor("systemChromeMaterialLight");
-    const iosBorderColor = isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.06)";
-
-    // 🤖 Android Material You Styles (Solid background from your theme with dynamic card tints)
-    const androidBgColor = isDark ? "#2C2C2C" : "#F0F0F0";
-
-    // Combine styles conditionally based on platform
-    const containerStyle = Platform.select({
-        ios: {
-            backgroundColor: iosGlassColor,
-            borderColor: iosBorderColor,
-            borderWidth: 1,
-            borderRadius: 25,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.08,
-            shadowRadius: 12,
-        },
-        android: {
-            backgroundColor: androidBgColor,
-            borderRadius: 28, // Material 3 uses slightly more rounded, organic pill shapes
-            elevation: 2, // Physical shadow layer
-        },
-    });
-
     return (
-        <View style={[styles.baseContainer, containerStyle]}>
+        <View style={[styles.baseContainer, { backgroundColor: isDark ? "#1B1108" : "#DCC89C" }]}>
+            <Ionicons name="search" size={18} color={currentTheme.textSecondary} style={{ marginRight: 8 }} />
             <TextInput
                 value={value}
                 onChangeText={onChangeText}
                 placeholder={placeholder}
-                placeholderTextColor={isDark ? "rgba(255, 255, 255, 0.4)" : "rgba(0, 0, 0, 0.4)"}
-                style={[
-                    styles.input,
-                    {
-                        color: currentTheme.text,
-                        fontFamily: Platform.OS === "ios" ? "System" : "sans-serif"
-                    }
-                ]}
-                clearButtonMode="while-editing" // Adds standard Apple clear button
+                placeholderTextColor={currentTheme.textSecondary}
+                style={[styles.input, { color: currentTheme.text }]}
             />
         </View>
     );
@@ -75,13 +35,21 @@ export default function AdaptiveSearchBar({
 const styles = StyleSheet.create({
     baseContainer: {
         width: "100%",
-        height: 50,
+        height: 46,
         paddingHorizontal: 16,
-        justifyContent: "center",
+        flexDirection: "row",
+        alignItems: "center",
+        borderRadius: 10,
+        borderWidth: 1.5,
+        borderTopColor: "rgba(0,0,0,0.45)",
+        borderLeftColor: "rgba(0,0,0,0.3)",
+        borderRightColor: "rgba(255,255,255,0.25)",
+        borderBottomColor: "rgba(255,255,255,0.3)",
     },
     input: {
         fontSize: 16,
         height: "100%",
-        paddingVertical: 8,
+        flex: 1,
+        fontWeight: "600",
     },
 });

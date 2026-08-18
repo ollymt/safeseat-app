@@ -4,18 +4,19 @@ import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    useColorScheme,
-    View,
+	ScrollView,
+	StyleSheet,
+	Text,
+	useColorScheme,
+	View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import Button from "@/components/button";
 import EmergencytModal from "@/components/emergency-modal";
 import SeatCard from "@/components/seat-card";
-import { Host, Icon } from "@expo/ui";
+import { LinenBackground, LeatherPanel, EngravedTitle } from "@/components/skeuo";
+import { Ionicons } from "@expo/vector-icons";
 
 type Profile = {
 	id: string;
@@ -110,102 +111,97 @@ export default function Home() {
 		emergencySeatNo !== undefined ? assignments[emergencySeatNo] : undefined;
 
 	return (
-		<SafeAreaView
-			style={{
-				flex: 1,
-				backgroundColor: currentTheme.background,
-			}}
-			edges={["left", "right"]}
-		>
-			<View style={[styles.container, { marginTop: 40 }]}>
-				{isLockedIn && 
-				<Text style={[styles.pageHeader, { color: currentTheme.text }]}>
-					Home
-				</Text>
-				}
+		<LinenBackground>
+			<SafeAreaView
+				style={{
+					flex: 1,
+				}}
+				edges={["left", "right"]}
+			>
+				{isLockedIn && (
+					<LeatherPanel style={styles.headerPanel}>
+						<EngravedTitle size={26}>Home</EngravedTitle>
+					</LeatherPanel>
+				)}
+				<View style={[styles.container, { marginTop: isLockedIn ? 16 : 40 }]}>
 
-				{isLockedIn ? (
-					<ScrollView
-						showsVerticalScrollIndicator={false}
-						contentContainerStyle={{ paddingBottom: 40 }}
-					>
-						<View style={{ gap: 10, marginTop: 10 }}>
-							{[1, 2, 3, 4, 5].map((seatNo) => {
-								const profile = assignments[seatNo];
-								const state = getSeatState(seatNo);
+					{isLockedIn ? (
+						<ScrollView
+							showsVerticalScrollIndicator={false}
+							contentContainerStyle={{ paddingBottom: 40 }}
+						>
+							<View style={{ gap: 10, marginTop: 10 }}>
+								{[1, 2, 3, 4, 5].map((seatNo) => {
+									const profile = assignments[seatNo];
+									const state = getSeatState(seatNo);
 
-								return (
-									<SeatCard
-										key={seatNo}
-										seatNo={seatNo}
-										role={SEAT_ROLES[seatNo]}
-										name={profile?.name}
-										pfp={profile?.icon ?? profile?.photoURL}
-										state={state}
-										onPress={() => {
-											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-										}}
-									/>
-								);
-							})}
-						</View>
-					</ScrollView>
-				) : (
-					<View style={styles.unlockedContainer}>
-						<View style={{ marginVertical: 20 }}>
-							<Host matchContents>
-								<Icon name={Icon.select({
-									ios: "lock.slash.fill",
-									android: import("@expo/material-symbols/lock_open.xml")
-								})} size={180} color={currentTheme.secondaryBttn}
+									return (
+										<SeatCard
+											key={seatNo}
+											seatNo={seatNo}
+											role={SEAT_ROLES[seatNo]}
+											name={profile?.name}
+											pfp={profile?.icon ?? profile?.photoURL}
+											state={state}
+											onPress={() => {
+												Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+											}}
+										/>
+									);
+								})}
+							</View>
+						</ScrollView>
+					) : (
+						<View style={styles.unlockedContainer}>
+							<View style={{ marginVertical: 20 }}>
+								<Ionicons name="lock-open" size={180} color={currentTheme.secondaryBttn} />
+							</View>
+							<Text
+								style={[
+									styles.unlockedTitle,
+									{ color: currentTheme.text },
+								]}
+							>
+								Trip Not Locked In
+							</Text>
+							<Text
+								style={[
+									styles.unlockedSubtitle,
+									{ color: currentTheme.textSecondary },
+								]}
+							>
+								Assign passengers to seats and tap "Lock In" on the Assign page to start monitoring.
+							</Text>
+							<View style={{ width: "100%", marginTop: 24 }}>
+								<Button
+									label="Go to Assign"
+									onPress={() => {
+										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+										router.push("/assign");
+									}}
+									fullWidth={true}
+									glass={false}
 								/>
-							</Host>
+							</View>
 						</View>
-						<Text
-							style={[
-								styles.unlockedTitle,
-								{ color: currentTheme.text },
-							]}
-						>
-							Trip Not Locked In
-						</Text>
-						<Text
-							style={[
-								styles.unlockedSubtitle,
-								{ color: currentTheme.textSecondary },
-							]}
-						>
-							Assign passengers to seats and tap "Lock In" on the Assign page to start monitoring.
-						</Text>
-						<View style={{ width: "100%", marginTop: 24 }}>
-							<Button
-								label="Go to Assign"
-								onPress={() => {
-									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-									router.push("/assign");
-								}}
-								fullWidth={true}
-								glass={false}
-							/>
-						</View>
-					</View>
-				)}
+					)}
 
-				{emergencySeatNo !== undefined && emergencyProfile && (
-					<EmergencytModal
-						seat={emergencySeatNo}
-						visible={true}
-						onClose={() =>
-							setDismissedSeats((prev) => new Set(prev).add(emergencySeatNo))
-						}
-						id={emergencyProfile.id}
-						name={emergencyProfile.name}
-						icon={emergencyProfile.photoURL ?? emergencyProfile.icon}
-						isAccountOwner={emergencyProfile.isAccountOwner}
-					/>
-				)}
-			</View>
-		</SafeAreaView>
+					{emergencySeatNo !== undefined && emergencyProfile && (
+						<EmergencytModal
+							seat={emergencySeatNo}
+							visible={true}
+							onClose={() =>
+								setDismissedSeats((prev) => new Set(prev).add(emergencySeatNo))
+							}
+							id={emergencyProfile.id}
+							name={emergencyProfile.name}
+							icon={emergencyProfile.photoURL ?? emergencyProfile.icon}
+							isAccountOwner={emergencyProfile.isAccountOwner}
+						/>
+					)}
+				</View>
+			</SafeAreaView>
+		</LinenBackground>
 	);
 }
 
@@ -220,6 +216,12 @@ const styles = StyleSheet.create({
 	pageHeader: {
 		fontSize: 40,
 		fontFamily: "Logo-Font",
+	},
+	headerPanel: {
+		width: "100%",
+		paddingTop: 16,
+		paddingBottom: 14,
+		paddingHorizontal: 20,
 	},
 	unlockedContainer: {
 		flex: 1,

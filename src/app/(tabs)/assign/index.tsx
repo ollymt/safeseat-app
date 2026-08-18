@@ -1,4 +1,5 @@
 import { Themes } from "@/constants/theme";
+import { useGLTF } from '@react-three/drei/native';
 import { useFocusEffect, useRouter } from "expo-router";
 import {
     Alert,
@@ -17,6 +18,9 @@ import { useCallback, useState } from "react";
 
 import Button from "@/components/button";
 import EmergencytModal from "@/components/emergency-modal";
+
+import { Model as CarModel } from "@/components/CarModel";
+import { Canvas } from "@react-three/fiber";
 
 type Profile = {
 	id: string;
@@ -39,6 +43,16 @@ const SEATS = [
 	{ seatNo: 4, seatCode: "c backseat" },
 	{ seatNo: 5, seatCode: "r backseat" },
 ];
+
+const SEAT_COORDINATES = {
+	driver: [0.4, 0.5, -0.2],
+	passenger: [-0.4, 0.5, -0.2],
+	rearLeft: [0.5, 0.4, -1.2],
+	rearMiddle: [0.0, 0.4, -1.2],
+	rearRight: [-0.5, 0.4, -1.2],
+};
+
+
 
 export default function Assign() {
 	const colorScheme = useColorScheme();
@@ -92,17 +106,6 @@ export default function Assign() {
 			loadState();
 		}, [loadState])
 	);
-
-	// 🛠️ Derive the current state for any given seat number
-	const getCardState = (seatNo: number): SeatState => {
-		const hasProfile = Boolean(assignments[seatNo]);
-
-		if (!hasProfile) return "empty";
-		if (!isLockedIn) return "assigned";
-
-		// When locked in, return its live status (defaulting to "safe")
-		return seatStatuses[seatNo] ?? "safe";
-	};
 
 	// 🔒 Lock In Handler
 	const handleLockIn = async () => {
@@ -205,29 +208,6 @@ export default function Assign() {
 		});
 	};
 
-	// Card tap interaction
-	const handleCardPress = (seatNo: number) => {
-		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-		if (isLockedIn) {
-			// Options or quick-status toggle when locked in
-			const currentStatus = getCardState(seatNo);
-			if (currentStatus === "empty") return;
-
-			// Example cycle when tapped while locked in: safe -> warning -> emergency -> safe
-			const nextStatus: Record<string, "safe" | "warning" | "emergency"> = {
-				safe: "warning",
-				warning: "emergency",
-				emergency: "safe",
-			};
-			updateSeatStatus(seatNo, nextStatus[currentStatus] ?? "safe");
-		} else {
-			// Open assignment modal when unlocked
-			setSelectedSeat(seatNo);
-			setAssignModalVisible(true);
-		}
-	};
-
 	const [dismissedSeats, setDismissedSeats] = useState<Set<number>>(new Set());
 
 	const emergencySeat = isLockedIn
@@ -254,106 +234,10 @@ export default function Assign() {
 					Assign
 				</Text>
 
-				<View
-					style={{
-						gap: 10,
-						marginTop: 10,
-						width: "100%",
-						borderWidth: 0,
-						borderColor: currentTheme.secondaryBttn,
-						borderRadius: 10,
-					}}
-				>
-					{/* Front Row */}
-					<View style={{ gap: 10, flexDirection: "row", height: 230 }}>
-						<AssignCard
-							seatNo={1}
-							assignedProfile={assignments[1]}
-							onPress={() => handleCardPress(1)}
-							state={getCardState(1)}
-							seatCode="driver"
-						/>
-						<AssignCard
-							seatNo={2}
-							assignedProfile={assignments[2]}
-							onPress={() => handleCardPress(2)}
-							state={getCardState(2)}
-							seatCode="passenger"
-						/>
-					</View>
-
-					{/* Back Row */}
-					<View style={{ gap: 10, flexDirection: "row", height: 230 }}>
-						<AssignCard
-							seatNo={3}
-							assignedProfile={assignments[3]}
-							onPress={() => handleCardPress(3)}
-							state={getCardState(3)}
-							seatCode="l backseat"
-						/>
-						<AssignCard
-							seatNo={4}
-							assignedProfile={assignments[4]}
-							onPress={() => handleCardPress(4)}
-							state={getCardState(4)}
-							seatCode="c backseat"
-						/>
-						<AssignCard
-							seatNo={5}
-							assignedProfile={assignments[5]}
-							onPress={() => handleCardPress(5)}
-							state={getCardState(5)}
-							seatCode="r backseat"
-						/>
-					</View>
-				</View>
-
-				{/* Lock In / Unlock Action Controls */}
-				<View style={{ paddingVertical: 20 }}>
-					{isLockedIn ? (
-						<Button
-							label="Unlock"
-							onPress={handleUnlock}
-							fullWidth={true}
-							variant="warn"
-							glass={false}
-						/>
-					) : (
-						<Button
-							label="Lock In"
-							onPress={handleLockIn}
-							fullWidth={true}
-							variant="primary"
-							enabled={hasAssignedSeats}
-							glass={false}
-						/>
-					)}
-				</View>
-
-				<AssignSeatModal
-					seat={selectedSeat}
-					visible={assignModalVisible}
-					onClose={() => {
-						setAssignModalVisible(false);
-					}}
-					onSuccess={(seatNum, profile) => {
-						handleSeatAssigned(seatNum, profile);
-					}}
-				/>
-
-				{emergencySeat && emergencyProfile && (
-					<EmergencytModal
-						seat={emergencySeat.seatNo}
-						visible={true}
-						onClose={() =>
-							setDismissedSeats((prev) => new Set(prev).add(emergencySeat.seatNo))
-						}
-						id={emergencyProfile.id}
-						name={emergencyProfile.name}
-						icon={emergencyProfile.photoURL ?? emergencyProfile.icon}
-						isAccountOwner={emergencyProfile.isAccountOwner}
-					/>
-				)}
+				<Canvas>
+					<ambientLight />
+					<CarModel />
+				</Canvas>
 			</View>
 		</SafeAreaView>
 	);
