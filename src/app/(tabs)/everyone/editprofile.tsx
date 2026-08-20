@@ -10,8 +10,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Column, FieldGroup, Host, TextInput } from "@expo/ui";
-import { frame } from "@expo/ui/swift-ui/modifiers";
+import SkeuoInput from "@/components/skeuo-input";
+import { LinenBackground, PaperCard } from "@/components/skeuo";
 import { useCallback, useState } from "react";
 
 import * as Haptics from "expo-haptics";
@@ -21,7 +21,6 @@ import * as SecureStore from "expo-secure-store";
 import PasswordVerifyModal from "@/components/PasswordVerifyModal";
 import { isSessionValid } from "@/utils/securitySession";
 
-import { submitLabel } from "@expo/ui/swift-ui/modifiers";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../../../firebase";
 
@@ -235,40 +234,23 @@ export default function EditProfile() {
     };
 
     return (
+        <LinenBackground>
         <SafeAreaView
-            style={{ flex: 1, backgroundColor: currentTheme.background }}
+            style={{ flex: 1 }}
             edges={["left", "right"]}
         >
             <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={true} bounces={true}>
-                <View style={[styles.container, { marginTop: -30 }]}>
+                <View style={[styles.container, { marginTop: 10 }]}>
                     <Text style={[styles.pageHeader, { color: currentTheme.text }]}>Edit {userName.split(" ")[0]}</Text>
-                    <View style={{ gap: 20, marginTop: 10, width: "100%", height: "auto", borderWidth: 3, borderColor: "#000" }}>
-                        <Host>
-                            <Column
-                                spacing={16}
-                                style={{ height: "100%" }}
-                            >
-                                <TextInput
-                                    placeholder="Name"
-                                    value={userName}
-                                    onChangeText={setUserName}
-                                    modifiers={[submitLabel("next")]}
-                                    textAlign="left"
-                                />
-                                <FieldGroup>
-                                    <FieldGroup.Section title="Basic Information">
-                                        <TextInput
-                                            placeholder="Name"
-                                            value={userName}
-                                            onChangeText={setUserName}
-                                            modifiers={[submitLabel("next")]}
-                                            textAlign="left"
-                                        />
-                                    </FieldGroup.Section>
-                                </FieldGroup>
-                            </Column>
-                        </Host>
-                    </View>
+                    <PaperCard style={{ marginTop: 16, padding: 20, width: "100%" }}>
+                        <SkeuoInput
+                            label="Basic Information — Name"
+                            placeholder="Name"
+                            value={userName}
+                            onChangeText={setUserName}
+                            returnKeyType="next"
+                        />
+                    </PaperCard>
 
                     <PasswordVerifyModal
                         visible={authModalVisible}
@@ -287,12 +269,13 @@ export default function EditProfile() {
                 </View>
             </ScrollView>
         </SafeAreaView>
+        </LinenBackground>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, width: "100%", padding: 20, height: "100%" },
-    pageHeader: { fontSize: 40, fontFamily: "Logo-Font" },
-    infoLabel: { fontFamily: "Condensed-Bold", fontSize: 14, margin: 0, marginBottom: 8 },
-    caption: { fontFeatureSettings: "Body-Medium", opacity: 0.8, fontSize: 13 },
+    container: { flex: 1, width: "100%", padding: 20 },
+    pageHeader: { fontSize: 30, fontWeight: "800" },
+    infoLabel: { fontSize: 14, fontWeight: "700", margin: 0, marginBottom: 8 },
+    caption: { opacity: 0.8, fontSize: 13 },
 });

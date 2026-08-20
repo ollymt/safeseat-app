@@ -1,27 +1,29 @@
 import { Themes } from "@/constants/theme";
-import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import { Alert, StyleSheet, Text, useColorScheme, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import AssignCard from "@/components/assign-card";
 import AssignSeatModal from "@/components/assign-seat-modal";
-import * as Haptics from "expo-haptics";
-import { useEffect, useState } from "react";
-
 import Button from "@/components/button";
 import EmergencytModal from "@/components/emergency-modal";
 
+import { auth, db } from "@/firebase";
 import {
   addDoc,
   arrayUnion,
   collection,
   deleteField,
   doc,
-  onSnapshot,
   setDoc,
-  updateDoc,
 } from "firebase/firestore";
-import { auth, db } from "../../../firebase";
+
+const SEAT_ASSIGNMENTS_KEY = "SEAT_ASSIGNMENTS";
+const IS_LOCKED_IN_KEY = "IS_LOCKED_IN";
+const SEAT_STATUSES_KEY = "SEAT_STATUSES";
 
 type Profile = {
   id: string;
@@ -45,6 +47,14 @@ const SEATS = [
   { seatNo: 4, seatCode: "c backseat" },
   { seatNo: 5, seatCode: "r backseat" },
 ];
+
+const SEAT_COORDINATES = {
+  driver: [0.4, 0.5, -0.2],
+  passenger: [-0.4, 0.5, -0.2],
+  rearLeft: [0.5, 0.4, -1.2],
+  rearMiddle: [0.0, 0.4, -1.2],
+  rearRight: [-0.5, 0.4, -1.2],
+};
 
 export default function Assign() {
   const colorScheme = useColorScheme();
@@ -75,46 +85,38 @@ export default function Assign() {
     Boolean(profile),
   );
 
-  // 📡 Real-time listener on users/{uid}/activeTrip/current — replaces the old
-  // AsyncStorage read. This fires instantly whenever the doc changes, whether
-  // the change came from this device, another device, or (later) a sensor.
-  useEffect(() => {
-    const currentUser = auth.currentUser;
-    if (!currentUser) return;
+  // 📥 Load saved state on focus
+  const loadState = useCallback(async () => {
+    try {
+      const [rawAssignments, rawLockedIn, rawStatuses] = await Promise.all([
+        AsyncStorage.getItem(SEAT_ASSIGNMENTS_KEY),
+        AsyncStorage.getItem(IS_LOCKED_IN_KEY),
+        AsyncStorage.getItem(SEAT_STATUSES_KEY),
+      ]);
 
-    const tripDocRef = doc(
-      db,
-      "users",
-      currentUser.uid,
-      "activeTrip",
-      "current",
-    );
+      if (rawAssignments) {
+        setAssignments(JSON.parse(rawAssignments));
+      } else {
+        setAssignments({});
+      }
 
-    const unsubscribe = onSnapshot(
-      tripDocRef,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data();
-          setAssignments(data.assignments ?? {});
-          setIsLockedIn(Boolean(data.isLockedIn));
-          setSeatStatuses(data.seatStatuses ?? {});
-          setLockedInAt(data.lockedInAt ?? null);
-          setEmergencyEvents(data.emergencyEvents ?? []);
-        } else {
-          setAssignments({});
-          setIsLockedIn(false);
-          setSeatStatuses({});
-          setLockedInAt(null);
-          setEmergencyEvents([]);
-        }
-      },
-      (error) => {
-        console.error("Failed to listen to active trip data:", error);
-      },
-    );
+      if (rawLockedIn) {
+        setIsLockedIn(JSON.parse(rawLockedIn));
+      }
 
-    return () => unsubscribe();
+      if (rawStatuses) {
+        setSeatStatuses(JSON.parse(rawStatuses));
+      }
+    } catch (error) {
+      console.error("Failed to load seat & lock state:", error);
+    }
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadState();
+    }, [loadState]),
+  );
 
   // 🛠️ Derive the current state for any given seat number
   const getCardState = (seatNo: number): SeatState => {
@@ -326,52 +328,16 @@ export default function Assign() {
   };
 
   // Callback when modal updates or unassigns a seat
-  const handleSeatAssigned = async (
-    seatNumber: number,
-    profile: Profile | null,
-  ) => {
-    const currentUser = auth.currentUser;
-    if (!currentUser) return;
-
-    try {
-      const tripDocRef = doc(
-        db,
-        "users",
-        currentUser.uid,
-        "activeTrip",
-        "current",
-      );
-
+  const handleSeatAssigned = (seatNumber: number, profile: Profile | null) => {
+    setAssignments((prev) => {
+      const updated = { ...prev };
       if (profile) {
-        // 🛠️ Firestore rejects `undefined` field values outright (unlike
-        // `null`, which is fine). Since Profile.photoURL/icon/isAccountOwner
-        // are optional and may genuinely be undefined on some profiles,
-        // sanitize them to null/false before writing, or setDoc throws.
-        const sanitizedProfile = {
-          id: profile.id,
-          name: profile.name,
-          photoURL: profile.photoURL ?? null,
-          icon: profile.icon ?? null,
-          isAccountOwner: profile.isAccountOwner ?? false,
-        };
-
-        await setDoc(
-          tripDocRef,
-          {
-            assignments: { [String(seatNumber)]: sanitizedProfile },
-          },
-          { merge: true },
-        );
+        updated[seatNumber] = profile;
       } else {
-        // deleteField() fully removes the key, unlike setting it to null
-        await updateDoc(tripDocRef, {
-          [`assignments.${seatNumber}`]: deleteField(),
-        });
+        delete updated[seatNumber];
       }
-    } catch (error) {
-      console.error("Failed to update seat assignment:", error);
-      Alert.alert("Error", "Could not save seat assignment.");
-    }
+      return updated;
+    });
   };
 
   // Card tap interaction
@@ -501,6 +467,7 @@ export default function Assign() {
           )}
         </View>
 
+        {/* @ts-ignore */}
         <AssignSeatModal
           seat={selectedSeat}
           visible={assignModalVisible}

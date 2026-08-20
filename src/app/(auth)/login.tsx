@@ -1,41 +1,31 @@
 import Button from "@/components/button";
-import { Themes } from "@/constants/theme";
-import { Column, FieldGroup, Host, TextInput } from "@expo/ui";
-import {
-  autocorrectionDisabled,
-  frame,
-  keyboardType,
-  onSubmit,
-  scrollDisabled,
-  submitLabel,
-} from "@expo/ui/swift-ui/modifiers";
+import { LinenBackground, PaperCard, Stitching } from "@/components/skeuo";
+import SkeuoInput from "@/components/skeuo-input";
+import { Materials, Themes } from "@/constants/theme";
 import { useRouter } from "expo-router";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { useRef, useState } from "react";
 import {
   Alert,
-  Dimensions,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   useColorScheme,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { setStorageItem } from "../../utils/storage";
 
 import * as Haptics from "expo-haptics";
-import * as SecureStore from "expo-secure-store";
 import { auth } from "../../firebase";
 
-const { width: screenWidth } = Dimensions.get("window");
-
 export default function Login() {
-  const passwordInputRef = useRef<any>(null);
+  const passwordInputRef = useRef<TextInput>(null);
   const router = useRouter();
 
-  // 2. Setup standard React state variables to hold typed credentials
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -44,9 +34,7 @@ export default function Login() {
   const activeScheme = colorScheme === "dark" ? "dark" : "light";
   const currentTheme = Themes[activeScheme];
 
-  // 3. The Authentication Validation Function
   const handleLogin = async () => {
-    // Basic structural validation checks
     if (!email || !password) {
       Alert.alert("Missing Fields", "Please enter your email and password.");
       return;
@@ -56,20 +44,13 @@ export default function Login() {
 
     try {
       const cleanEmail = email.toLowerCase().trim();
-
-      // Sign in via Firebase Authentication
       await signInWithEmailAndPassword(auth, cleanEmail, password);
-
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      // Save an active login flag for the local navigation guard in _layout.tsx
-      await SecureStore.setItemAsync("is_logged_in", "true");
-
+      await setStorageItem("is_logged_in", "true");
       router.replace("/(tabs)/home");
     } catch (error: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
 
-      // Translate common Firebase error codes into friendlier messages
       let message = "Incorrect email or password combination.";
       if (error.code === "auth/invalid-email") {
         message = "Please enter a valid email address.";
@@ -87,93 +68,75 @@ export default function Login() {
   };
 
   return (
-    <SafeAreaView
-      style={{
-        flex: 1,
-        backgroundColor: currentTheme.background,
-      }}
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1 }}
-      >
-        {/* 2. ScrollView absorbs the squeeze and allows scrolling if elements overflow */}
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
-          bounces={false}
-          keyboardShouldPersistTaps="handled"
+    <LinenBackground>
+      <SafeAreaView style={{ flex: 1 }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
         >
-          <View style={styles.container}>
-            {/* Header logo area */}
-            <View style={styles.logoSection}>
-              <Text style={[styles.loginlogo, { color: currentTheme.text }]}>
-                Log-in
-              </Text>
-            </View>
-
-            {/* Input Form area */}
-            <View style={styles.formSection}>
-              <Host
-                style={{
-                  borderColor: "#000",
-                  borderWidth: 0,
-                  height: 140, // 3. Changing from flex: 0.33 to a static height blocks collapse!
-                  width: "100%",
-                }}
-              >
-                <Column
-                  spacing={16}
-                  modifiers={[frame({ maxWidth: Infinity })]}
-                >
-                  <FieldGroup modifiers={[scrollDisabled()]}>
-                    <TextInput
-                      placeholder="Email"
-                      modifiers={[
-                        keyboardType("email-address"),
-                        submitLabel("next"),
-                        autocorrectionDisabled(),
-                        onSubmit(() => {
-                          passwordInputRef.current?.focus();
-                        }),
-                      ]}
-                      onChangeText={setEmail}
-                    />
-                    <TextInput
-                      ref={passwordInputRef}
-                      secureTextEntry={true}
-                      placeholder="Password"
-                      modifiers={[submitLabel("done"), onSubmit(handleLogin)]}
-                      onChangeText={setPassword}
-                    />
-                  </FieldGroup>
-                </Column>
-              </Host>
-
-              <View
-                style={{
-                  width: "90%",
-                  alignSelf: "center",
-                  marginTop: 10,
-                  gap: 5,
-                }}
-              >
-                <Button
-                  label={isSubmitting ? "Logging in..." : "Log-in"}
-                  onPress={() => {
-                    if (!isSubmitting) handleLogin();
+          <ScrollView
+            contentContainerStyle={{ flexGrow: 1 }}
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.container}>
+              <View style={styles.logoSection}>
+                <Text style={[styles.loginlogo, { color: currentTheme.text }]}>
+                  Log-in
+                </Text>
+                <Stitching
+                  color={Materials.stitchDim}
+                  style={{
+                    borderWidth: 0,
+                    borderTopWidth: 1,
+                    width: 80,
+                    marginTop: 10,
                   }}
                 />
-                <Button
-                  label="Forgot Password"
-                  onPress={() => {}}
-                  variant="tertiary"
-                />
               </View>
+
+              <PaperCard style={styles.formSection}>
+                <View style={{ gap: 16 }}>
+                  <SkeuoInput
+                    label="Email"
+                    placeholder="you@example.com"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="email-address"
+                    returnKeyType="next"
+                    onSubmitEditing={() => passwordInputRef.current?.focus()}
+                    onChangeText={setEmail}
+                  />
+                  <SkeuoInput
+                    ref={passwordInputRef}
+                    label="Password"
+                    placeholder="••••••••"
+                    secureTextEntry
+                    returnKeyType="done"
+                    onSubmitEditing={handleLogin}
+                    onChangeText={setPassword}
+                  />
+                </View>
+
+                <View style={{ width: "100%", marginTop: 20, gap: 6 }}>
+                  <Button
+                    label={isSubmitting ? "Logging in..." : "Log-in"}
+                    onPress={() => {
+                      if (!isSubmitting) handleLogin();
+                    }}
+                  />
+                  <Button
+                    label="Forgot Password"
+                    onPress={() => {}}
+                    variant="tertiary"
+                  />
+                </View>
+              </PaperCard>
             </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </LinenBackground>
   );
 }
 
@@ -184,17 +147,17 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   logoSection: {
-    height: "35%", // Reduced slightly to give more room for keyboard space
     alignItems: "center",
     justifyContent: "flex-end",
+    paddingVertical: 40,
   },
   formSection: {
     width: "100%",
-    flex: 1,
+    padding: 20,
   },
   loginlogo: {
-    fontSize: 60,
-    fontFamily: "Logo-Font",
+    fontSize: 40,
+    fontWeight: "800",
     textAlign: "center",
   },
 });

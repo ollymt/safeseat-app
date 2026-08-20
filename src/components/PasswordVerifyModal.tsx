@@ -1,11 +1,24 @@
 // components/PasswordVerifyModal.tsx
+import UButton from "@/components/button";
+import SkeuoInput from "@/components/skeuo-input";
+import { LeatherPanel, PaperCard } from "@/components/skeuo";
 import { Themes } from "@/constants/theme";
 import { extendSession } from "@/utils/securitySession";
-import { BottomSheet, Button, Column, FieldGroup, Host, Icon, Row, Spacer, Text, TextInput } from "@expo/ui";
-import { buttonBorderShape, buttonStyle, controlSize, scrollDisabled, submitLabel } from "@expo/ui/swift-ui/modifiers";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useEffect, useRef, useState } from "react";
-import { Alert, StyleSheet, useColorScheme } from "react-native";
+import {
+    Alert,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    useColorScheme,
+    View,
+} from "react-native";
 
 // 🛠️ Fixed: Using single, unified Firebase imports
 import { auth } from "../firebase";
@@ -20,7 +33,7 @@ type Props = {
 export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Props) {
     const [passwordInput, setPasswordInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
-    const passwordInputRef = useRef<any>(null);
+    const passwordInputRef = useRef<TextInput>(null);
 
     const colorScheme = useColorScheme();
     const activeScheme = colorScheme === "dark" ? "dark" : "light";
@@ -70,104 +83,99 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
     }, [visible]);
 
     return (
-        <Host matchContents>
-            <BottomSheet
-                isPresented={visible}
-                onDismiss={onClose}
-                showDragIndicator={false}
-                snapPoints={["half"]}
-            >
-                <Column spacing={16} alignment="center">
-                    {/* 🧭 Header Navigation Row */}
-                    <Row>
-                        <Button
-                            variant="outlined"
-                            onPress={onClose}
-                            disabled={isLoading}
-                            modifiers={[
-                                buttonStyle("glass"),
-                                controlSize("large"),
-                                buttonBorderShape("circle"),
-                            ]}
-                        >
-                            <Icon
-                                name={Icon.select({
-                                    ios: "xmark",
-                                    android: import("@expo/material-symbols/close.xml"),
-                                })}
-                            />
-                        </Button>
-                        <Spacer flexible />
-                        <Button
-                            onPress={handleVerify}
-                            variant={passwordInput && !isLoading ? "filled" : "outlined"}
-                            modifiers={[
-                                passwordInput && !isLoading
-                                    ? buttonStyle("borderedProminent")
-                                    : buttonStyle("glass"),
-                                controlSize("large"),
-                                buttonBorderShape("circle"),
-                            ]}
-                            disabled={passwordInput === "" || isLoading}
-                        >
-                            <Icon
-                                name={Icon.select({
-                                    ios: "checkmark",
-                                    android: import("@expo/material-symbols/check.xml"),
-                                })}
-                            />
-                        </Button>
-                    </Row>
+        <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+            <View style={styles.backdrop}>
+                <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ width: "100%" }}>
+                    <LeatherPanel style={styles.sheet} inset={10}>
+                        <View style={styles.headerRow}>
+                            <Pressable onPress={onClose} disabled={isLoading} style={styles.chromeCircle}>
+                                <Ionicons name="close" size={18} color="#F1E3C6" />
+                            </Pressable>
+                            <View style={{ flex: 1 }} />
+                            <Pressable
+                                onPress={handleVerify}
+                                disabled={passwordInput === "" || isLoading}
+                                style={[styles.chromeCircle, passwordInput && !isLoading ? styles.chromeCircleActive : null]}
+                            >
+                                <Ionicons name="checkmark" size={18} color="#F1E3C6" />
+                            </Pressable>
+                        </View>
 
-                    {/* 🔑 Verification Form Stack */}
-                    <Column spacing={10} alignment="center">
-                        <Text textStyle={{ fontSize: 36, color: currentTheme.text, fontWeight: "bold", textAlign: "center" }}>Enter Password to Continue</Text>
-                        <FieldGroup modifiers={[scrollDisabled()]} style={{ borderWidth: 3 }}>
-                            <TextInput
-                                placeholder="Password"
-                                secureTextEntry={true}
-                                editable={!isLoading}
+                        <Text style={styles.title}>Enter Password to Continue</Text>
+
+                        <PaperCard style={{ width: "100%", padding: 16, marginTop: 16 }}>
+                            <SkeuoInput
                                 ref={passwordInputRef}
+                                placeholder="Password"
+                                secureTextEntry
+                                editable={!isLoading}
                                 onChangeText={setPasswordInput}
                                 value={passwordInput}
-                                modifiers={[submitLabel("done")]}
-                                textAlign="center"
+                                returnKeyType="done"
                                 onSubmitEditing={handleVerify}
                             />
-                        </FieldGroup>
-                        <Button
-                            label={isLoading ? "Verifying..." : "Continue"}
-                            variant={passwordInput && !isLoading ? "filled" : "outlined"}
-                            modifiers={[
-                                passwordInput && !isLoading
-                                    ? buttonStyle("borderedProminent")
-                                    : buttonStyle("glass"),
-                                controlSize("large"),
-                                buttonBorderShape("capsule"),
-                            ]}
-                            disabled={passwordInput === "" || isLoading}
-                            onPress={handleVerify}
-                        />
-                    </Column>
+                            <View style={{ marginTop: 16 }}>
+                                <UButton
+                                    label={isLoading ? "Verifying..." : "Continue"}
+                                    variant="primary"
+                                    fullWidth
+                                    enabled={passwordInput !== "" && !isLoading}
+                                    onPress={handleVerify}
+                                />
+                            </View>
+                        </PaperCard>
 
-                    <Text textStyle={{ fontSize: 13, color: currentTheme.textSecondary, textAlign: "center" }}>
-                        After this, you can change any important setting for 15 minutes.
-                    </Text>
-                    <Spacer />
-                </Column>
-            </BottomSheet>
-        </Host>
+                        <Text style={styles.caption}>
+                            After this, you can change any important setting for 15 minutes.
+                        </Text>
+                    </LeatherPanel>
+                </KeyboardAvoidingView>
+            </View>
+        </Modal>
     );
 }
 
 const styles = StyleSheet.create({
-    title: {
-        fontSize: 36,
-        textAlign: "center",
-        height: 100,
-        fontFamily: "Logo-Font",
-        borderWidth: 1,
-        borderColor: "#fff",
+    backdrop: {
+        flex: 1,
+        justifyContent: "flex-end",
+        backgroundColor: "rgba(0,0,0,0.55)",
+    },
+    sheet: {
+        width: "100%",
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 20,
+        paddingBottom: 34,
+    },
+    headerRow: {
+        flexDirection: "row",
+        alignItems: "center",
         marginBottom: 8,
+    },
+    chromeCircle: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: "rgba(255,255,255,0.08)",
+        alignItems: "center",
+        justifyContent: "center",
+        borderWidth: 1,
+        borderColor: "rgba(255,255,255,0.2)",
+    },
+    chromeCircleActive: {
+        backgroundColor: "#4F8B29",
+    },
+    title: {
+        fontSize: 24,
+        color: "#F1E3C6",
+        fontWeight: "800",
+        textAlign: "center",
+    },
+    caption: {
+        fontSize: 13,
+        color: "#C9AC7C",
+        textAlign: "center",
+        marginTop: 14,
     },
 });

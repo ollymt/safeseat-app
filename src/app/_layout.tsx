@@ -1,6 +1,7 @@
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
+import { Platform } from "react-native";
 export { ErrorBoundary } from "expo-router";
 
 import {
@@ -27,6 +28,20 @@ import { db } from "../firebase";
 
 // Keep the splash screen visible while fonts and auth initialize
 SplashScreen.preventAutoHideAsync();
+
+const RootStack = Stack as any;
+
+// Helper to handle secure storage on Native devices and fallback to localStorage on Web
+async function getStorageItem(key: string): Promise<string | null> {
+  if (Platform.OS === "web") {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+  return await SecureStore.getItemAsync(key);
+}
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -58,7 +73,7 @@ export default function RootLayout() {
   useEffect(() => {
     async function checkAuthSession() {
       try {
-        const sessionFlag = await SecureStore.getItemAsync("is_logged_in");
+        const sessionFlag = await getStorageItem("is_logged_in");
         setHasSession(sessionFlag === "true");
       } catch (e) {
         console.error("Failed to read auth token from local device:", e);
@@ -86,10 +101,10 @@ export default function RootLayout() {
 
     if (!hasSession && !inAuthGroup) {
       // User is NOT logged in and trying to go to tabs -> send them to the login flow
-      router.replace("/(auth)/splash");
+      router.replace("/(auth)/splash" as any);
     } else if (hasSession && inAuthGroup) {
       // User IS logged in but accidentally went back to splash/login -> force them back inside
-      router.replace("/(tabs)/home");
+      router.replace("/(tabs)/home" as any);
     }
   }, [segments, loaded, authLoading, hasSession]);
 
@@ -99,9 +114,9 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(tabs)" />
-    </Stack>
+    <RootStack screenOptions={{ headerShown: false }}>
+      <RootStack.Screen name="(auth)" />
+      <RootStack.Screen name="(tabs)" />
+    </RootStack>
   );
 }

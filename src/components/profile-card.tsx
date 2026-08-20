@@ -1,13 +1,6 @@
-import { Themes } from "@/constants/theme";
-import { Host, Icon } from "@expo/ui";
-import {
-    Pressable,
-    StyleSheet,
-    Text,
-    useColorScheme,
-    View,
-    Image,
-} from "react-native";
+import { Materials, Themes } from "@/constants/theme";
+import { Image, Pressable, StyleSheet, Text, useColorScheme, View } from "react-native";
+import { PaperCard } from "@/components/skeuo";
 
 type ProfileCardProps = {
     name?: string;
@@ -20,7 +13,6 @@ type ProfileCardProps = {
 export default function ProfileCard({
     name = "empty",
     img,
-    isLast = false,
     enabled = true,
     onPress,
 }: ProfileCardProps) {
@@ -29,28 +21,22 @@ export default function ProfileCard({
     const currentTheme = Themes[activeScheme];
 
     return (
-        <Pressable
-            style={[
-                seatcard.baseCard,
-                {
-                    borderBottomWidth: isLast ? 0 : 1,
-                    borderBottomColor: currentTheme.border,
-                    opacity: enabled ? 1 : 0.5,
-                    flexDirection: "row",
-                    // 🌟 Align items vertically along the main row axis (keeps image and text centered together)
-                    alignItems: "center"
-                }
-            ]}
-            onPress={onPress}
-        >
-            <View style={{ borderRadius: 12, borderColor: "#fff", flexDirection: "row", gap: 0 }}>
-                <Image source={{ uri: img }} style={{ width: 50, height: 50, borderRadius: 25 }} />
-            </View>
+        <Pressable onPress={onPress} disabled={!enabled} style={{ opacity: enabled ? 1 : 0.5 }}>
+            <PaperCard style={seatcard.baseCard}>
+                <View style={seatcard.frame}>
+                    {img ? (
+                        <Image source={{ uri: img }} style={seatcard.avatar} />
+                    ) : (
+                        <View style={[seatcard.avatar, seatcard.fallback]}>
+                            <Text style={seatcard.monogram}>{name.charAt(0).toUpperCase()}</Text>
+                        </View>
+                    )}
+                </View>
 
-            {/* 🛠️ Fix 1: Use justifyContent: "center" instead of alignContent */}
-            <View style={{ justifyContent: "center", flex: 1, paddingLeft: 10 }}>
-                <Text style={[seatcard.profileName, { color: currentTheme.text }]}>{name}</Text>
-            </View>
+                <View style={{ justifyContent: "center", flex: 1, paddingLeft: 12 }}>
+                    <Text style={[seatcard.profileName, { color: currentTheme.text }]}>{name}</Text>
+                </View>
+            </PaperCard>
         </Pressable>
     );
 }
@@ -58,15 +44,33 @@ export default function ProfileCard({
 const seatcard = StyleSheet.create({
     baseCard: {
         width: "100%",
-        borderWidth: 0,
-        borderColor: "#fff",
-        gap: 6,
+        flexDirection: "row",
+        alignItems: "center",
         padding: 10,
-        overflow: "hidden",
+    },
+    frame: {
+        padding: 3,
+        borderRadius: 30,
+        borderWidth: 2,
+        borderColor: Materials.brassMid,
+    },
+    avatar: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+    },
+    fallback: {
+        backgroundColor: Materials.leatherMid,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    monogram: {
+        color: "#F1E3C6",
+        fontSize: 18,
+        fontWeight: "800",
     },
     profileName: {
-        fontFamily: "Body-Medium",
         fontSize: 18,
-        // 🛠️ Fix 2: Removed "flex: 1" from here so the text doesn't stretch and distort alignment bounds
-    }
+        fontWeight: "700",
+    },
 });

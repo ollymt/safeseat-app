@@ -12,7 +12,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Icon } from "@expo/ui";
 import { useCallback, useState } from "react";
 
 import * as Haptics from "expo-haptics";
@@ -20,6 +19,7 @@ import * as SecureStore from "expo-secure-store";
 
 import SettingPageItem from "@/components/setting-page-item";
 import SettingSwitch from "@/components/setting-switch";
+import { LinenBackground, LeatherPanel, EngravedTitle } from "@/components/skeuo";
 
 import PasswordVerifyModal from "@/components/PasswordVerifyModal";
 import { isSessionValid } from "@/utils/securitySession";
@@ -202,14 +202,17 @@ export default function Settings() {
 	};
 
 	return (
+		<LinenBackground>
 		<SafeAreaView
-			style={{ flex: 1, backgroundColor: currentTheme.background }}
+			style={{ flex: 1 }}
 			edges={Platform.OS == "android" ? ["left", "right", "top"] : ["left", "right"]}
 		>
-			<ScrollView contentContainerStyle={[{ flexGrow: 1 }, Platform.OS == "ios" ? { marginTop: -31 } : { marginTop: 6 }]} showsVerticalScrollIndicator={true} bounces={true}>
+			<LeatherPanel style={styles.headerPanel}>
+				<EngravedTitle size={26}>Settings</EngravedTitle>
+			</LeatherPanel>
+			<ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={true} bounces={true}>
 				<View style={[styles.container, { borderWidth: 0, borderColor: currentTheme.text}]}>
-					<Text style={[styles.pageHeader, { color: currentTheme.text }]}>Settings</Text>
-					<View style={{ gap: 20, marginTop: 0, width: "100%" }}>
+					<View style={{ gap: 20, marginTop: 8, width: "100%" }}>
 
 						{/* ACCOUNT SECTION */}
 						<View>
@@ -217,7 +220,7 @@ export default function Settings() {
 							<View style={{ borderRadius: 12, overflow: "hidden" }}>
 								<SettingPageItem
 									name="Password"
-									iconName={Icon.select({ ios: "asterisk", android: import("@expo/material-symbols/asterisk.xml") })}
+									iconName={"key"}
 									showChevron={true}
 									isLast={true}
 									onPress={() => {
@@ -236,7 +239,7 @@ export default function Settings() {
 									<View style={{ borderRadius: 12, overflow: "hidden" }}>
 										<SettingSwitch
 											name="Data Sharing Consent"
-											iconName={Icon.select({ ios: "hand.raised.fill", android: import("@expo/material-symbols/front_hand.xml") })}
+											iconName={"hand-left"}
 											isLast={true}
 											value={consent}
 											onValueChange={(val) => {
@@ -255,7 +258,7 @@ export default function Settings() {
 									<View style={{ borderRadius: 12, overflow: "hidden" }}>
 										<SettingSwitch
 											name="Emergency Escalation"
-											iconName={Icon.select({ ios: "exclamationmark.triangle.fill", android: import("@expo/material-symbols/front_hand.xml") })}
+											iconName={"warning"}
 											isLast={true}
 											value={emergencyEscalation}
 											onValueChange={(val) => {
@@ -281,14 +284,14 @@ export default function Settings() {
 									<View style={{ borderRadius: 12, overflow: "hidden" }}>
 										<SettingSwitch
 											name="Use Metric Units"
-											iconName={Icon.select({ ios: "ruler.fill", android: import("@expo/material-symbols/straighten.xml") })}
+											iconName={"resize"}
 											isLast={true}
 											value={isMetric}
 											onValueChange={handleMetricToggle}
 										/>
 										<SettingPageItem
 											name="Dark Theme"
-											iconName={Icon.select({ ios: "moon.fill", android: import("@expo/material-symbols/dark_mode.xml") })}
+											iconName={"moon"}
 											enabled={false}
 											isLast={true}
 										/>
@@ -303,7 +306,7 @@ export default function Settings() {
 									<View style={{ borderRadius: 12, overflow: "hidden" }}>
 										<SettingPageItem
 											name="Sign-out"
-											iconName={Icon.select({ ios: "power", android: import("@expo/material-symbols/power_settings_new.xml") })}
+											iconName={"power"}
 											isLast={false}
 											onPress={() => {
 												Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -342,7 +345,7 @@ export default function Settings() {
 										/>
 										<SettingPageItem
 											name="Delete Account"
-											iconName={Icon.select({ ios: "trash.fill", android: import("@expo/material-symbols/delete.xml") })}
+											iconName={"trash"}
 											isLast={true}
 											destructive={true}
 										/>
@@ -381,12 +384,14 @@ export default function Settings() {
 				</View>
 			</ScrollView>
 		</SafeAreaView>
+		</LinenBackground>
 	);
 }
 
 const styles = StyleSheet.create({
 	container: { flex: 1, width: "100%", padding: 20 },
 	pageHeader: { fontSize: 40, fontFamily: "Logo-Font" },
-	infoLabel: { fontFamily: "Condensed-Bold", fontSize: 14, margin: 0, marginBottom: 8 },
-	caption: { fontFeatureSettings: "Body-Medium", opacity: 0.8, fontSize: 13 },
+	infoLabel: { fontFamily: "Condensed-Bold", fontSize: 14, margin: 0, marginBottom: 8, letterSpacing: 0.6 },
+	caption: { opacity: 0.8, fontSize: 13 },
+	headerPanel: { width: "100%", paddingTop: 16, paddingBottom: 14, paddingHorizontal: 20 },
 });

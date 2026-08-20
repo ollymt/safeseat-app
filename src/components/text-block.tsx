@@ -23,10 +23,12 @@ export default function TextBlock({ text, copyable = false, label }: TextBlockPr
 			await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
 			// Optional visual confirmation toast
-			{(!label || label == "") ? 
+			{
+				(!label || label == "") ?
 				Alert.alert("Copied", "Copied to clipboard!")
-			:
-			Alert.alert("Copied", `${label} copied to clipboard.`); }
+				:
+				Alert.alert("Copied", `${label} copied to clipboard.`);
+			}
 		} catch (error) {
 			console.error("Failed to copy text:", error);
 		}
@@ -40,10 +42,10 @@ export default function TextBlock({ text, copyable = false, label }: TextBlockPr
 			onPress={handlePress}
 			style={[
 				textblockstyles.baseCard,
-				{ backgroundColor: currentTheme.element },
+				{ backgroundColor: currentTheme.element, borderColor: currentTheme.border, borderWidth: 1 },
 			]}
 		>
-			<Text style={{ color: currentTheme.text, fontSize: 18, fontFamily: "Body-Bold" }}>
+			<Text style={{ color: currentTheme.text, fontSize: 18, fontWeight: "700" }}>
 				{text}
 			</Text>
 		</TouchableOpacity>

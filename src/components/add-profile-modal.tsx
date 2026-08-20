@@ -1,12 +1,25 @@
 // components/AddProfileModal.tsx
+import React from "react";
+import UButton from "@/components/button";
+import SkeuoInput from "@/components/skeuo-input";
+import { LeatherPanel, PaperCard } from "@/components/skeuo";
 import { Themes } from "@/constants/theme";
-import { BottomSheet, Button, Column, FieldGroup, Host, Icon, Row, Spacer, Text, TextInput } from "@expo/ui";
-import { ConfirmationDialog, Button as SwiftButton } from "@expo/ui/swift-ui";
-import { buttonBorderShape, buttonStyle, controlSize, submitLabel } from "@expo/ui/swift-ui/modifiers";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
-import { Alert, Platform, StyleSheet, useColorScheme } from "react-native";
+import {
+    Alert,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    useColorScheme,
+    View,
+} from "react-native";
 
 // 🛠️ Firebase Imports
 import { addDoc, collection, doc, getDoc } from "firebase/firestore";
@@ -286,383 +299,274 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
     };
 
     return (
-        <Host matchContents>
-            <BottomSheet
-                isPresented={visible}
-                onDismiss={onClose}
-                showDragIndicator={false}
-                snapPoints={["full"]}
-            >
-                <Column spacing={16} alignment="center">
-                    <Row>
-                        {Platform.OS === "ios" ? (
-                            <ConfirmationDialog
-                                title="Discard your progress?"
-                                isPresented={discardConfirmVisible}
-                                onIsPresentedChange={setDiscardConfirmVisible}
-                                titleVisibility="visible"
-                            >
-                                <ConfirmationDialog.Trigger>
-                                    <Button
-                                        variant="outlined"
-                                        onPress={() => {
-                                            if (hasUnsavedChanges) {
-                                                setDiscardConfirmVisible(true);
-                                            } else {
-                                                onClose();
-                                            }
-                                        }}
-                                        disabled={isLoading}
-                                        modifiers={[
-                                            buttonStyle("glass"),
-                                            controlSize("large"),
-                                            buttonBorderShape("circle"),
-                                        ]}
-                                    >
-                                        <Icon
-                                            name={Icon.select({
-                                                ios: "xmark",
-                                                android: import("@expo/material-symbols/close.xml"),
-                                            })}
-                                        />
-                                    </Button>
-                                </ConfirmationDialog.Trigger>
-                                <ConfirmationDialog.Actions>
-                                    <SwiftButton
-                                        label="Discard"
-                                        role="destructive"
-                                        onPress={handleResetAndClose}
-                                    />
-                                    <SwiftButton
-                                        label="Cancel"
-                                        onPress={() => setDiscardConfirmVisible(false)}
-                                    />
-                                </ConfirmationDialog.Actions>
-                            </ConfirmationDialog>
-                        ) : (
-                            <Button
-                                variant="outlined"
+        <Modal visible={visible} animationType="slide" transparent onRequestClose={() => {
+            if (hasUnsavedChanges) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                Alert.alert("Discard?", "You have unsaved changes. Discard?", [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Discard", style: "destructive", onPress: () => handleResetAndClose() },
+                ]);
+            } else {
+                onClose();
+            }
+        }}>
+            <View style={styles.backdrop}>
+                <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ width: "100%", maxHeight: "92%" }}>
+                    <LeatherPanel style={styles.sheet} inset={10}>
+                        <View style={styles.headerRow}>
+                            <Pressable
                                 onPress={() => {
                                     if (hasUnsavedChanges) {
                                         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
                                         Alert.alert("Discard?", "You have unsaved changes. Discard?", [
-                                            {
-                                                text: "Cancel",
-                                                style: "cancel"
-                                            },
-                                            {
-                                                text: "Discard",
-                                                style: "destructive",
-                                                onPress: () => handleResetAndClose()
-                                            }
+                                            { text: "Cancel", style: "cancel" },
+                                            { text: "Discard", style: "destructive", onPress: () => handleResetAndClose() },
                                         ]);
                                     } else {
                                         onClose();
                                     }
                                 }}
                                 disabled={isLoading}
-                                modifiers={[
-                                    buttonStyle("glass"),
-                                    controlSize("large"),
-                                    buttonBorderShape("circle"),
-                                ]}
+                                style={styles.chromeCircle}
                             >
-                                <Icon
-                                    name={Icon.select({
-                                        ios: "xmark",
-                                        android: import("@expo/material-symbols/close.xml"),
-                                    })}
-                                />
-                            </Button>
-                        )}
-                        <Spacer flexible />
-                        <Button
-                            onPress={handleSave}
-                            variant={isFormInvalid ? "outlined" : "filled"}
-                            modifiers={[
-                                isFormInvalid ? buttonStyle("glass") : buttonStyle("borderedProminent"),
-                                controlSize("large"),
-                                buttonBorderShape("circle"),
-                            ]}
-                            disabled={isLoading || isFormInvalid}
-                        >
-                            <Icon
-                                name={Icon.select({
-                                    ios: "checkmark",
-                                    android: import("@expo/material-symbols/check.xml"),
-                                })}
-                            />
-                        </Button>
-                    </Row>
+                                <Ionicons name="close" size={18} color="#F1E3C6" />
+                            </Pressable>
+                            <View style={{ flex: 1 }} />
+                            <Pressable
+                                onPress={handleSave}
+                                disabled={isLoading || isFormInvalid}
+                                style={[styles.chromeCircle, !isFormInvalid && !isLoading ? styles.chromeCircleActive : null]}
+                            >
+                                <Ionicons name="checkmark" size={18} color="#F1E3C6" />
+                            </Pressable>
+                        </View>
 
-                    <Column spacing={0} alignment="center">
-                        <Text textStyle={{ fontSize: 36, color: currentTheme.text, fontWeight: "bold", textAlign: "center" }}>New Profile</Text>
-                        <FieldGroup>
-                            <FieldGroup.Section>
-                                <TextInput
-                                    placeholder="Name"
-                                    editable={!isLoading}
-                                    onChangeText={setName}
-                                    // @ts-ignore
-                                    value={name}
-                                    modifiers={[submitLabel("next")]}
-                                    // @ts-ignore
-                                    textAlign="left"
-                                />
-                                <TextInput
-                                    placeholder="Icon URL (optional)"
-                                    editable={!isLoading}
-                                    onChangeText={setIcon}
-                                    // @ts-ignore
-                                    value={icon}
-                                    modifiers={[submitLabel("next")]}
-                                    // @ts-ignore
-                                    textAlign="left"
-                                />
-                                <TextInput
-                                    placeholder="Email"
-                                    editable={!isLoading}
-                                    onChangeText={setEmail}
-                                    // @ts-ignore
-                                    value={email}
-                                    modifiers={[submitLabel("next")]}
-                                    keyboardType="email-address"
-                                    // @ts-ignore
-                                    textAlign="left"
-                                />
-                                <TextInput
-                                    placeholder="Phone"
-                                    editable={!isLoading}
-                                    onChangeText={setPhone}
-                                    // @ts-ignore
-                                    value={phone}
-                                    modifiers={[submitLabel("next")]}
-                                    keyboardType="phone-pad"
-                                    // @ts-ignore
-                                    textAlign="left"
-                                />
-                                <Row alignment="center">
-                                    <Text>Birthday</Text>
-                                    <Spacer flexible />
-                                    <Row spacing={8} style={{ width: 180 }}>
-                                        <TextInput
-                                            placeholder="MM"
-                                            editable={!isLoading}
-                                            // @ts-ignore
-                                            value={birthMonth}
-                                            onChangeText={setBirthMonth}
-                                            modifiers={[submitLabel("next")]}
-                                            keyboardType="number-pad"
-                                            textAlign="center"
-                                            maxLength={2}
-                                            style={{ width: 45 }}
-                                        />
-                                        <TextInput
-                                            placeholder="DD"
-                                            editable={!isLoading}
-                                            // @ts-ignore
-                                            value={birthDate}
-                                            onChangeText={setBirthDate}
-                                            modifiers={[submitLabel("next")]}
-                                            keyboardType="number-pad"
-                                            textAlign="center"
-                                            maxLength={2}
-                                            style={{ width: 45 }}
-                                        />
-                                        <TextInput
-                                            placeholder="YYYY"
-                                            editable={!isLoading}
-                                            // @ts-ignore
-                                            value={birthYear}
-                                            onChangeText={setBirthYear}
-                                            modifiers={[submitLabel("next")]}
-                                            keyboardType="number-pad"
-                                            textAlign="center"
-                                            maxLength={4}
-                                            style={{ width: 65 }}
-                                        />
-                                    </Row>
-                                </Row>
-                            </FieldGroup.Section>
+                        <Text style={styles.title}>New Profile</Text>
 
-                            <FieldGroup.Section>
-                                {Platform.OS === "ios" ? (
-                                    isMetric ? (
-                                        <Row>
-                                            <TextInput
-                                                placeholder="Height (cm)"
-                                                editable={!isLoading}
-                                                onChangeText={setHeightCm}
-                                                // @ts-ignore
-                                                value={heightCm}
-                                                modifiers={[submitLabel("next")]}
-                                                keyboardType="number-pad"
-                                                // @ts-ignore
-                                                textAlign="left"
-                                            />
-                                            <TextInput
-                                                placeholder="Weight (kg)"
-                                                editable={!isLoading}
-                                                onChangeText={setWeightKg}
-                                                // @ts-ignore
-                                                value={weightKg}
-                                                modifiers={[submitLabel("next")]}
-                                                keyboardType="number-pad"
-                                                // @ts-ignore
-                                                textAlign="left"
-                                            />
-                                        </Row>
+                        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 14, paddingBottom: 8 }}>
+                            <PaperCard style={{ padding: 16 }}>
+                                <View style={{ gap: 14 }}>
+                                    <SkeuoInput
+                                        label="Name"
+                                        placeholder="Name"
+                                        editable={!isLoading}
+                                        onChangeText={setName}
+                                        value={name}
+                                        returnKeyType="next"
+                                    />
+                                    <SkeuoInput
+                                        label="Icon URL (optional)"
+                                        placeholder="Icon URL (optional)"
+                                        editable={!isLoading}
+                                        onChangeText={setIcon}
+                                        value={icon}
+                                        returnKeyType="next"
+                                    />
+                                    <SkeuoInput
+                                        label="Email"
+                                        placeholder="Email"
+                                        editable={!isLoading}
+                                        onChangeText={setEmail}
+                                        value={email}
+                                        keyboardType="email-address"
+                                        returnKeyType="next"
+                                    />
+                                    <SkeuoInput
+                                        label="Phone"
+                                        placeholder="Phone"
+                                        editable={!isLoading}
+                                        onChangeText={setPhone}
+                                        value={phone}
+                                        keyboardType="phone-pad"
+                                        returnKeyType="next"
+                                    />
+                                    <View>
+                                        <Text style={styles.fieldLabel}>BIRTHDAY</Text>
+                                        <View style={{ flexDirection: "row", gap: 8 }}>
+                                            <View style={{ width: 70 }}>
+                                                <SkeuoInput
+                                                    placeholder="MM"
+                                                    editable={!isLoading}
+                                                    value={birthMonth}
+                                                    onChangeText={setBirthMonth}
+                                                    keyboardType="number-pad"
+                                                    maxLength={2}
+                                                    textAlign="center"
+                                                />
+                                            </View>
+                                            <View style={{ width: 70 }}>
+                                                <SkeuoInput
+                                                    placeholder="DD"
+                                                    editable={!isLoading}
+                                                    value={birthDate}
+                                                    onChangeText={setBirthDate}
+                                                    keyboardType="number-pad"
+                                                    maxLength={2}
+                                                    textAlign="center"
+                                                />
+                                            </View>
+                                            <View style={{ width: 90 }}>
+                                                <SkeuoInput
+                                                    placeholder="YYYY"
+                                                    editable={!isLoading}
+                                                    value={birthYear}
+                                                    onChangeText={setBirthYear}
+                                                    keyboardType="number-pad"
+                                                    maxLength={4}
+                                                    textAlign="center"
+                                                />
+                                            </View>
+                                        </View>
+                                    </View>
+                                </View>
+                            </PaperCard>
+
+                            <PaperCard style={{ padding: 16 }}>
+                                <View style={{ gap: 14 }}>
+                                    {isMetric ? (
+                                        <View style={{ flexDirection: "row", gap: 10 }}>
+                                            <View style={{ flex: 1 }}>
+                                                <SkeuoInput
+                                                    label="Height (cm)"
+                                                    placeholder="Height (cm)"
+                                                    editable={!isLoading}
+                                                    onChangeText={setHeightCm}
+                                                    value={heightCm}
+                                                    keyboardType="number-pad"
+                                                />
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <SkeuoInput
+                                                    label="Weight (kg)"
+                                                    placeholder="Weight (kg)"
+                                                    editable={!isLoading}
+                                                    onChangeText={setWeightKg}
+                                                    value={weightKg}
+                                                    keyboardType="number-pad"
+                                                />
+                                            </View>
+                                        </View>
                                     ) : (
                                         <>
-                                            <Row>
-                                                <TextInput
-                                                    placeholder="Height (ft)"
-                                                    editable={!isLoading}
-                                                    onChangeText={setHeightFt}
-                                                    // @ts-ignore
-                                                    value={heightFt}
-                                                    modifiers={[submitLabel("next")]}
-                                                    keyboardType="number-pad"
-                                                    // @ts-ignore
-                                                    textAlign="left"
-                                                />
-                                                <TextInput
-                                                    placeholder="Height (in)"
-                                                    editable={!isLoading}
-                                                    onChangeText={setHeightIn}
-                                                    // @ts-ignore
-                                                    value={heightIn}
-                                                    modifiers={[submitLabel("next")]}
-                                                    keyboardType="number-pad"
-                                                    // @ts-ignore
-                                                    textAlign="left"
-                                                />
-                                            </Row>
-                                            <TextInput
+                                            <View style={{ flexDirection: "row", gap: 10 }}>
+                                                <View style={{ flex: 1 }}>
+                                                    <SkeuoInput
+                                                        label="Height (ft)"
+                                                        placeholder="Height (ft)"
+                                                        editable={!isLoading}
+                                                        onChangeText={setHeightFt}
+                                                        value={heightFt}
+                                                        keyboardType="number-pad"
+                                                    />
+                                                </View>
+                                                <View style={{ flex: 1 }}>
+                                                    <SkeuoInput
+                                                        label="Height (in)"
+                                                        placeholder="Height (in)"
+                                                        editable={!isLoading}
+                                                        onChangeText={setHeightIn}
+                                                        value={heightIn}
+                                                        keyboardType="number-pad"
+                                                    />
+                                                </View>
+                                            </View>
+                                            <SkeuoInput
+                                                label="Weight (lb)"
                                                 placeholder="Weight (lb)"
                                                 editable={!isLoading}
                                                 onChangeText={setWeightLb}
-                                                // @ts-ignore
                                                 value={weightLb}
-                                                modifiers={[submitLabel("next")]}
                                                 keyboardType="number-pad"
-                                                // @ts-ignore
-                                                textAlign="left"
                                             />
                                         </>
-                                    )
-                                ) : (
-                                    /* Android: Render each input in its own clean row */
-                                    isMetric ? (
-                                        <>
-                                            <TextInput
-                                                placeholder="Height (cm)"
-                                                editable={!isLoading}
-                                                onChangeText={setHeightCm}
-                                                // @ts-ignore
-                                                value={heightCm}
-                                                modifiers={[submitLabel("next")]}
-                                                keyboardType="number-pad"
-                                                // @ts-ignore
-                                                textAlign="left"
-                                            />
-                                            <TextInput
-                                                placeholder="Weight (kg)"
-                                                editable={!isLoading}
-                                                onChangeText={setWeightKg}
-                                                // @ts-ignore
-                                                value={weightKg}
-                                                modifiers={[submitLabel("next")]}
-                                                keyboardType="number-pad"
-                                                // @ts-ignore
-                                                textAlign="left"
-                                            />
-                                        </>
-                                    ) : (
-                                        <>
-                                            <TextInput
-                                                placeholder="Height (ft)"
-                                                editable={!isLoading}
-                                                onChangeText={setHeightFt}
-                                                // @ts-ignore
-                                                value={heightFt}
-                                                modifiers={[submitLabel("next")]}
-                                                keyboardType="number-pad"
-                                                // @ts-ignore
-                                                textAlign="left"
-                                            />
-                                            <TextInput
-                                                placeholder="Height (in)"
-                                                editable={!isLoading}
-                                                onChangeText={setHeightIn}
-                                                // @ts-ignore
-                                                value={heightIn}
-                                                modifiers={[submitLabel("next")]}
-                                                keyboardType="number-pad"
-                                                // @ts-ignore
-                                                textAlign="left"
-                                            />
-                                            <TextInput
-                                                placeholder="Weight (lb)"
-                                                editable={!isLoading}
-                                                onChangeText={setWeightLb}
-                                                // @ts-ignore
-                                                value={weightLb}
-                                                modifiers={[submitLabel("next")]}
-                                                keyboardType="number-pad"
-                                                // @ts-ignore
-                                                textAlign="left"
-                                            />
-                                        </>
-                                    )
-                                )}
-                                <Row alignment="center">
-                                    <TextInput
+                                    )}
+                                    <SkeuoInput
+                                        label="Blood Type (e.g. O+)"
                                         placeholder="Blood Type (e.g. O+)"
                                         editable={!isLoading}
                                         onChangeText={setBloodType}
-                                        // @ts-ignore
                                         value={bloodType}
-                                        modifiers={[submitLabel("done")]}
-                                        // @ts-ignore
-                                        textAlign="left"
                                         maxLength={3}
+                                        returnKeyType="done"
                                     />
-                                </Row>
-                            </FieldGroup.Section>
-                        </FieldGroup>
+                                </View>
+                            </PaperCard>
 
-                        {/* 🌟 Diagnostic warnings */}
-                        {birthYear !== "" && birthMonth !== "" && birthDate !== "" && !isValidDateInput && (
-                            <Text textStyle={{ fontSize: 13, color: "#FF3B30", textAlign: "center" }}>
-                                Please enter a valid calendar date.
-                            </Text>
-                        )}
-                        {isValidDateInput && isUnder18 && (
-                            <Text textStyle={{ fontSize: 13, color: "#FF3B30", textAlign: "center" }}>
-                                Profile holder must be at least 18 years old.
-                            </Text>
-                        )}
-                        {isBloodTypeInvalid && (
-                            <Text textStyle={{ fontSize: 13, color: "#FF3B30", textAlign: "center" }}>
-                                Please enter a valid blood type (A, B, AB, O with +/-).
-                            </Text>
-                        )}
-                    </Column>
-                </Column>
-            </BottomSheet>
-        </Host>
+                            {birthYear !== "" && birthMonth !== "" && birthDate !== "" && !isValidDateInput && (
+                                <Text style={styles.warningText}>Please enter a valid calendar date.</Text>
+                            )}
+                            {isValidDateInput && isUnder18 && (
+                                <Text style={styles.warningText}>Profile holder must be at least 18 years old.</Text>
+                            )}
+                            {isBloodTypeInvalid && (
+                                <Text style={styles.warningText}>Please enter a valid blood type (A, B, AB, O with +/-).</Text>
+                            )}
+
+                            <UButton
+                                label={isLoading ? "Saving..." : "Save Profile"}
+                                variant="primary"
+                                fullWidth
+                                enabled={!isLoading && !isFormInvalid}
+                                onPress={handleSave}
+                            />
+                        </ScrollView>
+                    </LeatherPanel>
+                </KeyboardAvoidingView>
+            </View>
+        </Modal>
     );
 }
 
 const styles = StyleSheet.create({
-    title: {
-        fontSize: 36,
-        textAlign: "center",
-        height: 100,
-        fontFamily: "Logo-Font",
-        borderWidth: 1,
-        borderColor: "#fff",
+    backdrop: {
+        flex: 1,
+        justifyContent: "flex-end",
+        backgroundColor: "rgba(0,0,0,0.55)",
+    },
+    sheet: {
+        width: "100%",
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 20,
+        paddingBottom: 30,
+    },
+    headerRow: {
+        flexDirection: "row",
+        alignItems: "center",
         marginBottom: 8,
+    },
+    chromeCircle: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: "rgba(255,255,255,0.08)",
+        alignItems: "center",
+        justifyContent: "center",
+        borderWidth: 1,
+        borderColor: "rgba(255,255,255,0.2)",
+    },
+    chromeCircleActive: {
+        backgroundColor: "#4F8B29",
+    },
+    title: {
+        fontSize: 28,
+        color: "#F1E3C6",
+        fontWeight: "800",
+        textAlign: "center",
+        marginBottom: 14,
+    },
+    fieldLabel: {
+        fontSize: 12,
+        fontWeight: "700",
+        letterSpacing: 0.8,
+        marginLeft: 4,
+        marginBottom: 6,
+        color: "#7C5A38",
+    },
+    warningText: {
+        fontSize: 13,
+        color: "#E36A54",
+        textAlign: "center",
+        fontWeight: "600",
     },
 });

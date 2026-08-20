@@ -1,11 +1,7 @@
 import Button from "@/components/button";
-import { Themes } from "@/constants/theme";
-import { Column, FieldGroup, Host, TextInput } from "@expo/ui";
-import {
-  frame,
-  scrollDisabled,
-  submitLabel,
-} from "@expo/ui/swift-ui/modifiers";
+import SkeuoInput from "@/components/skeuo-input";
+import { LinenBackground, PaperCard, Stitching } from "@/components/skeuo";
+import { Materials, Themes } from "@/constants/theme";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import {
@@ -116,87 +112,63 @@ export default function ChangePass() {
   };
 
   return (
-    <SafeAreaView
-      style={{
-        flex: 1,
-        backgroundColor: currentTheme.background,
-      }}
-      edges={["bottom", "left", "right"]}
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1 }}
-      >
-        <View style={[changepass.container, { borderWidth: 0, borderColor: currentTheme.text }, Platform.OS == "android" ? { marginTop: 60 } : { marginTop: 50 }]}>
-          <View style={changepass.logoSection}>
-            <Text
-              style={[
-                changepass.loginlogo,
-                { color: currentTheme.text, textAlign: "center" },
-              ]}
-            >
-              Change Password
-            </Text>
-          </View>
+    <LinenBackground>
+      <SafeAreaView style={{ flex: 1 }} edges={["bottom", "left", "right"]}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+            <View style={[changepass.container, Platform.OS == "android" ? { marginTop: 60 } : { marginTop: 50 }]}>
+              <View style={changepass.logoSection}>
+                <Text style={[changepass.loginlogo, { color: currentTheme.text, textAlign: "center" }]}>
+                  Change Password
+                </Text>
+                <Stitching color={Materials.stitchDim} style={{ borderWidth: 0, borderTopWidth: 1, width: 80, marginTop: 10, alignSelf: "center" }} />
+              </View>
 
-          <View style={changepass.formSection}>
-            <Host
-              style={{
-                borderColor: "#000",
-                borderWidth: 0,
-                height: 200, // 3. Changing from flex: 0.33 to a static height blocks collapse!
-                width: "100%",
-              }}
-            >
-              <Column
-                spacing={16}
-                modifiers={[frame({ maxWidth: Infinity })]}
-              >
-                <FieldGroup modifiers={[scrollDisabled()]}>
-                  {/* 🛠️ Map each input field to its respective state function hooks */}
-                  <TextInput
-                    secureTextEntry={true}
-                    placeholder="Enter Old Password"
-                    defaultValue={oldPassword}
-                    modifiers={[submitLabel("next")]}
+              <PaperCard style={changepass.formSection}>
+                <View style={{ gap: 14 }}>
+                  <SkeuoInput
+                    label="Old Password"
+                    placeholder="••••••••"
+                    secureTextEntry
+                    returnKeyType="next"
                     onChangeText={setOldPassword}
                   />
-                  <TextInput
-                    secureTextEntry={true}
-                    placeholder="Enter New Password"
-                    defaultValue={newPassword}
-                    modifiers={[submitLabel("next")]}
+                  <SkeuoInput
+                    label="New Password"
+                    placeholder="••••••••"
+                    secureTextEntry
+                    returnKeyType="next"
                     onChangeText={setNewPassword}
                   />
-                  <TextInput
-                    secureTextEntry={true}
-                    placeholder="Confirm New Password"
-                    defaultValue={confirmPassword}
-                    modifiers={[submitLabel("done")]}
+                  <SkeuoInput
+                    label="Confirm New Password"
+                    placeholder="••••••••"
+                    secureTextEntry
+                    returnKeyType="done"
+                    onSubmitEditing={handleChangePassword}
                     onChangeText={setConfirmPassword}
                   />
-                </FieldGroup>
-              </Column>
-            </Host>
-            <View style={{ paddingHorizontal: 20, marginTop: 10 }}>
-              {/* 🛠️ Connect function and handle loading states */}
-              <Button
-                label={isLoading ? "Updating..." : "Change Password"}
-                variant="primary"
-                fullWidth={true}
-                onPress={handleChangePassword}
-                enabled={
-                  !isLoading &&
-                  oldPassword != "" &&
-                  newPassword != "" &&
-                  confirmPassword != ""
-                }
-              />
+                </View>
+                <View style={{ marginTop: 20 }}>
+                  <Button
+                    label={isLoading ? "Updating..." : "Change Password"}
+                    variant="primary"
+                    fullWidth={true}
+                    onPress={handleChangePassword}
+                    enabled={
+                      !isLoading &&
+                      oldPassword != "" &&
+                      newPassword != "" &&
+                      confirmPassword != ""
+                    }
+                  />
+                </View>
+              </PaperCard>
             </View>
-          </View>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </LinenBackground>
   );
 }
 
@@ -207,17 +179,17 @@ const changepass = StyleSheet.create({
     padding: 20,
   },
   logoSection: {
-    height: "25%", // Reduced slightly to give more room for keyboard space
     alignItems: "center",
     justifyContent: "flex-end",
+    paddingVertical: 24,
   },
   formSection: {
     width: "100%",
-    flex: 1,
+    padding: 20,
   },
   loginlogo: {
-    fontSize: 40,
-    fontFamily: "Logo-Font",
+    fontSize: 30,
+    fontWeight: "800",
     textAlign: "center",
   },
 });

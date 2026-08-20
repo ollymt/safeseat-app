@@ -1,5 +1,6 @@
-import { Themes } from "@/constants/theme";
-import { Host, Icon } from "@expo/ui";
+import { Materials, Themes } from "@/constants/theme";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import {
     Pressable,
     StyleSheet,
@@ -9,7 +10,7 @@ import {
 } from "react-native";
 
 type SettingPageItemProps = {
-    iconName?: Parameters<typeof Icon>[0]["name"];
+    iconName?: keyof typeof Ionicons.glyphMap;
     name: string;
     value?: string;
     enabled?: boolean;
@@ -43,48 +44,50 @@ export default function SettingPageItem({
                     backgroundColor: currentTheme.element,
                     borderBottomWidth: isLast ? 0 : 1,
                     borderBottomColor: currentTheme.border,
-                    opacity: enabled ? 1 : 0.5,
-                }
+                    opacity: enabled ? (pressed ? 0.85 : 1) : 0.5,
+                },
             ]}
         >
             <View style={setitem.leftContainer}>
-                {/* 1. Render Icon natively only if iconName prop exists */}
                 {iconName && (
-                    <View style={[setitem.iconWrapper, { backgroundColor: destructive ? currentTheme.warnBttn : currentTheme.primaryBttn, padding: 6, borderRadius: 8 }]}>
-                        <Host style={{ width: 22, height: 22 }}>
-                            <Icon name={iconName} color={currentTheme.primaryBttnText} />
-                        </Host>
-                    </View>
+                    <LinearGradient
+                        colors={destructive ? ["#E36A54", "#A32A1B", "#5E140C"] : ["#F3E3A8", "#C9A227", "#7A5C12"]}
+                        start={{ x: 0.3, y: 0 }}
+                        end={{ x: 0.7, y: 1 }}
+                        style={setitem.iconWrapper}
+                    >
+                        <Ionicons name={iconName} size={18} color={destructive ? "#F6E9D8" : "#2C1B0F"} />
+                    </LinearGradient>
                 )}
 
-                {/* 2. Primary Label */}
-                <View style={{ borderWidth: 0, borderColor: "#fff" }}>
-                    <Text style={[setitem.settingName, { color: destructive ? currentTheme.warnBttn : currentTheme.text }]}>
+                <View>
+                    <Text
+                        style={[
+                            setitem.settingName,
+                            { color: destructive ? currentTheme.warnBttn : currentTheme.text },
+                        ]}
+                    >
                         {name}
                     </Text>
                 </View>
             </View>
 
-            <View style={{ flexDirection: "row", flex: 1, justifyContent: "flex-end", gap: 6 }}>
-                {/* 3. Optional Right-Side Value String */}
+            <View style={{ flexDirection: "row", flex: 1, justifyContent: "flex-end", gap: 6, alignItems: "center" }}>
                 {value && (
                     <View style={setitem.rightContainer}>
-                        <Text style={[setitem.settingValue, { color: currentTheme.textSecondary }]} numberOfLines={1} ellipsizeMode="tail" >
+                        <Text
+                            style={[setitem.settingValue, { color: currentTheme.textSecondary }]}
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
+                        >
                             {value}
                         </Text>
                     </View>
                 )}
 
-                {showChevron && 
-                    <View style={{ width: "auto" }}>
-                        <Host matchContents>
-                            <Icon name={Icon.select({
-                                ios: "chevron.right",
-                                android: import("@expo/material-symbols/chevron_right.xml")
-                            })} color={currentTheme.textSecondary} />
-                        </Host>
-                    </View>
-                }
+                {showChevron && (
+                    <Ionicons name="chevron-forward" size={18} color={currentTheme.textSecondary} />
+                )}
             </View>
         </Pressable>
     );
@@ -95,7 +98,8 @@ const setitem = StyleSheet.create({
         width: "100%",
         flexDirection: "row",
         alignItems: "center",
-        padding: 12,
+        paddingVertical: 14,
+        paddingHorizontal: 14,
     },
     leftContainer: {
         flexDirection: "row",
@@ -105,25 +109,27 @@ const setitem = StyleSheet.create({
     },
     rightContainer: {
         width: "auto",
-        borderWidth: 0,
-        borderColor: "#fff",
         flex: 0.9,
         marginLeft: 10,
-        textAlign: "right",
         justifyContent: "flex-end",
         alignItems: "center",
-        flexDirection: "row"
+        flexDirection: "row",
     },
     iconWrapper: {
+        width: 30,
+        height: 30,
+        borderRadius: 8,
         justifyContent: "center",
         alignItems: "center",
+        borderWidth: 1,
+        borderColor: Materials.brassDark,
     },
     settingName: {
-        fontSize: 18,
-        fontFamily: "Body-Medium",
+        fontSize: 17,
+        fontWeight: "600",
     },
     settingValue: {
-        fontSize: 18,
-        fontFamily: "Condensed-Bold",
-    }
+        fontSize: 16,
+        fontWeight: "600",
+    },
 });

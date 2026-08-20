@@ -3,21 +3,28 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-	ScrollView,
-	StyleSheet,
-	Text,
-	useColorScheme,
-	View,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import Button from "@/components/button";
 import EmergencytModal from "@/components/emergency-modal";
 import SeatCard from "@/components/seat-card";
-import { Host, Icon } from "@expo/ui";
+import {
+  EngravedTitle,
+  LeatherPanel,
+  LinenBackground,
+} from "@/components/skeuo";
+import { Ionicons } from "@expo/vector-icons";
 
+import { auth, db } from "@/firebase";
 import { doc, onSnapshot } from "firebase/firestore";
-import { auth, db } from "../../../firebase";
+
+const SeatCardAny = SeatCard as any;
 
 type Profile = {
   id: string;
@@ -50,14 +57,10 @@ export default function Home() {
     {},
   );
 
-  // Tracks which emergency seats the user has dismissed, so the modal
-  // doesn't keep popping back up until a *new* emergency is triggered.
+  // Tracks which emergency seats the user has dismissed
   const [dismissedSeats, setDismissedSeats] = useState<Set<number>>(new Set());
 
-  // 📡 Real-time listener on users/{uid}/activeTrip/current — this is what
-  // actually makes Home a "live monitoring" screen. It fires instantly
-  // whenever the trip doc changes, from this device, another device, or
-  // (later) a sensor — no manual refresh or focus-triggered refetch needed.
+  // 📡 Real-time listener on active trip data
   useEffect(() => {
     const currentUser = auth.currentUser;
     if (!currentUser) return;
@@ -93,14 +96,18 @@ export default function Home() {
   }, []);
 
   // Derive card status state
-  const getSeatState = (seatNo: number): SeatState => {
+  const getSeatState = (
+    seatNo: number,
+  ): "empty" | "safe" | "warning" | "emergency" => {
     const profile = assignments[seatNo];
     if (!profile) return "empty";
-    return seatStatuses[seatNo] ?? "safe";
+
+    const status = seatStatuses[seatNo];
+    if (status === "assigned") return "safe";
+    return status ?? "safe";
   };
 
-  // 🚨 Find the first assigned, locked-in seat currently in "emergency"
-  // that the user hasn't already dismissed.
+  // 🚨 Find active emergency seat
   const emergencySeatNo = isLockedIn
     ? [1, 2, 3, 4, 5].find(
         (seatNo) =>
@@ -114,100 +121,98 @@ export default function Home() {
     emergencySeatNo !== undefined ? assignments[emergencySeatNo] : undefined;
 
   return (
-    <SafeAreaView
-      style={{
-        flex: 1,
-        backgroundColor: currentTheme.background,
-      }}
-      edges={["left", "right"]}
-    >
-      <View style={[styles.container, { marginTop: 40 }]}>
+    <LinenBackground>
+      <SafeAreaView
+        style={{
+          flex: 1,
+        }}
+        edges={["left", "right"]}
+      >
         {isLockedIn && (
-          <Text style={[styles.pageHeader, { color: currentTheme.text }]}>
-            Home
-          </Text>
+          <LeatherPanel style={styles.headerPanel}>
+            <EngravedTitle size={26}>Home</EngravedTitle>
+          </LeatherPanel>
         )}
+        <View style={[styles.container, { marginTop: isLockedIn ? 16 : 40 }]}>
+          {isLockedIn ? (
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 40 }}
+            >
+              <View style={{ gap: 10, marginTop: 10 }}>
+                {[1, 2, 3, 4, 5].map((seatNo) => {
+                  const profile = assignments[seatNo];
+                  const state = getSeatState(seatNo);
 
-        {isLockedIn ? (
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 40 }}
-          >
-            <View style={{ gap: 10, marginTop: 10 }}>
-              {[1, 2, 3, 4, 5].map((seatNo) => {
-                const profile = assignments[seatNo];
-                const state = getSeatState(seatNo);
-
-                return (
-                  <SeatCard
-                    key={seatNo}
-                    seatNo={seatNo}
-                    role={SEAT_ROLES[seatNo]}
-                    name={profile?.name}
-                    state={state === "assigned" ? "safe" : state}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    }}
-                  />
-                );
-              })}
-            </View>
-          </ScrollView>
-        ) : (
-          <View style={styles.unlockedContainer}>
-            <View style={{ marginVertical: 20 }}>
-              <Host matchContents>
-                <Icon
-                  name={Icon.select({
-                    ios: "lock.slash.fill",
-                    android: import("@expo/material-symbols/lock_open.xml"),
-                  })}
+                  return (
+                    <SeatCardAny
+                      key={seatNo}
+                      seatNo={seatNo}
+                      role={SEAT_ROLES[seatNo]}
+                      name={profile?.name}
+                      pfp={profile?.icon ?? profile?.photoURL}
+                      state={state}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }}
+                    />
+                  );
+                })}
+              </View>
+            </ScrollView>
+          ) : (
+            <View style={styles.unlockedContainer}>
+              <View style={{ marginVertical: 20 }}>
+                <Ionicons
+                  name="lock-open"
                   size={180}
                   color={currentTheme.secondaryBttn}
                 />
-              </Host>
+              </View>
+              <Text
+                style={[styles.unlockedTitle, { color: currentTheme.text }]}
+              >
+                Trip Not Locked In
+              </Text>
+              <Text
+                style={[
+                  styles.unlockedSubtitle,
+                  { color: currentTheme.textSecondary },
+                ]}
+              >
+                Assign passengers to seats and tap "Lock In" on the Assign page
+                to start monitoring.
+              </Text>
+              <View style={{ width: "100%", marginTop: 24 }}>
+                <Button
+                  label="Go to Assign"
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    router.push("/assign");
+                  }}
+                  fullWidth={true}
+                  glass={false}
+                />
+              </View>
             </View>
-            <Text style={[styles.unlockedTitle, { color: currentTheme.text }]}>
-              Trip Not Locked In
-            </Text>
-            <Text
-              style={[
-                styles.unlockedSubtitle,
-                { color: currentTheme.textSecondary },
-              ]}
-            >
-              Assign passengers to seats and tap "Lock In" on the Assign page to
-              start monitoring.
-            </Text>
-            <View style={{ width: "100%", marginTop: 24 }}>
-              <Button
-                label="Go to Assign"
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  router.push("/assign");
-                }}
-                fullWidth={true}
-                glass={false}
-              />
-            </View>
-          </View>
-        )}
+          )}
 
-        {emergencySeatNo !== undefined && emergencyProfile && (
-          <EmergencytModal
-            seat={emergencySeatNo}
-            visible={true}
-            onClose={() =>
-              setDismissedSeats((prev) => new Set(prev).add(emergencySeatNo))
-            }
-            id={emergencyProfile.id}
-            name={emergencyProfile.name}
-            icon={emergencyProfile.photoURL ?? emergencyProfile.icon}
-            isAccountOwner={emergencyProfile.isAccountOwner}
-          />
-        )}
-      </View>
-    </SafeAreaView>
+          {emergencySeatNo !== undefined && emergencyProfile && (
+            <EmergencytModal
+              seat={emergencySeatNo}
+              visible={true}
+              onClose={() =>
+                setDismissedSeats((prev) => new Set(prev).add(emergencySeatNo))
+              }
+              id={emergencyProfile.id}
+              name={emergencyProfile.name}
+              icon={emergencyProfile.photoURL ?? emergencyProfile.icon}
+              isAccountOwner={emergencyProfile.isAccountOwner}
+            />
+          )}
+        </View>
+      </SafeAreaView>
+    </LinenBackground>
   );
 }
 
@@ -222,6 +227,12 @@ const styles = StyleSheet.create({
   pageHeader: {
     fontSize: 40,
     fontFamily: "Logo-Font",
+  },
+  headerPanel: {
+    width: "100%",
+    paddingTop: 16,
+    paddingBottom: 14,
+    paddingHorizontal: 20,
   },
   unlockedContainer: {
     flex: 1,

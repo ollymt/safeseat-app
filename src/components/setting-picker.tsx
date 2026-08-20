@@ -1,30 +1,28 @@
-import { Themes } from "@/constants/theme";
-import { Host, Icon, Picker } from "@expo/ui";
-// 1. Import the native scroll view wrapper designed specifically for Expo UI
-// Static import instead of a runtime import() — Icon.select needs an actual
-// value, not a Promise, or the Android icon silently breaks.
-import unfoldMoreIcon from "@expo/material-symbols/unfold_more.xml";
+import { LeatherPanel, PaperCard } from "@/components/skeuo";
+import { Materials, Themes } from "@/constants/theme";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useState } from "react";
 import {
-    Platform,
-    Pressable,
-    StyleSheet,
-    Text,
-    useColorScheme,
-    View,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View,
 } from "react-native";
 
 type SettingPickerProps = {
-  iconName?: Parameters<typeof Icon>[0]["name"];
+  iconName?: keyof typeof Ionicons.glyphMap;
   name: string;
   value?: string; // e.g. "a+", "b-", "none"
   enabled?: boolean;
   isLast?: boolean;
   showChevron?: boolean;
-  isOpen?: boolean; // Unused on iOS (inline Picker doesn't need a modal state), but kept for prop-type parity with the Android variant
-  onClose?: () => void; // Unused on iOS, same reason as above
+  isOpen?: boolean;
+  onClose?: () => void;
   onPress?: () => void;
-  onValueChange?: (newValue: string) => void; // Added value updater signature
+  onValueChange?: (newValue: string) => void;
 };
 
 const bloodTypes = [
@@ -45,7 +43,6 @@ export default function SettingPicker({
   value = "none",
   isLast = false,
   enabled = true,
-  onPress,
   onValueChange,
 }: SettingPickerProps) {
   const colorScheme = useColorScheme();
@@ -53,43 +50,25 @@ export default function SettingPicker({
   const currentTheme = Themes[activeScheme];
 
   const [selectedBloodType, setSelectedBloodType] = useState(value);
-  const [bloodTypeIsPresented, setBloodTypeIsPresented] = useState(false);
-  // 4. FIX: Holds a tapped value until the native sheet has fully finished
-  // dismissing. We must NOT mutate list state (which changes every row's
-  // isSelected) while Compose is mid-teardown of the BottomSheet/ScrollView,
-  // or it crashes. So we stage the value here and only commit it once
-  // onDismiss actually fires.
-  const [pendingBloodType, setPendingBloodType] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // Keep internal selector state updated when parent SecureStore values resolve asynchronously
   useEffect(() => {
-    if (value) {
-      setSelectedBloodType(value);
-    }
+    if (value) setSelectedBloodType(value);
   }, [value]);
 
-  // Format the display label text based on the mapped internal string token
   const currentLabel =
     bloodTypes.find((b) => b.value === selectedBloodType)?.label || "Not Set";
 
-  // Handle updates for the iOS inline picker item selections
-  const handleValueChangeIos = (newValue: string) => {
+  const handleSelectValue = (newValue: string) => {
     setSelectedBloodType(newValue);
-    if (onValueChange) {
-      onValueChange(newValue);
-    }
+    if (onValueChange) onValueChange(newValue);
+    setDrawerOpen(false);
   };
 
   return (
     <>
       <Pressable
-        onPress={
-          enabled
-            ? Platform.OS === "android"
-              ? () => setBloodTypeIsPresented(true)
-              : onPress
-            : undefined
-        }
+        onPress={enabled ? () => setDrawerOpen(true) : undefined}
         disabled={!enabled}
         style={[
           setitem.setItemBase,
@@ -100,71 +79,58 @@ export default function SettingPicker({
           },
         ]}
       >
-        {/* LEFT BLOCK */}
-        {/* Added pointerEvents="none" to stop native icons from high-jacking gestures */}
         <View style={setitem.leftContainer} pointerEvents="none">
           {iconName && (
-            <View
-              style={[
-                setitem.iconWrapper,
-                {
-                  backgroundColor: currentTheme.primaryBttn,
-                  padding: 6,
-                  borderRadius: 8,
-                },
-              ]}
+            <LinearGradient
+              colors={["#F3E3A8", "#C9A227", "#7A5C12"]}
+              start={{ x: 0.3, y: 0 }}
+              end={{ x: 0.7, y: 1 }}
+              style={setitem.iconWrapper}
             >
-              <Host style={{ width: 22, height: 22 }}>
-                <Icon name={iconName} color={currentTheme.primaryBttnText} />
-              </Host>
-            </View>
+              <Ionicons name={iconName} size={18} color="#2C1B0F" />
+            </LinearGradient>
           )}
-          <Text style={[setitem.settingName, { color: currentTheme.text }]}>
-            {name}
-          </Text>
+          <Text style={[setitem.settingName, { color: currentTheme.text }]}>{name}</Text>
         </View>
 
-        {/* RIGHT BLOCK */}
-        <View style={setitem.rightContainer}>
-          {Platform.OS == "ios" ? (
-            <Host matchContents>
-              <Picker
-                selectedValue={selectedBloodType}
-                onValueChange={handleValueChangeIos}
-                appearance="menu"
-              >
-                {bloodTypes.map((b) => (
-                  <Picker.Item key={b.value} label={b.label} value={b.value} />
-                ))}
-              </Picker>
-            </Host>
-          ) : (
-            /* Added pointerEvents="none" to pass gestures directly up to the parent row wrapper on Android */
-            <View
-              style={{ flexDirection: "row", alignItems: "center" }}
-              pointerEvents="none"
-            >
-              <Text
-                style={[
-                  setitem.settingValue,
-                  { color: currentTheme.primaryBttn },
-                ]}
-              >
-                {currentLabel}
-              </Text>
-              <Host style={{ width: 20, height: 20 }}>
-                <Icon
-                  name={Icon.select({
-                    ios: "chevron.up.chevron.down",
-                    android: unfoldMoreIcon,
-                  })}
-                  color={currentTheme.primaryBttn}
-                />
-              </Host>
-            </View>
-          )}
+        <View style={setitem.rightContainer} pointerEvents="none">
+          <Text style={[setitem.settingValue, { color: currentTheme.primaryBttn }]}>
+            {currentLabel}
+          </Text>
+          <Ionicons name="chevron-forward" size={18} color={currentTheme.textSecondary} />
         </View>
       </Pressable>
+
+      <Modal visible={drawerOpen} animationType="slide" transparent onRequestClose={() => setDrawerOpen(false)}>
+        <View style={setitem.backdrop}>
+          <LeatherPanel style={setitem.sheet} inset={10}>
+            <Text style={setitem.drawerTitle}>Select {name}</Text>
+            <PaperCard style={{ padding: 6 }}>
+              {bloodTypes.map((b, i) => {
+                const isSelected = b.value === selectedBloodType;
+                return (
+                  <Pressable
+                    key={b.value}
+                    onPress={() => handleSelectValue(b.value)}
+                    style={[
+                      setitem.radioRow,
+                      i !== bloodTypes.length - 1 && { borderBottomWidth: 1, borderBottomColor: "rgba(120,90,50,0.25)" },
+                    ]}
+                  >
+                    <Text style={[setitem.regularText, { color: isSelected ? currentTheme.primaryBttn : currentTheme.text, fontWeight: isSelected ? "800" : "600" }]}>
+                      {b.label}
+                    </Text>
+                    {isSelected && <Ionicons name="checkmark-circle" size={20} color={currentTheme.primaryBttn} />}
+                  </Pressable>
+                );
+              })}
+            </PaperCard>
+            <Pressable onPress={() => setDrawerOpen(false)} style={setitem.closeBtn}>
+              <Text style={setitem.closeBtnText}>Close</Text>
+            </Pressable>
+          </LeatherPanel>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -172,70 +138,36 @@ export default function SettingPicker({
 const setitem = StyleSheet.create({
   setItemBase: {
     width: "100%",
-    height: 56,
+    height: 58,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: 12,
+    paddingHorizontal: 14,
   },
-  leftContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    gap: 12,
-  },
-  rightContainer: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    alignItems: "center",
-    flex: 1,
-  },
+  leftContainer: { flexDirection: "row", alignItems: "center", gap: 12 },
+  rightContainer: { flexDirection: "row", alignItems: "center", gap: 6 },
   iconWrapper: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
     justifyContent: "center",
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: Materials.brassDark,
   },
-  settingName: {
-    fontSize: 18,
-    fontFamily: "Body-Medium",
-  },
-  settingValue: {
-    fontSize: 18,
-    fontFamily: "Condensed-Bold",
-  },
-  drawerCont: {
-    width: "100%",
-    flexDirection: "column",
-    padding: 24,
-  },
-  drawerTitle: {
-    fontSize: 20,
-    fontFamily: "Heading-Font",
-    textAlign: "center",
-    marginBottom: 16,
-  },
+  settingName: { fontSize: 17, fontWeight: "600" },
+  settingValue: { fontSize: 16, fontWeight: "700" },
+  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.55)" },
+  sheet: { width: "100%", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 34 },
+  drawerTitle: { fontSize: 20, fontWeight: "800", textAlign: "center", marginBottom: 16, color: "#F1E3C6" },
   radioRow: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     width: "100%",
     padding: 14,
-    borderRadius: 8,
-    gap: 12,
   },
-  radioOuter: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  regularText: {
-    fontSize: 16,
-    fontFamily: "Body-Medium",
-  },
+  regularText: { fontSize: 16 },
+  closeBtn: { alignItems: "center", marginTop: 16 },
+  closeBtnText: { color: "#C9AC7C", fontSize: 15, fontWeight: "700" },
 });

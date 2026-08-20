@@ -1,14 +1,7 @@
 import Button from "@/components/button";
-import { Themes } from "@/constants/theme";
-import { Column, FieldGroup, Host, TextInput } from "@expo/ui";
-import {
-  autocorrectionDisabled,
-  frame,
-  keyboardType,
-  onSubmit,
-  scrollDisabled,
-  submitLabel,
-} from "@expo/ui/swift-ui/modifiers";
+import SkeuoInput from "@/components/skeuo-input";
+import { LinenBackground, PaperCard, Stitching } from "@/components/skeuo";
+import { Materials, Themes } from "@/constants/theme";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { createUserWithEmailAndPassword } from "firebase/auth";
@@ -16,19 +9,17 @@ import { doc, setDoc } from "firebase/firestore";
 import { useRef, useState } from "react";
 import {
   Alert,
-  Dimensions,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   useColorScheme,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../firebase";
-
-const { width: screenWidth } = Dimensions.get("window");
 
 export default function Login() {
   // 2. Setup state variables to store the user input values
@@ -39,10 +30,10 @@ export default function Login() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const emailInputRef = useRef<any>(null);
-  const phoneInputRef = useRef<any>(null);
-  const passwordInputRef = useRef<any>(null);
-  const confirmPasswordInputRef = useRef<any>(null);
+  const emailInputRef = useRef<TextInput>(null);
+  const phoneInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
+  const confirmPasswordInputRef = useRef<TextInput>(null);
 
   const router = useRouter();
 
@@ -120,116 +111,79 @@ export default function Login() {
   };
 
   return (
-    <SafeAreaView
-      style={{
-        flex: 1,
-        backgroundColor: currentTheme.background,
-      }}
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1 }}
-      >
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
-          bounces={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={styles.container}>
-            {/* Logo Context Title Layout Area */}
-            <View style={styles.logoSection}>
-              <Text style={[styles.loginlogo, { color: currentTheme.text }]}>
-                Sign-up
-              </Text>
-            </View>
-
-            {/* Main Form Context Window Layout Area */}
-            <View style={styles.formSection}>
-              <Host
-                style={{
-                  height: 300, // 2. Hardcoded height avoids field crushing from multi-inputs
-                  width: "100%",
-                }}
-              >
-                <Column
-                  spacing={16}
-                  modifiers={[frame({ maxWidth: Infinity })]}
-                >
-                  <FieldGroup modifiers={[scrollDisabled()]}>
-                    <TextInput
-                      placeholder="Name"
-                      modifiers={[
-                        submitLabel("next"),
-                        autocorrectionDisabled(),
-                        onSubmit(() => {
-                          emailInputRef.current?.focus();
-                        }),
-                      ]}
-                      onChangeText={setName}
-                    />
-                    <TextInput
-                      ref={emailInputRef}
-                      placeholder="Email"
-                      modifiers={[
-                        keyboardType("email-address"),
-                        submitLabel("next"),
-                        autocorrectionDisabled(),
-                        onSubmit(() => {
-                          phoneInputRef.current?.focus();
-                        }),
-                      ]}
-                      onChangeText={setEmail}
-                    />
-                    <TextInput
-                      ref={phoneInputRef}
-                      placeholder="Phone Number"
-                      modifiers={[
-                        keyboardType("phone-pad"),
-                        submitLabel("next"),
-                        onSubmit(() => {
-                          passwordInputRef.current?.focus();
-                        }),
-                      ]}
-                      onChangeText={setPhone}
-                    />
-                    <TextInput
-                      ref={passwordInputRef}
-                      secureTextEntry={true}
-                      placeholder="Password"
-                      modifiers={[
-                        submitLabel("next"),
-                        onSubmit(() => {
-                          confirmPasswordInputRef.current?.focus();
-                        }),
-                      ]}
-                      onChangeText={setPassword}
-                    />
-                    <TextInput
-                      ref={confirmPasswordInputRef}
-                      secureTextEntry={true}
-                      placeholder="Confirm Password"
-                      modifiers={[submitLabel("done")]}
-                      onChangeText={setConfirmPassword}
-                    />
-                  </FieldGroup>
-                </Column>
-              </Host>
-
-              <View
-                style={{ width: "90%", alignSelf: "center", marginTop: 10 }}
-              >
-                <Button
-                  label={isSubmitting ? "Creating account..." : "Sign-up"}
-                  onPress={() => {
-                    if (!isSubmitting) handleSignUp();
-                  }}
-                />
+    <LinenBackground>
+      <SafeAreaView style={{ flex: 1 }}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={{ flexGrow: 1 }} bounces={false} keyboardShouldPersistTaps="handled">
+            <View style={styles.container}>
+              <View style={styles.logoSection}>
+                <Text style={[styles.loginlogo, { color: currentTheme.text }]}>Sign-up</Text>
+                <Stitching color={Materials.stitchDim} style={{ borderWidth: 0, borderTopWidth: 1, width: 80, marginTop: 10 }} />
               </View>
+
+              <PaperCard style={styles.formSection}>
+                <View style={{ gap: 14 }}>
+                  <SkeuoInput
+                    label="Name"
+                    placeholder="Jane Driver"
+                    returnKeyType="next"
+                    onSubmitEditing={() => emailInputRef.current?.focus()}
+                    onChangeText={setName}
+                  />
+                  <SkeuoInput
+                    ref={emailInputRef}
+                    label="Email"
+                    placeholder="you@example.com"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="email-address"
+                    returnKeyType="next"
+                    onSubmitEditing={() => phoneInputRef.current?.focus()}
+                    onChangeText={setEmail}
+                  />
+                  <SkeuoInput
+                    ref={phoneInputRef}
+                    label="Phone Number"
+                    placeholder="(555) 555-5555"
+                    keyboardType="phone-pad"
+                    returnKeyType="next"
+                    onSubmitEditing={() => passwordInputRef.current?.focus()}
+                    onChangeText={setPhone}
+                  />
+                  <SkeuoInput
+                    ref={passwordInputRef}
+                    label="Password"
+                    placeholder="••••••••"
+                    secureTextEntry
+                    returnKeyType="next"
+                    onSubmitEditing={() => confirmPasswordInputRef.current?.focus()}
+                    onChangeText={setPassword}
+                  />
+                  <SkeuoInput
+                    ref={confirmPasswordInputRef}
+                    label="Confirm Password"
+                    placeholder="••••••••"
+                    secureTextEntry
+                    returnKeyType="done"
+                    onSubmitEditing={handleSignUp}
+                    onChangeText={setConfirmPassword}
+                  />
+                </View>
+
+                <View style={{ width: "100%", marginTop: 20 }}>
+                  <Button
+                    label={isSubmitting ? "Creating account..." : "Sign-up"}
+                    onPress={() => {
+                      if (!isSubmitting) handleSignUp();
+                    }}
+                  />
+                </View>
+              </PaperCard>
             </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </LinenBackground>
   );
 }
 
@@ -240,17 +194,17 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   logoSection: {
-    height: "25%",
     alignItems: "center",
     justifyContent: "flex-end",
+    paddingVertical: 30,
   },
   formSection: {
     width: "100%",
-    flex: 1,
+    padding: 20,
   },
   loginlogo: {
-    fontSize: 55,
-    fontFamily: "Logo-Font",
+    fontSize: 36,
+    fontWeight: "800",
     textAlign: "center",
   },
 });

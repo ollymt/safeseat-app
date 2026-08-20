@@ -1,6 +1,5 @@
-import { Themes } from "@/constants/theme";
-import { Button, Host, Icon, Row, TextInput } from "@expo/ui";
-import { GlassView } from "expo-glass-effect";
+import { Materials, Themes } from "@/constants/theme";
+import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
 	Dimensions,
@@ -30,12 +29,8 @@ import AddContactModal from "@/components/add-contact-modal";
 import AddProfileModal from "@/components/add-profile-modal";
 import ContactCard from "@/components/contact-card";
 import ProfileCard from "@/components/profile-card";
-import SegmentedControl from "@expo/ui/community/segmented-control";
-import {
-	buttonBorderShape,
-	buttonStyle,
-	controlSize,
-} from "@expo/ui/swift-ui/modifiers";
+import { GlossSurface, LeatherPanel, LinenBackground, EngravedTitle } from "@/components/skeuo";
+import SkeuoInput from "@/components/skeuo-input";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -309,294 +304,212 @@ export default function Everyone() {
 	}, []);
 
 	return (
-		<SafeAreaView
-			style={{ flex: 1, backgroundColor: currentTheme.background }}
-			edges={["left", "right"]}
-		>
-			<View style={[styles.container, { marginTop: 60 }]}>
-				<View
-					style={{
-						flexDirection: "row",
-						alignItems: "center",
-						marginBottom: 10,
-						paddingRight: 0,
-					}}
-				>
-					<Text
-						style={[styles.pageHeader, { color: currentTheme.text, flex: 1 }]}
-					>
-						Everyone
-					</Text>
-				</View>
-
-				<View style={{ paddingBottom: 10 }}>
-					<SegmentedControl
-						values={["Profiles", "Contacts"]}
-						selectedIndex={selectedIndex}
-						onChange={(event) => {
-							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
-							setSelectedIndex(event.nativeEvent.selectedSegmentIndex);
-						}}
-						style={{ paddingBottom: 10 }}
-					/>
-				</View>
-
-				{selectedIndex === 0 ? (
-					<View style={{ flex: 1, borderWidth: 0, borderColor: currentTheme.text }}>
-						<SectionList
-							sections={filteredSections}
-							keyExtractor={(item) => item.id}
-							onRefresh={loadAllUserData}
-							refreshing={refreshing}
-							contentContainerStyle={Platform.OS == "android" ? { marginTop: 0, paddingBottom: 70 } : { marginTop: 0, paddingBottom: 160 }}
-							stickySectionHeadersEnabled={false}
-							showsVerticalScrollIndicator={false}
-							showsHorizontalScrollIndicator={false}
-							renderItem={({ item, index, section }) => (
-								<View
-									style={{
-										backgroundColor: currentTheme.element,
-										overflow: "hidden",
-										borderTopLeftRadius: index === 0 ? 12 : undefined,
-										borderTopRightRadius: index === 0 ? 12 : undefined,
-										borderBottomLeftRadius:
-											index === section.data.length - 1 ? 12 : undefined,
-										borderBottomRightRadius:
-											index === section.data.length - 1 ? 12 : undefined,
-									}}
-								>
-									<ProfileCard
-										name={item.name}
-										img={
-											item.img ||
-											"https://pbs.twimg.com/media/C8SFjSYWAAA6452.jpg"
-										}
-										isLast={index === section.data.length - 1}
-										onPress={() => {
-											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-											if (item.id === "owner-profile") {
-												// @ts-ignore
-												router.push("/(tabs)/everyone/profile");
-											} else {
-												router.push({
-													// @ts-ignore
-													pathname: "/(tabs)/everyone/profile",
-													params: { profileId: item.id }, // 🌟 Changed key from "id" to "profileId"
-												});
-											}
-										}}
-									/>
-								</View>
-							)}
-							renderSectionHeader={({ section: { title } }) => (
-								<View
-									style={[
-										styles.sectionHeaderContainer,
-										{ backgroundColor: currentTheme.background },
-									]}
-								>
-									<Text
-										style={[
-											styles.sectionHeaderTitle,
-											{ color: currentTheme.text },
-										]}
-									>
-										{title}
-									</Text>
-								</View>
-							)}
-							renderSectionFooter={() => (
-								<View style={[styles.sectionFooterSpacer]} />
-							)}
-							ListEmptyComponent={() => (
-								<View style={{ padding: 20, alignItems: "center" }}>
-									<Text style={{ color: currentTheme.text, opacity: 0.6 }}>
-										No profiles found. Create one to get started!
-									</Text>
-								</View>
-							)}
-						/>
-					</View>
-				) : (
-					// 🌟 3. RENDERING EMERGENCY CONTACTS TAB
-					<View style={{ flex: 1 }}>
-						<FlatList
-							data={emergencyContacts}
-							keyExtractor={(item) => item.id}
-							onRefresh={loadAllUserData}
-							refreshing={refreshing}
-							showsVerticalScrollIndicator={false}
-							contentContainerStyle={{ paddingBottom: 0, gap: 10 }}
-							renderItem={({ item, index }) => (
-								<View
-									style={{
-										backgroundColor: currentTheme.element,
-										overflow: "hidden",
-										borderTopLeftRadius: index === 0 ? 12 : 0,
-										borderTopRightRadius: index === 0 ? 12 : 0,
-										borderBottomLeftRadius:
-											index === emergencyContacts.length - 1 ? 12 : 0,
-										borderBottomRightRadius:
-											index === emergencyContacts.length - 1 ? 12 : 0,
-									}}
-								>
-									<ContactCard
-										name={item.name}
-										phone={item.phone}
-										order={
-											item.hierarchy === 1 ? "primary"
-												: item.hierarchy === 2 ? "secondary"
-													: item.hierarchy === 3 ? "tertiary"
-														: item.hierarchy === 4 ? "quaternary"
-															: item.hierarchy === 5 ? "quinary"
-																: "none"
-										}
-									/>
-								</View>
-							)}
-							ListEmptyComponent={() => (
-								<View style={{ padding: 20, alignItems: "center" }}>
-									<Text style={{ color: currentTheme.text, opacity: 0.6 }}>
-										No emergency contacts added yet.
-									</Text>
-								</View>
-							)}
-						/>
-					</View>
-				)}
-
-				{/* 🌟 4. ABSOLUTE POSITIONED BAR (SHARED BY BOTH INDICES FOR UNIFORM LAYOUT) */}
-				<KeyboardAvoidingView
-					behavior={Platform.OS === "ios" ? "padding" : undefined}
-					keyboardVerticalOffset={Platform.OS == "ios" ? 50 : 0}
-					style={{
-						position: "absolute",
-						// 🌟 DYNAMIC BOTTOM VALUE
-						bottom: isKeyboardVisible
-							? (Platform.OS == "ios" ? 116 : 40)
-							: (Platform.OS === "ios" ? 95 : 15),
-						left: 20,
-						right: 20,
-						zIndex: 10,
-					}}
-				>
-					<View style={{ flexDirection: "row", gap: 10 }}>
-						{selectedIndex === 0 ? (
-							<>
-								{/* 🌟 Wrap the GlassView in a Pressable to handle taps anywhere on the bar */}
+		<LinenBackground>
+			<SafeAreaView
+				style={{ flex: 1 }}
+				edges={["left", "right"]}
+			>
+				<LeatherPanel style={styles.headerPanel}>
+					<EngravedTitle size={26}>Everyone</EngravedTitle>
+				</LeatherPanel>
+				<View style={[styles.container, { marginTop: 16 }]}>
+					<View style={{ paddingBottom: 10, flexDirection: "row" }}>
+						{(["Profiles", "Contacts"] as const).map((label, i) => {
+							const active = selectedIndex === i;
+							return (
 								<Pressable
-									style={{ flex: 1 }}
+									key={label}
 									onPress={() => {
 										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
-										searchInputRef.current?.focus();
+										setSelectedIndex(i);
 									}}
+									style={{ flex: 1 }}
 								>
-									<GlassView
-										style={[{
-											flex: 1,
-											borderRadius: 100,
-											justifyContent: "center",
-											paddingHorizontal: 16,
-											borderColor: currentTheme.secondaryBttn,
-											borderWidth: 1,
-
-										}, Platform.OS == "android" && {
-											backgroundColor: currentTheme.element,
-											borderRadius: 100,
-											overflow: "hidden"
-										}]}
-										isInteractive
-									>
-										<Host matchContents ignoreSafeArea="keyboard">
-											<Row spacing={8} alignment="center">
-												<Icon
-													name={Icon.select({
-														ios: "magnifyingglass",
-														android:
-															import("@expo/material-symbols/search.xml"),
-													})}
-												/>
-												<TextInput
-													ref={searchInputRef} // 🌟 Attach the ref here
-													placeholder="Search"
-													// @ts-ignore
-													value={searchQuery}
-													onChangeText={setSearchQuery}
-													clearButtonMode="while-editing"
-													returnKeyType="search"
-													// @ts-ignore
-													style={{ flex: 1 }} // 🌟 Ensure the TextInput tries to take up remaining space
-												/>
-											</Row>
-										</Host>
-									</GlassView>
+									{active ? (
+										<GlossSurface tone={["#8FCB57", "#4F8B29", "#2C5416"]} style={styles.segmentBtn}>
+											<Text style={styles.segmentTextActive}>{label}</Text>
+										</GlossSurface>
+									) : (
+										<View style={[styles.segmentBtn, { backgroundColor: currentTheme.backgroundElement, borderRadius: 100 }]}>
+											<Text style={[styles.segmentText, { color: currentTheme.textSecondary }]}>{label}</Text>
+										</View>
+									)}
 								</Pressable>
-								<Host matchContents ignoreSafeArea="keyboard">
-									<Button
-										variant={Platform.OS == "ios" ? "outlined" : "filled"}
-										modifiers={[
-											controlSize("large"),
-											buttonStyle("glass"),
-											buttonBorderShape("circle"),
-										]}
-										onPress={() => {
-											setAddProfileVisible(true);
-										}}
-									>
-										<Icon
-											name={Icon.select({
-												ios: "plus",
-												android: import("@expo/material-symbols/add.xml"),
-											})}
-										/>
-									</Button>
-								</Host>
-							</>
-						) : (
-							// Buttons layout on Emergency Contacts tab. We match width properties to keep action items cleanly aligned.
-							<>
-								{/* Keeps the button pushed cleanly to the right side */}
-								<View style={{ flex: 1 }} />
-								<Host matchContents ignoreSafeArea="keyboard">
-									<Button
-										variant={Platform.OS == "ios" ? "outlined" : "filled"}
-										modifiers={[
-											controlSize("large"),
-											buttonStyle("glass"),
-											buttonBorderShape("circle"),
-										]}
-										onPress={() => {
-											setAddContactVisible(true);
-										}}
-									>
-										<Icon
-											name={Icon.select({
-												ios: "plus",
-												android: import("@expo/material-symbols/add.xml"),
-											})}
-										/>
-									</Button>
-								</Host>
-							</>
-						)}
+							);
+						})}
 					</View>
-				</KeyboardAvoidingView>
 
-				<AddProfileModal
-					visible={addProfileVisible}
-					onClose={() => {
-						setAddProfileVisible(false);
-					}}
-				/>
+					{selectedIndex === 0 ? (
+						<View style={{ flex: 1, borderWidth: 0, borderColor: currentTheme.text }}>
+							<SectionList
+								sections={filteredSections}
+								keyExtractor={(item) => item.id}
+								onRefresh={loadAllUserData}
+								refreshing={refreshing}
+								contentContainerStyle={Platform.OS == "android" ? { marginTop: 0, paddingBottom: 70 } : { marginTop: 0, paddingBottom: 160 }}
+								stickySectionHeadersEnabled={false}
+								showsVerticalScrollIndicator={false}
+								showsHorizontalScrollIndicator={false}
+								renderItem={({ item, index, section }) => (
+									<View style={{ marginBottom: 8 }}>
+										<ProfileCard
+											name={item.name}
+											img={
+												item.img ||
+												"https://pbs.twimg.com/media/C8SFjSYWAAA6452.jpg"
+											}
+											isLast={index === section.data.length - 1}
+											onPress={() => {
+												Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+												if (item.id === "owner-profile") {
+													// @ts-ignore
+													router.push("/(tabs)/everyone/profile");
+												} else {
+													router.push({
+														// @ts-ignore
+														pathname: "/(tabs)/everyone/profile",
+														params: { profileId: item.id }, // 🌟 Changed key from "id" to "profileId"
+													});
+												}
+											}}
+										/>
+									</View>
+								)}
+								renderSectionHeader={({ section: { title } }) => (
+									<View
+										style={[
+											styles.sectionHeaderContainer,
+											{ backgroundColor: currentTheme.background },
+										]}
+									>
+										<Text
+											style={[
+												styles.sectionHeaderTitle,
+												{ color: currentTheme.text },
+											]}
+										>
+											{title}
+										</Text>
+									</View>
+								)}
+								renderSectionFooter={() => (
+									<View style={[styles.sectionFooterSpacer]} />
+								)}
+								ListEmptyComponent={() => (
+									<View style={{ padding: 20, alignItems: "center" }}>
+										<Text style={{ color: currentTheme.text, opacity: 0.6 }}>
+											No profiles found. Create one to get started!
+										</Text>
+									</View>
+								)}
+							/>
+						</View>
+					) : (
+						// 🌟 3. RENDERING EMERGENCY CONTACTS TAB
+						<View style={{ flex: 1 }}>
+							<FlatList
+								data={emergencyContacts}
+								keyExtractor={(item) => item.id}
+								onRefresh={loadAllUserData}
+								refreshing={refreshing}
+								showsVerticalScrollIndicator={false}
+								contentContainerStyle={{ paddingBottom: 0, gap: 10 }}
+								renderItem={({ item, index }) => (
+									<View>
+										<ContactCard
+											name={item.name}
+											phone={item.phone}
+											order={
+												item.hierarchy === 1 ? "primary"
+													: item.hierarchy === 2 ? "secondary"
+														: item.hierarchy === 3 ? "tertiary"
+															: item.hierarchy === 4 ? "quaternary"
+																: item.hierarchy === 5 ? "quinary"
+																	: "none"
+											}
+										/>
+									</View>
+								)}
+								ListEmptyComponent={() => (
+									<View style={{ padding: 20, alignItems: "center" }}>
+										<Text style={{ color: currentTheme.text, opacity: 0.6 }}>
+											No emergency contacts added yet.
+										</Text>
+									</View>
+								)}
+							/>
+						</View>
+					)}
 
-				<AddContactModal
-					visible={addContactVisible}
-					onClose={() => {
-						setAddContactVisible(false);
-					}}
-				/>
-			</View>
-		</SafeAreaView>
+					{/* 🌟 4. ABSOLUTE POSITIONED BAR (SHARED BY BOTH INDICES FOR UNIFORM LAYOUT) */}
+					<KeyboardAvoidingView
+						behavior={Platform.OS === "ios" ? "padding" : undefined}
+						keyboardVerticalOffset={Platform.OS == "ios" ? 50 : 0}
+						style={{
+							position: "absolute",
+							// 🌟 DYNAMIC BOTTOM VALUE
+							bottom: isKeyboardVisible
+								? (Platform.OS == "ios" ? 116 : 40)
+								: (Platform.OS === "ios" ? 95 : 15),
+							left: 20,
+							right: 20,
+							zIndex: 10,
+						}}
+					>
+						<View style={{ flexDirection: "row", gap: 10 }}>
+							{selectedIndex === 0 ? (
+								<>
+									<View style={{ flex: 1 }}>
+										<SkeuoInput
+											ref={searchInputRef}
+											placeholder="Search"
+											value={searchQuery}
+											onChangeText={setSearchQuery}
+											returnKeyType="search"
+											clearButtonMode="while-editing"
+										/>
+									</View>
+									<GlossSurface tone={["#8FCB57", "#4F8B29", "#2C5416"]} style={styles.addBtn}>
+										<Pressable
+											style={{ width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}
+											onPress={() => setAddProfileVisible(true)}
+										>
+											<Ionicons name="add" size={22} color="#F4ECD8" />
+										</Pressable>
+									</GlossSurface>
+								</>
+							) : (
+								<>
+									<View style={{ flex: 1 }} />
+									<GlossSurface tone={["#8FCB57", "#4F8B29", "#2C5416"]} style={styles.addBtn}>
+										<Pressable
+											style={{ width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}
+											onPress={() => setAddContactVisible(true)}
+										>
+											<Ionicons name="add" size={22} color="#F4ECD8" />
+										</Pressable>
+									</GlossSurface>
+								</>
+							)}
+						</View>
+					</KeyboardAvoidingView>
+
+					<AddProfileModal
+						visible={addProfileVisible}
+						onClose={() => {
+							setAddProfileVisible(false);
+						}}
+					/>
+
+					<AddContactModal
+						visible={addContactVisible}
+						onClose={() => {
+							setAddContactVisible(false);
+						}}
+					/>
+				</View>
+			</SafeAreaView>
+		</LinenBackground>
 	);
 }
 
@@ -605,7 +518,18 @@ const styles = StyleSheet.create({
 	fieldContainer: { gap: 4, width: "100%" },
 	pageHeader: { fontSize: 40, fontFamily: "Logo-Font" },
 	infoLabel: { fontFamily: "Condensed-Bold", fontSize: 14, margin: 0 },
-	caption: { fontFeatureSettings: "Body-Medium", opacity: 0.8, fontSize: 13 },
+	caption: { opacity: 0.8, fontSize: 13 },
+	headerPanel: { width: "100%", paddingTop: 16, paddingBottom: 14, paddingHorizontal: 20 },
+	segmentBtn: {
+		height: 38,
+		borderRadius: 100,
+		marginHorizontal: 4,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	segmentText: { fontSize: 14, fontWeight: "700" },
+	segmentTextActive: { fontSize: 14, fontWeight: "800", color: "#F4ECD8" },
+	addBtn: { width: 46, height: 46 },
 	sectionHeaderContainer: {
 		paddingVertical: 8,
 		marginTop: 0,

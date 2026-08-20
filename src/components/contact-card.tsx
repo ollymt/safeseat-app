@@ -1,11 +1,11 @@
-import { Themes } from "@/constants/theme";
-import { Host, Button, Icon } from "@expo/ui";
-import { useState } from "react";
-import { MenuView } from '@expo/ui/community/menu';
-import { Pressable, StyleSheet, Text, useColorScheme, View, Linking, Alert } from "react-native";
+import { Materials, Themes } from "@/constants/theme";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { Alert, Linking, Pressable, StyleSheet, Text, useColorScheme, View } from "react-native";
 import { useRouter } from "expo-router";
 
 import * as Haptics from "expo-haptics";
+import { GlossSurface, PaperCard } from "@/components/skeuo";
 
 type ContactCardProps = {
     name: string;
@@ -18,7 +18,6 @@ export default function ContactCard({
     name,
     phone,
     order,
-    onPress
 }: ContactCardProps) {
     const colorScheme = useColorScheme();
     const activeScheme = colorScheme === "dark" ? "dark" : "light";
@@ -26,7 +25,6 @@ export default function ContactCard({
 
     const router = useRouter();
 
-    // 🌟 Helper function to determine badge/border color based on order
     const getOrderColor = () => {
         switch (order) {
             case "primary":
@@ -40,13 +38,12 @@ export default function ContactCard({
             case "quinary":
                 return currentTheme.purple;
             default:
-                return currentTheme.textSecondary; // 🌟 Defaults to textSecondary when priority is not set
+                return currentTheme.textSecondary;
         }
     };
 
     const accentColor = getOrderColor();
 
-    // 1. Trigger a Phone Call
     const handleMakeCall = async (phoneNumber: string) => {
         const url = `tel:${phoneNumber}`;
         try {
@@ -61,7 +58,6 @@ export default function ContactCard({
         }
     };
 
-    // 2. Trigger a Text Message (SMS)
     const handleSendSMS = async (phoneNumber: string, messageBody?: string) => {
         const url = messageBody
             ? `sms:${phoneNumber}?body=${encodeURIComponent(messageBody)}`
@@ -79,92 +75,76 @@ export default function ContactCard({
         }
     };
 
-    return (
-        <MenuView
-            shouldOpenOnLongPress={true}
-            title={""}
-            onPressAction={({ nativeEvent }) => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const handleLongPress = () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        Alert.alert(name, undefined, [
+            { text: `Call ${name}`, onPress: () => handleMakeCall(phone) },
+            { text: `Message ${name}`, onPress: () => handleSendSMS(phone) },
+            { text: `Edit ${name}'s Info`, onPress: () => router.navigate("/settings") },
+            { text: "Cancel", style: "cancel" },
+        ]);
+    };
 
-                switch (nativeEvent.event) {
-                    case 'call':
-                        handleMakeCall(phone);
-                        break;
-                    case 'msg':
-                        handleSendSMS(phone);
-                        break;
-                    case 'edit':
-                        console.log("Edit requested for:", name);
-                        router.navigate("/settings");
-                        break;
-                    default:
-                        break;
-                }
-            }}
-            actions={[
-                { id: 'call', title: `Call ${name}`, image: 'phone.fill' },
-                { id: 'msg', title: `Message ${name}`, image: 'bubble.left.fill' },
-                { id: 'edit', title: `Edit ${name}'s Info`, image: 'pencil' },
-            ]}
-        >
-            <View
-                style={[
-                    contcard.baseCard,
-                    {
-                        backgroundColor: currentTheme.element,
-                        flexDirection: "row",
-                        borderWidth: 2,
-                        borderColor: accentColor // 🌟 Applied dynamic accent color
-                    }
-                ]}
-            >
+    return (
+        <Pressable onLongPress={handleLongPress}>
+            <PaperCard style={[contcard.baseCard, { flexDirection: "row", borderColor: accentColor, borderWidth: 2 }]}>
+                {/* index-tab accent strip */}
+                <View style={[contcard.tab, { backgroundColor: accentColor }]} />
+
                 <View style={{ flex: 1 }}>
-                    <Text style={[contcard.orderLabel, { color: accentColor }]}>
-                        {order.toUpperCase()}
-                    </Text>
+                    <Text style={[contcard.orderLabel, { color: accentColor }]}>{order.toUpperCase()}</Text>
                     <Text style={[contcard.contName, { color: currentTheme.text }]}>{name}</Text>
-                    <Text style={[contcard.numLabel, { color: currentTheme.text }]}>{phone}</Text>
+                    <Text style={[contcard.numLabel, { color: currentTheme.textSecondary }]}>{phone}</Text>
                 </View>
-                <View style={{ alignItems: "center", justifyContent: "center", borderWidth: 0, borderColor: "#fff", marginRight: 10 }}>
-                    <Pressable
-                        style={{ backgroundColor: currentTheme.primaryBttn, padding: 8, borderRadius: 100 }}
-                        onPress={() => {
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                            handleMakeCall(phone);
-                        }}
+                <View style={{ alignItems: "center", justifyContent: "center", marginRight: 4 }}>
+                    <GlossSurface
+                        tone={["#8FCB57", "#4F8B29", "#2C5416"]}
+                        style={{ width: 44, height: 44 }}
                     >
-                        <Host matchContents>
-                            <Icon
-                                name={Icon.select({
-                                    ios: "phone.fill",
-                                    android: import("@expo/material-symbols/call.xml")
-                                })}
-                                color={currentTheme.primaryBttnText}
-                            />
-                        </Host>
-                    </Pressable>
+                        <Pressable
+                            style={{ width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}
+                            onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                handleMakeCall(phone);
+                            }}
+                        >
+                            <Ionicons name="call" size={18} color="#F4ECD8" />
+                        </Pressable>
+                    </GlossSurface>
                 </View>
-            </View>
-        </MenuView>
+            </PaperCard>
+        </Pressable>
     );
 }
 
 const contcard = StyleSheet.create({
     baseCard: {
         width: "100%",
-        padding: 10,
-        borderRadius: 12
+        padding: 14,
+        paddingLeft: 18,
+        alignItems: "center",
+    },
+    tab: {
+        position: "absolute",
+        left: 0,
+        top: 12,
+        bottom: 12,
+        width: 4,
+        borderRadius: 2,
     },
     contName: {
-        fontFamily: "Body-Bold",
-        fontSize: 36,
+        fontWeight: "800",
+        fontSize: 22,
     },
     orderLabel: {
-        fontFamily: "Condensed-Bold",
-        fontSize: 14
+        fontWeight: "700",
+        fontSize: 12,
+        letterSpacing: 0.6,
+        marginBottom: 2,
     },
     numLabel: {
-        fontFamily: "Body-Bold",
-        fontSize: 18
-    }
+        fontWeight: "600",
+        fontSize: 15,
+        marginTop: 2,
+    },
 });

@@ -1,7 +1,7 @@
 import Button from "@/components/button";
-import { Themes } from "@/constants/theme";
-import { Column, FieldGroup, Host, TextInput } from "@expo/ui";
-import { frame, scrollDisabled, submitLabel } from "@expo/ui/swift-ui/modifiers";
+import SkeuoInput from "@/components/skeuo-input";
+import { LinenBackground, PaperCard, Stitching } from "@/components/skeuo";
+import { Materials, Themes } from "@/constants/theme";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
@@ -72,70 +72,47 @@ export default function ChangeEmail() {
     };
 
     return (
-        <SafeAreaView
-            style={{
-                flex: 1,
-                backgroundColor: currentTheme.background,
-            }}
-            edges={["bottom", 'left', 'right']}
-        >
-            <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
-                style={{ flex: 1 }}
-            >
-                <ScrollView
-                    contentContainerStyle={{ flexGrow: 1 }}
-                    showsVerticalScrollIndicator={false}
-                    bounces={true}
-                    keyboardShouldPersistTaps="handled"
-                >
-                    <View style={changepass.container}>
-                        <View style={changepass.logoSection}>
-                            <Text style={[changepass.loginlogo, { color: currentTheme.text, textAlign: "center" }]}>Change Email</Text>
-                        </View>
-
-                        <View style={changepass.formSection}>
-                            <Host
-                                style={{
-                                    borderColor: "#000",
-                                    borderWidth: 0,
-                                    height: 90,
-                                    width: "100%",
-                                }}
-                            >
-                                <Column
-                                    spacing={16}
-                                    modifiers={[frame({ maxWidth: Infinity })]}
-                                >
-                                    <FieldGroup modifiers={[scrollDisabled()]}>
-                                        <TextInput
-                                            autoCorrect={false}
-                                            autoCapitalize="none" // 🛠️ Keeps native interface from pushing capitals on email input
-                                            placeholder="Enter New Email"
-                                            // @ts-ignore
-                                            value={newEmail}
-                                            modifiers={[submitLabel("done")]}
-                                            onChangeText={setNewEmail}
-                                            keyboardType={"email-address"}
-                                        />
-                                    </FieldGroup>
-                                </Column>
-                            </Host>
-                            <View style={{ paddingHorizontal: 20, marginTop: 10 }}>
-                                <Button
-                                    label={isLoading ? "Updating..." : "Change Email"}
-                                    variant="primary"
-                                    fullWidth={true}
-                                    onPress={handleChangeEmail} // 🛠️ Connected handler function hook
-                                    // 🛠️ Fixed logical lock: disabled/enabled rules match exact string validation constraints
-                                    enabled={!isLoading && newEmail.trim() !== ""}
-                                />
+        <LinenBackground>
+            <SafeAreaView style={{ flex: 1 }} edges={["bottom", 'left', 'right']}>
+                <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+                    <ScrollView
+                        contentContainerStyle={{ flexGrow: 1 }}
+                        showsVerticalScrollIndicator={false}
+                        bounces={true}
+                        keyboardShouldPersistTaps="handled"
+                    >
+                        <View style={changepass.container}>
+                            <View style={changepass.logoSection}>
+                                <Text style={[changepass.loginlogo, { color: currentTheme.text, textAlign: "center" }]}>Change Email</Text>
+                                <Stitching color={Materials.stitchDim} style={{ borderWidth: 0, borderTopWidth: 1, width: 80, marginTop: 10, alignSelf: "center" }} />
                             </View>
+
+                            <PaperCard style={changepass.formSection}>
+                                <SkeuoInput
+                                    label="New Email"
+                                    placeholder="you@example.com"
+                                    autoCorrect={false}
+                                    autoCapitalize="none"
+                                    keyboardType="email-address"
+                                    returnKeyType="done"
+                                    onSubmitEditing={handleChangeEmail}
+                                    onChangeText={setNewEmail}
+                                />
+                                <View style={{ marginTop: 20 }}>
+                                    <Button
+                                        label={isLoading ? "Updating..." : "Change Email"}
+                                        variant="primary"
+                                        fullWidth={true}
+                                        onPress={handleChangeEmail}
+                                        enabled={!isLoading && newEmail.trim() !== ""}
+                                    />
+                                </View>
+                            </PaperCard>
                         </View>
-                    </View>
-                </ScrollView>
-            </KeyboardAvoidingView>
-        </SafeAreaView>
+                    </ScrollView>
+                </KeyboardAvoidingView>
+            </SafeAreaView>
+        </LinenBackground>
     )
 }
 
@@ -146,17 +123,17 @@ const changepass = StyleSheet.create({
         padding: 20,
     },
     logoSection: {
-        height: "25%",
         alignItems: "center",
         justifyContent: "flex-end",
+        paddingVertical: 24,
     },
     formSection: {
         width: "100%",
-        flex: 1,
+        padding: 20,
     },
     loginlogo: {
-        fontSize: 40,
-        fontFamily: "Logo-Font",
+        fontSize: 30,
+        fontWeight: "800",
         textAlign: "center",
     },
 })
