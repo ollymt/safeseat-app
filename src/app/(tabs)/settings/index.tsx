@@ -1,4 +1,4 @@
-import { Themes } from "@/constants/theme";
+import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
 	Alert,
@@ -30,10 +30,6 @@ import { auth, db } from "../../../firebase";
 const { width: screenWidth } = Dimensions.get("window");
 
 export default function Settings() {
-	const colorScheme = useColorScheme();
-	const activeScheme = colorScheme === "dark" ? "dark" : "light";
-	const currentTheme = Themes[activeScheme];
-
 	const router = useRouter();
 
 	// 1. Core Account States
@@ -203,17 +199,17 @@ export default function Settings() {
 
 	return (
 		<SafeAreaView
-			style={{ flex: 1, backgroundColor: currentTheme.background }}
+			style={{ flex: 1, backgroundColor: themes.background }}
 			edges={Platform.OS == "android" ? ["left", "right", "top"] : ["left", "right"]}
 		>
 			<ScrollView contentContainerStyle={[{ flexGrow: 1 }, Platform.OS == "ios" ? { marginTop: -31 } : { marginTop: 6 }]} showsVerticalScrollIndicator={true} bounces={true}>
-				<View style={[styles.container, { borderWidth: 0, borderColor: currentTheme.text}]}>
-					<Text style={[styles.pageHeader, { color: currentTheme.text }]}>Settings</Text>
+				<View style={[styles.container, { borderWidth: 0, borderColor: themes.text}]}>
+					<Text style={[styles.pageHeader, { color: themes.text }]}>Settings</Text>
 					<View style={{ gap: 20, marginTop: 0, width: "100%" }}>
 
 						{/* ACCOUNT SECTION */}
 						<View>
-							<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>ACCOUNT</Text>
+							<Text style={[styles.infoLabel, { color: themes.textSecondary }]}>ACCOUNT</Text>
 							<View style={{ borderRadius: 12, overflow: "hidden" }}>
 								<SettingPageItem
 									name="Password"
@@ -230,7 +226,7 @@ export default function Settings() {
 
 						{/* PRIVACY SECTION */}
 						<View>
-							<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>PRIVACY</Text>
+							<Text style={[styles.infoLabel, { color: themes.textSecondary }]}>PRIVACY</Text>
 							<View style={{ gap: 20 }}>
 								<View style={{ gap: 6 }}>
 									<View style={{ borderRadius: 12, overflow: "hidden" }}>
@@ -246,7 +242,7 @@ export default function Settings() {
 										/>
 									</View>
 									<View style={{ paddingHorizontal: 10 }}>
-										<Text style={[styles.caption, { color: currentTheme.textSecondary }]}>
+										<Text style={[styles.caption, { color: themes.textSecondary }]}>
 											Authorize real-time synchronization with secure cloud nodes.
 										</Text>
 									</View>
@@ -265,7 +261,7 @@ export default function Settings() {
 										/>
 									</View>
 									<View style={{ paddingHorizontal: 10 }}>
-										<Text style={[styles.caption, { color: currentTheme.textSecondary }]}>
+										<Text style={[styles.caption, { color: themes.textSecondary }]}>
 											Automatic alert routing to nearest response center if unresponsive.
 										</Text>
 									</View>
@@ -275,7 +271,7 @@ export default function Settings() {
 
 						{/* APP SECTION */}
 						<View>
-							<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>APP</Text>
+							<Text style={[styles.infoLabel, { color: themes.textSecondary }]}>APP</Text>
 							<View style={{ gap: 20 }}>
 								<View style={{ gap: 6 }}>
 									<View style={{ borderRadius: 12, overflow: "hidden" }}>
@@ -294,7 +290,7 @@ export default function Settings() {
 										/>
 									</View>
 									<View style={{ paddingHorizontal: 10 }}>
-										<Text style={[styles.caption, { color: currentTheme.textSecondary }]}>
+										<Text style={[styles.caption, { color: themes.textSecondary }]}>
 											You can change your theme in the Settings app.
 										</Text>
 									</View>
@@ -348,7 +344,7 @@ export default function Settings() {
 										/>
 									</View>
 									<View style={{ paddingHorizontal: 10 }}>
-										<Text style={[styles.caption, { color: currentTheme.textSecondary }]}>
+										<Text style={[styles.caption, { color: themes.textSecondary }]}>
 											Permanently delete your account. This action cannot be undone.
 										</Text>
 									</View>
@@ -358,7 +354,7 @@ export default function Settings() {
 
 						{/* FOOTER */}
 						<View style={{ paddingHorizontal: 10 }}>
-							<Text style={[styles.caption, { color: currentTheme.textSecondary }]}>
+							<Text style={[styles.caption, { color: themes.textSecondary }]}>
 								v.26w30d5r02 • made with 💚 by safeseat team
 							</Text>
 						</View>

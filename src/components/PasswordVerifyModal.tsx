@@ -1,5 +1,5 @@
 // components/PasswordVerifyModal.tsx
-import { Themes } from "@/constants/theme";
+import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { extendSession } from "@/utils/securitySession";
 import { BottomSheet, Button, Column, FieldGroup, Host, Icon, Row, Spacer, Text, TextInput } from "@expo/ui";
 import { buttonBorderShape, buttonStyle, controlSize, scrollDisabled, submitLabel } from "@expo/ui/swift-ui/modifiers";
@@ -21,10 +21,6 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
     const [passwordInput, setPasswordInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const passwordInputRef = useRef<any>(null);
-
-    const colorScheme = useColorScheme();
-    const activeScheme = colorScheme === "dark" ? "dark" : "light";
-    const currentTheme = Themes[activeScheme];
 
     const handleVerify = async () => {
         const currentUser = auth.currentUser;
@@ -121,7 +117,7 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
 
                     {/* 🔑 Verification Form Stack */}
                     <Column spacing={10} alignment="center">
-                        <Text textStyle={{ fontSize: 36, color: currentTheme.text, fontWeight: "bold", textAlign: "center" }}>Enter Password to Continue</Text>
+                        <Text textStyle={{ fontSize: 36, color: themes.text, fontWeight: "bold", textAlign: "center" }}>Enter Password to Continue</Text>
                         <FieldGroup modifiers={[scrollDisabled()]} style={{ borderWidth: 3 }}>
                             <TextInput
                                 placeholder="Password"
@@ -150,7 +146,7 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
                         />
                     </Column>
 
-                    <Text textStyle={{ fontSize: 13, color: currentTheme.textSecondary, textAlign: "center" }}>
+                    <Text textStyle={{ fontSize: 13, color: themes.textSecondary, textAlign: "center" }}>
                         After this, you can change any important setting for 15 minutes.
                     </Text>
                     <Spacer />

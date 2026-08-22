@@ -1,4 +1,4 @@
-import { Themes } from "@/constants/theme";
+import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
     Alert,
@@ -41,10 +41,6 @@ const SEATS = [
 ];
 
 export default function Assign() {
-	const colorScheme = useColorScheme();
-	const activeScheme = colorScheme === "dark" ? "dark" : "light";
-	const currentTheme = Themes[activeScheme];
-
 	const router = useRouter();
 
 	const [assignModalVisible, setAssignModalVisible] = useState(false);
@@ -245,12 +241,12 @@ export default function Assign() {
 		<SafeAreaView
 			style={{
 				flex: 1,
-				backgroundColor: currentTheme.background,
+				backgroundColor: themes.background,
 			}}
 			edges={['left', 'right']}
 		>
 			<View style={[styles.container, { marginTop: 40 }]}>
-				<Text style={[styles.pageHeader, { color: currentTheme.text }]}>
+				<Text style={[styles.pageHeader, { color: themes.text }]}>
 					Assign
 				</Text>
 
@@ -260,7 +256,7 @@ export default function Assign() {
 						marginTop: 10,
 						width: "100%",
 						borderWidth: 0,
-						borderColor: currentTheme.secondaryBttn,
+						borderColor: themes.secondaryBttn,
 						borderRadius: 10,
 					}}
 				>
@@ -341,6 +337,7 @@ export default function Assign() {
 					}}
 				/>
 
+				{/*
 				{emergencySeat && emergencyProfile && (
 					<EmergencytModal
 						seat={emergencySeat.seatNo}
@@ -354,6 +351,7 @@ export default function Assign() {
 						isAccountOwner={emergencyProfile.isAccountOwner}
 					/>
 				)}
+				*/}
 			</View>
 		</SafeAreaView>
 	);

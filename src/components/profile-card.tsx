@@ -1,4 +1,4 @@
-import { Themes } from "@/constants/theme";
+import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { Host, Icon } from "@expo/ui";
 import {
     Pressable,
@@ -24,17 +24,14 @@ export default function ProfileCard({
     enabled = true,
     onPress,
 }: ProfileCardProps) {
-    const colorScheme = useColorScheme();
-    const activeScheme = colorScheme === "dark" ? "dark" : "light";
-    const currentTheme = Themes[activeScheme];
-
     return (
         <Pressable
             style={[
                 seatcard.baseCard,
                 {
                     borderBottomWidth: isLast ? 0 : 1,
-                    borderBottomColor: currentTheme.border,
+                    borderBottomColor: themes.secondaryBttn,
+                    backgroundColor: themes.backgroundElement,
                     opacity: enabled ? 1 : 0.5,
                     flexDirection: "row",
                     // 🌟 Align items vertically along the main row axis (keeps image and text centered together)
@@ -49,7 +46,7 @@ export default function ProfileCard({
 
             {/* 🛠️ Fix 1: Use justifyContent: "center" instead of alignContent */}
             <View style={{ justifyContent: "center", flex: 1, paddingLeft: 10 }}>
-                <Text style={[seatcard.profileName, { color: currentTheme.text }]}>{name}</Text>
+                <Text style={[seatcard.profileName, { color: themes.text }]}>{name}</Text>
             </View>
         </Pressable>
     );

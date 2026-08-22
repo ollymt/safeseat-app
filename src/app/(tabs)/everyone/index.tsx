@@ -1,5 +1,5 @@
-import { Themes } from "@/constants/theme";
-import { Button, Host, Icon, Row, TextInput } from "@expo/ui";
+import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { Host, Icon, Row } from "@expo/ui";
 import { GlassView } from "expo-glass-effect";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
@@ -36,6 +36,8 @@ import {
 	buttonStyle,
 	controlSize,
 } from "@expo/ui/swift-ui/modifiers";
+import TextInput from "@/components/text-input";
+import Button from "@/components/button";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -60,10 +62,6 @@ interface ProfileSection {
 }
 
 export default function Everyone() {
-	const colorScheme = useColorScheme();
-	const activeScheme = colorScheme === "dark" ? "dark" : "light";
-	const currentTheme = Themes[activeScheme];
-
 	const router = useRouter();
 
 	const [userName, setUserName] = useState<string>("Guest");
@@ -310,7 +308,7 @@ export default function Everyone() {
 
 	return (
 		<SafeAreaView
-			style={{ flex: 1, backgroundColor: currentTheme.background }}
+			style={{ flex: 1, backgroundColor: themes.background }}
 			edges={["left", "right"]}
 		>
 			<View style={[styles.container, { marginTop: 60 }]}>
@@ -323,7 +321,7 @@ export default function Everyone() {
 					}}
 				>
 					<Text
-						style={[styles.pageHeader, { color: currentTheme.text, flex: 1 }]}
+						style={[styles.pageHeader, { color: themes.text, flex: 1 }]}
 					>
 						Everyone
 					</Text>
@@ -342,7 +340,7 @@ export default function Everyone() {
 				</View>
 
 				{selectedIndex === 0 ? (
-					<View style={{ flex: 1, borderWidth: 0, borderColor: currentTheme.text }}>
+					<View style={{ flex: 1, borderWidth: 0, borderColor: themes.text }}>
 						<SectionList
 							sections={filteredSections}
 							keyExtractor={(item) => item.id}
@@ -355,7 +353,7 @@ export default function Everyone() {
 							renderItem={({ item, index, section }) => (
 								<View
 									style={{
-										backgroundColor: currentTheme.element,
+										backgroundColor: themes.backgroundElement,
 										overflow: "hidden",
 										borderTopLeftRadius: index === 0 ? 12 : undefined,
 										borderTopRightRadius: index === 0 ? 12 : undefined,
@@ -392,13 +390,13 @@ export default function Everyone() {
 								<View
 									style={[
 										styles.sectionHeaderContainer,
-										{ backgroundColor: currentTheme.background },
+										{ backgroundColor: themes.background },
 									]}
 								>
 									<Text
 										style={[
 											styles.sectionHeaderTitle,
-											{ color: currentTheme.text },
+											{ color: themes.text },
 										]}
 									>
 										{title}
@@ -410,7 +408,7 @@ export default function Everyone() {
 							)}
 							ListEmptyComponent={() => (
 								<View style={{ padding: 20, alignItems: "center" }}>
-									<Text style={{ color: currentTheme.text, opacity: 0.6 }}>
+									<Text style={{ color: themes.text, opacity: 0.6 }}>
 										No profiles found. Create one to get started!
 									</Text>
 								</View>
@@ -430,7 +428,7 @@ export default function Everyone() {
 							renderItem={({ item, index }) => (
 								<View
 									style={{
-										backgroundColor: currentTheme.element,
+										backgroundColor: themes.backgroundElement,
 										overflow: "hidden",
 										borderTopLeftRadius: index === 0 ? 12 : 0,
 										borderTopRightRadius: index === 0 ? 12 : 0,
@@ -456,7 +454,7 @@ export default function Everyone() {
 							)}
 							ListEmptyComponent={() => (
 								<View style={{ padding: 20, alignItems: "center" }}>
-									<Text style={{ color: currentTheme.text, opacity: 0.6 }}>
+									<Text style={{ color: themes.text, opacity: 0.6 }}>
 										No emergency contacts added yet.
 									</Text>
 								</View>
@@ -473,84 +471,41 @@ export default function Everyone() {
 						position: "absolute",
 						// 🌟 DYNAMIC BOTTOM VALUE
 						bottom: isKeyboardVisible
-							? (Platform.OS == "ios" ? 116 : 40)
-							: (Platform.OS === "ios" ? 95 : 15),
-						left: 20,
-						right: 20,
+							? (Platform.OS == "ios" ? 100 : 40)
+							: (Platform.OS === "ios" ? 112 : 15),
+						left: spacing.two,
+						right: spacing.two,
 						zIndex: 10,
+						maxHeight: spacing.six
 					}}
 				>
-					<View style={{ flexDirection: "row", gap: 10 }}>
+					<View style={{ flexDirection: "row", gap: spacing.one, width: "100%", borderWidth: spacing.none, borderColor: "white" }}>
 						{selectedIndex === 0 ? (
 							<>
 								{/* 🌟 Wrap the GlassView in a Pressable to handle taps anywhere on the bar */}
 								<Pressable
-									style={{ flex: 1 }}
+									style={{ flex: 1, marginBottom: spacing.two, width: "100%" }}
 									onPress={() => {
 										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
 										searchInputRef.current?.focus();
 									}}
 								>
-									<GlassView
-										style={[{
-											flex: 1,
-											borderRadius: 100,
-											justifyContent: "center",
-											paddingHorizontal: 16,
-											borderColor: currentTheme.secondaryBttn,
-											borderWidth: 1,
-
-										}, Platform.OS == "android" && {
-											backgroundColor: currentTheme.element,
-											borderRadius: 100,
-											overflow: "hidden"
-										}]}
-										isInteractive
-									>
-										<Host matchContents ignoreSafeArea="keyboard">
-											<Row spacing={8} alignment="center">
-												<Icon
-													name={Icon.select({
-														ios: "magnifyingglass",
-														android:
-															import("@expo/material-symbols/search.xml"),
-													})}
-												/>
-												<TextInput
-													ref={searchInputRef} // 🌟 Attach the ref here
-													placeholder="Search"
-													// @ts-ignore
-													value={searchQuery}
-													onChangeText={setSearchQuery}
-													clearButtonMode="while-editing"
-													returnKeyType="search"
-													// @ts-ignore
-													style={{ flex: 1 }} // 🌟 Ensure the TextInput tries to take up remaining space
-												/>
-											</Row>
-										</Host>
-									</GlassView>
+									<TextInput placeholder="Search" value={searchQuery} onChangeText={setSearchQuery} />
 								</Pressable>
-								<Host matchContents ignoreSafeArea="keyboard">
-									<Button
-										variant={Platform.OS == "ios" ? "outlined" : "filled"}
-										modifiers={[
-											controlSize("large"),
-											buttonStyle("glass"),
-											buttonBorderShape("circle"),
-										]}
-										onPress={() => {
-											setAddProfileVisible(true);
-										}}
-									>
-										<Icon
-											name={Icon.select({
-												ios: "plus",
-												android: import("@expo/material-symbols/add.xml"),
-											})}
-										/>
-									</Button>
-								</Host>
+
+								<Button variant="secondary" onPress={() => { setAddProfileVisible(true) }}>
+									<View style={{ paddingHorizontal: spacing.two, paddingVertical: spacing.one }}>
+										<Host>
+											<Icon
+												name={Icon.select({
+													ios: "plus",
+													android: import("@expo/material-symbols/add.xml"),
+												})}
+												size={spacing.three}
+											/>
+										</Host>
+									</View>
+								</Button>
 							</>
 						) : (
 							// Buttons layout on Emergency Contacts tab. We match width properties to keep action items cleanly aligned.

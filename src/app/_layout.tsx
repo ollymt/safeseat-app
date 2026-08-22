@@ -4,23 +4,14 @@ import { useEffect, useState } from "react";
 export { ErrorBoundary } from "expo-router";
 
 import {
-  Roboto_400Regular,
-  Roboto_400Regular_Italic,
-  Roboto_500Medium,
-  Roboto_700Bold,
+  Inter_400Regular,
+  Inter_400Regular_Italic,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  Inter_900Black,
   useFonts,
-} from "@expo-google-fonts/roboto";
-import {
-  RobotoCondensed_400Regular,
-  RobotoCondensed_400Regular_Italic,
-  RobotoCondensed_500Medium,
-  RobotoCondensed_700Bold,
-  RobotoCondensed_900Black,
-} from "@expo-google-fonts/roboto-condensed";
-import {
-  RobotoSlab_700Bold,
-  RobotoSlab_900Black,
-} from "@expo-google-fonts/roboto-slab";
+} from "@expo-google-fonts/inter";
 
 import * as SplashScreen from "expo-splash-screen";
 import { db } from "../firebase";
@@ -30,17 +21,14 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
-    "Heading-Font": RobotoSlab_700Bold,
-    "Logo-Font": RobotoSlab_900Black,
-    "Body-Regular": Roboto_400Regular,
-    "Body-Regular-Italic": Roboto_400Regular_Italic,
-    "Body-Bold": Roboto_700Bold,
-    "Body-Medium": Roboto_500Medium,
-    "Condensed-Regular": RobotoCondensed_400Regular,
-    "Condensed-Regular-Italic": RobotoCondensed_400Regular_Italic,
-    "Condensed-Medium": RobotoCondensed_500Medium,
-    "Condensed-Bold": RobotoCondensed_700Bold,
-    "Condensed-Black": RobotoCondensed_900Black,
+    "Heading-Font": Inter_600SemiBold,
+    "Logo-Font": Inter_900Black,
+    "Body-Regular": Inter_400Regular,
+    "Body-Regular-Italic": Inter_400Regular_Italic,
+    "Body-Bold": Inter_700Bold,
+    "Body-Medium": Inter_500Medium,
+    "Condensed-Regular": Inter_400Regular,
+    "Condensed-Regular-Italic": Inter_400Regular_Italic
   });
 
   const router = useRouter();

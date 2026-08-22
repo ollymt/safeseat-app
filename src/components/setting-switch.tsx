@@ -1,5 +1,5 @@
-import { Themes } from "@/constants/theme";
-import { Host, Icon, Switch } from "@expo/ui";
+import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { Host, Icon } from "@expo/ui";
 import { useState, useEffect } from "react";
 import {
     Platform,
@@ -8,6 +8,7 @@ import {
     Text,
     useColorScheme,
     View,
+    Switch
 } from "react-native";
 
 import * as Haptics from "expo-haptics";
@@ -29,10 +30,6 @@ export default function SettingSwitch({
     value = false,
     onValueChange,
 }: SettingSwitchProps) {
-    const colorScheme = useColorScheme();
-    const activeScheme = colorScheme === "dark" ? "dark" : "light";
-    const currentTheme = Themes[activeScheme];
-
     const [selectedValue, setSelectedValue] = useState(value);
 
     // Synchronize local toggled UI state if parent storage finishes resolving asynchronously
@@ -54,13 +51,12 @@ export default function SettingSwitch({
             <Pressable
                 onPress={enabled ? handleToggle : undefined}
                 disabled={!enabled}
-                style={({ pressed }) => [
+                style={[
                     setitem.setItemBase,
                     {
-                        backgroundColor: currentTheme.element,
-                        borderBottomWidth: isLast ? 0 : 1,
-                        borderBottomColor: currentTheme.border,
-                        opacity: enabled && pressed ? 0.8 : 1
+                        backgroundColor: themes.backgroundElement,
+                        borderBottomWidth: isLast ? spacing.none : spacing.quarter,
+                        borderBottomColor: themes.secondaryBttn,
                     }
                 ]}
             >
@@ -68,25 +64,24 @@ export default function SettingSwitch({
                 {/* Added pointerEvents="none" so icon frames don't conflict with row press */}
                 <View style={setitem.leftContainer} pointerEvents="none">
                     {iconName && (
-                        <View style={[setitem.iconWrapper, { backgroundColor: currentTheme.primaryBttn, padding: 6, borderRadius: 8 }]}>
+                        <View style={[setitem.iconWrapper, { backgroundColor: themes.primaryBttn, padding: 6, borderRadius: 8 }]}>
                             <Host style={{ width: 22, height: 22 }}>
-                                <Icon name={iconName} color={currentTheme.primaryBttnText} />
+                                <Icon name={iconName} color={themes.primaryBttnText} />
                             </Host>
                         </View>
                     )}
-                    <Text style={[setitem.settingName, { color: currentTheme.text }]}>{name}</Text>
+                    <Text style={[setitem.settingName, { color: themes.text }]}>{name}</Text>
                 </View>
 
                 {/* RIGHT BLOCK */}
                 {/* Added pointerEvents="none" here so the entire row area responds uniformly without getting swallowed by native switch wrappers */}
-                <View style={setitem.rightContainer} pointerEvents="none">
-                    <Host matchContents>
+                <View style={setitem.rightContainer}>
                         <Switch 
                             value={selectedValue} 
                             onValueChange={handleToggle} 
                             disabled={!enabled}
+                            trackColor={{false: themes.secondaryBttn, true: themes.primaryBttn}}
                         />
-                    </Host>
                 </View>
             </Pressable>
         </>

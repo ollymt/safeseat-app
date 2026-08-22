@@ -1,5 +1,5 @@
 import Button from "@/components/button";
-import { Themes } from "@/constants/theme";
+import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { Column, FieldGroup, Host, TextInput } from "@expo/ui";
 import { frame, scrollDisabled, submitLabel } from "@expo/ui/swift-ui/modifiers";
 import { useRouter } from "expo-router";
@@ -19,10 +19,6 @@ import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store"; // 🛠️ Added for persistence logic
 
 export default function ChangeEmail() {
-    const colorScheme = useColorScheme();
-    const activeScheme = colorScheme === "dark" ? "dark" : "light";
-    const currentTheme = Themes[activeScheme];
-
     const router = useRouter();
 
     const [newEmail, setNewEmail] = useState("");
@@ -75,7 +71,7 @@ export default function ChangeEmail() {
         <SafeAreaView
             style={{
                 flex: 1,
-                backgroundColor: currentTheme.background,
+                backgroundColor: themes.background,
             }}
             edges={["bottom", 'left', 'right']}
         >
@@ -91,7 +87,7 @@ export default function ChangeEmail() {
                 >
                     <View style={changepass.container}>
                         <View style={changepass.logoSection}>
-                            <Text style={[changepass.loginlogo, { color: currentTheme.text, textAlign: "center" }]}>Change Email</Text>
+                            <Text style={[changepass.loginlogo, { color: themes.text, textAlign: "center" }]}>Change Email</Text>
                         </View>
 
                         <View style={changepass.formSection}>

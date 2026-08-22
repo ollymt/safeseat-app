@@ -1,4 +1,4 @@
-import { Themes } from "@/constants/theme";
+import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { Host, Icon } from "@expo/ui";
 import {
     Pressable,
@@ -29,10 +29,6 @@ export default function SettingPageItem({
     enabled = true,
     onPress,
 }: SettingPageItemProps) {
-    const colorScheme = useColorScheme();
-    const activeScheme = colorScheme === "dark" ? "dark" : "light";
-    const currentTheme = Themes[activeScheme];
-
     return (
         <Pressable
             onPress={enabled ? onPress : undefined}
@@ -40,9 +36,9 @@ export default function SettingPageItem({
             style={({ pressed }) => [
                 setitem.setItemBase,
                 {
-                    backgroundColor: currentTheme.element,
+                    backgroundColor: themes.backgroundElement,
                     borderBottomWidth: isLast ? 0 : 1,
-                    borderBottomColor: currentTheme.border,
+                    borderBottomColor: themes.secondaryBttn,
                     opacity: enabled ? 1 : 0.5,
                 }
             ]}
@@ -50,16 +46,16 @@ export default function SettingPageItem({
             <View style={setitem.leftContainer}>
                 {/* 1. Render Icon natively only if iconName prop exists */}
                 {iconName && (
-                    <View style={[setitem.iconWrapper, { backgroundColor: destructive ? currentTheme.warnBttn : currentTheme.primaryBttn, padding: 6, borderRadius: 8 }]}>
+                    <View style={[setitem.iconWrapper, { backgroundColor: destructive ? themes.warnBttn : themes.primaryBttn, padding: 6, borderRadius: 8 }]}>
                         <Host style={{ width: 22, height: 22 }}>
-                            <Icon name={iconName} color={currentTheme.primaryBttnText} />
+                            <Icon name={iconName} color={themes.primaryBttnText} />
                         </Host>
                     </View>
                 )}
 
                 {/* 2. Primary Label */}
                 <View style={{ borderWidth: 0, borderColor: "#fff" }}>
-                    <Text style={[setitem.settingName, { color: destructive ? currentTheme.warnBttn : currentTheme.text }]}>
+                    <Text style={[setitem.settingName, { color: destructive ? themes.warnBttn : themes.text }]}>
                         {name}
                     </Text>
                 </View>
@@ -69,7 +65,7 @@ export default function SettingPageItem({
                 {/* 3. Optional Right-Side Value String */}
                 {value && (
                     <View style={setitem.rightContainer}>
-                        <Text style={[setitem.settingValue, { color: currentTheme.textSecondary }]} numberOfLines={1} ellipsizeMode="tail" >
+                        <Text style={[setitem.settingValue, { color: themes.textSecondary }]} numberOfLines={1} ellipsizeMode="tail" >
                             {value}
                         </Text>
                     </View>
@@ -81,7 +77,7 @@ export default function SettingPageItem({
                             <Icon name={Icon.select({
                                 ios: "chevron.right",
                                 android: import("@expo/material-symbols/chevron_right.xml")
-                            })} color={currentTheme.textSecondary} />
+                            })} color={themes.textSecondary} />
                         </Host>
                     </View>
                 }

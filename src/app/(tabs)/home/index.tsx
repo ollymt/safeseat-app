@@ -1,14 +1,14 @@
-import { Themes } from "@/constants/theme";
+import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    useColorScheme,
-    View,
+	ScrollView,
+	StyleSheet,
+	Text,
+	useColorScheme,
+	View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -16,6 +16,7 @@ import Button from "@/components/button";
 import EmergencytModal from "@/components/emergency-modal";
 import SeatCard from "@/components/seat-card";
 import { Host, Icon } from "@expo/ui";
+import InfoCard from "@/components/info-card";
 
 type Profile = {
 	id: string;
@@ -40,10 +41,6 @@ const SEAT_ROLES: Record<number, string> = {
 };
 
 export default function Home() {
-	const colorScheme = useColorScheme();
-	const activeScheme = colorScheme === "dark" ? "dark" : "light";
-	const currentTheme = Themes[activeScheme];
-
 	const router = useRouter();
 
 	const [isLockedIn, setIsLockedIn] = useState<boolean>(false);
@@ -110,87 +107,111 @@ export default function Home() {
 		emergencySeatNo !== undefined ? assignments[emergencySeatNo] : undefined;
 
 	return (
-		<SafeAreaView
-			style={{
-				flex: 1,
-				backgroundColor: currentTheme.background,
-			}}
-			edges={["left", "right"]}
+		<View style={{
+			backgroundColor: themes.background,
+			height: "100%"
+		}}
 		>
-			<View style={[styles.container, { marginTop: 40 }]}>
-				{isLockedIn && 
-				<Text style={[styles.pageHeader, { color: currentTheme.text }]}>
-					Home
-				</Text>
-				}
+			<SafeAreaView
+				style={{
+					flex: 1,
+					backgroundColor: themes.background,
+					position: "absolute",
+					borderWidth: 0,
+					borderColor: "red"
+				}}
+				edges={["left", "right"]}
+			>
+				<View style={[styles.container, { marginTop: spacing.six, gap: spacing.three }]}>
+					{isLockedIn ? (
+						<ScrollView
+							showsVerticalScrollIndicator={false}
+							contentContainerStyle={{ paddingBottom: spacing.five }}
+						>
+							<Text style={[styles.pageHeader]}>
+								Home
+							</Text>
+							<View style={{ gap: spacing.one, marginTop: spacing.one }}>
+								<Text style={styles.sectionHeader}>Everyone's State</Text>
+								{[1, 2, 3, 4, 5].map((seatNo) => {
+									const profile = assignments[seatNo];
+									const state = getSeatState(seatNo);
 
-				{isLockedIn ? (
-					<ScrollView
-						showsVerticalScrollIndicator={false}
-						contentContainerStyle={{ paddingBottom: 40 }}
-					>
-						<View style={{ gap: 10, marginTop: 10 }}>
-							{[1, 2, 3, 4, 5].map((seatNo) => {
-								const profile = assignments[seatNo];
-								const state = getSeatState(seatNo);
+									return (
+										<SeatCard
+											key={seatNo}
+											seatNo={seatNo}
+											role={SEAT_ROLES[seatNo]}
+											name={profile?.name}
+											pfp={profile?.icon ?? profile?.photoURL}
+											// @ts-ignore
+											state={state}
+											onPress={() => {
+												Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+											}}
+										/>
+									);
+								})}
+							</View>
 
-								return (
-									<SeatCard
-										key={seatNo}
-										seatNo={seatNo}
-										role={SEAT_ROLES[seatNo]}
-										name={profile?.name}
-										pfp={profile?.icon ?? profile?.photoURL}
-										state={state}
-										onPress={() => {
-											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-										}}
+							<View style={{ gap: spacing.one, marginTop: spacing.four }}>
+								<Text style={styles.sectionHeader}>Extra Info</Text>
+								<InfoCard
+									smolTopText="TOTAL PASSENGER WEIGHT*"
+									bigText="443 lbs"
+									icon={
+										<Host>
+											<Icon name={Icon.select({
+												ios: "scalemass.fill",
+												android: import("@expo/material-symbols/weight.xml")
+											})} size={spacing.five} />
+										</Host>
+									} />
+								<Text style={styles.caption}>* Total passenger weight calculation is based on entered weight per profile.</Text>
+							</View>
+						</ScrollView>
+					) : (
+						<View style={styles.unlockedContainer}>
+							<View style={{ marginVertical: spacing.two }}>
+								<Host matchContents>
+									<Icon name={Icon.select({
+										ios: "lock.slash.fill",
+										android: import("@expo/material-symbols/lock_open.xml")
+									})} size={180} color={themes.secondaryBttn}
 									/>
-								);
-							})}
-						</View>
-					</ScrollView>
-				) : (
-					<View style={styles.unlockedContainer}>
-						<View style={{ marginVertical: 20 }}>
-							<Host matchContents>
-								<Icon name={Icon.select({
-									ios: "lock.slash.fill",
-									android: import("@expo/material-symbols/lock_open.xml")
-								})} size={180} color={currentTheme.secondaryBttn}
+								</Host>
+							</View>
+							<Text
+								style={[
+									styles.unlockedTitle,
+									{ color: themes.text },
+								]}
+							>
+								Trip Not Locked In
+							</Text>
+							<Text
+								style={[
+									styles.unlockedSubtitle,
+									{ color: themes.textSecondary },
+								]}
+							>
+								Assign passengers to seats and tap "Lock In" on the Assign page to start monitoring.
+							</Text>
+							<View style={{ width: "100%", marginTop: spacing.three }}>
+								<Button
+									label="Go to Assign"
+									onPress={() => {
+										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+										router.push("/assign");
+									}}
+									fullWidth={true}
+									glass={false}
 								/>
-							</Host>
+							</View>
 						</View>
-						<Text
-							style={[
-								styles.unlockedTitle,
-								{ color: currentTheme.text },
-							]}
-						>
-							Trip Not Locked In
-						</Text>
-						<Text
-							style={[
-								styles.unlockedSubtitle,
-								{ color: currentTheme.textSecondary },
-							]}
-						>
-							Assign passengers to seats and tap "Lock In" on the Assign page to start monitoring.
-						</Text>
-						<View style={{ width: "100%", marginTop: 24 }}>
-							<Button
-								label="Go to Assign"
-								onPress={() => {
-									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-									router.push("/assign");
-								}}
-								fullWidth={true}
-								glass={false}
-							/>
-						</View>
-					</View>
-				)}
+					)}
 
+					{/*
 				{emergencySeatNo !== undefined && emergencyProfile && (
 					<EmergencytModal
 						seat={emergencySeatNo}
@@ -204,8 +225,10 @@ export default function Home() {
 						isAccountOwner={emergencyProfile.isAccountOwner}
 					/>
 				)}
-			</View>
-		</SafeAreaView>
+				*/}
+				</View>
+			</SafeAreaView>
+		</View>
 	);
 }
 
@@ -213,33 +236,46 @@ const styles = StyleSheet.create({
 	container: {
 		flex: 1,
 		width: "100%",
-		padding: 20,
-		borderWidth: 0,
+		paddingLeft: spacing.two,
+		paddingRight: spacing.two,
+		borderWidth: spacing.none,
 		borderColor: "#fff",
 	},
 	pageHeader: {
-		fontSize: 40,
+		fontSize: fontsize.pageHeader,
 		fontFamily: "Logo-Font",
+		color: themes.text,
+		margin: spacing.none,
+	},
+	sectionHeader: {
+		fontSize: fontsize.header,
+		fontFamily: "Heading-Font",
+		color: themes.text
 	},
 	unlockedContainer: {
 		flex: 1,
 		justifyContent: "flex-start",
 		paddingTop: 140,
 		alignItems: "center",
-		paddingHorizontal: 20,
-		borderWidth: 0,
+		paddingHorizontal: spacing.two,
+		borderWidth: spacing.none,
 		borderColor: "#fff"
 	},
 	unlockedTitle: {
-		fontSize: 22,
+		fontSize: fontsize.header,
 		fontFamily: "Body-Bold",
 		fontWeight: "bold",
 		textAlign: "center",
-		marginBottom: 8,
+		marginBottom: spacing.one,
 	},
 	unlockedSubtitle: {
-		fontSize: 15,
+		fontSize: fontsize.body,
 		textAlign: "center",
-		lineHeight: 22,
+		lineHeight: spacing.three,
 	},
+	caption: {
+		fontSize: fontsize.caption,
+		color: themes.textSecondary,
+		fontFamily: "Body-Regular"
+	}
 });

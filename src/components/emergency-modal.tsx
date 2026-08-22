@@ -1,5 +1,5 @@
 // components/AssignSeatModal.tsx
-import { Themes } from "@/constants/theme";
+import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { BottomSheet, Host, Icon, Row, Spacer } from "@expo/ui";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
@@ -57,10 +57,6 @@ export default function EmergencyModal({
     icon,
     onClose,
 }: Props) {
-    const colorScheme = useColorScheme();
-    const activeScheme = colorScheme === "dark" ? "dark" : "light";
-    const currentTheme = Themes[activeScheme];
-
     const [role, setRole] = useState("");
     const [econMenuVisible, setEconMenuVisible] = useState(false);
 
@@ -179,16 +175,16 @@ export default function EmergencyModal({
 
     return (
         <View style={styles.glassViewCont}>
-            <View style={[styles.glassView, { backgroundColor: currentTheme.backgroundElement, borderWidth: 0, borderColor: currentTheme.text }]}>
+            <View style={[styles.glassView, { backgroundColor: themes.backgroundElement, borderWidth: 0, borderColor: themes.text }]}>
                 {/* Header Content */}
                 <View style={styles.headerRow}>
                     {icon ? (
                         <Image
                             source={{ uri: icon }}
-                            style={[styles.avatar, { borderColor: currentTheme.text }]}
+                            style={[styles.avatar, { borderColor: themes.text }]}
                         />
                     ) : null}
-                    <Text style={[styles.titleText, { color: currentTheme.text }]}>
+                    <Text style={[styles.titleText, { color: themes.text }]}>
                         {name} is having an emergency!
                     </Text>
                 </View>
@@ -200,14 +196,14 @@ export default function EmergencyModal({
                             <View style={styles.iconContainer}>
                                 <Ionicons
                                     name="warning"
-                                    color={currentTheme.primaryBttnText}
+                                    color={themes.primaryBttnText}
                                     size={30}
                                 />
                             </View>
                             <Text
                                 style={[
                                     styles.buttonText,
-                                    { color: currentTheme.primaryBttnText },
+                                    { color: themes.primaryBttnText },
                                 ]}
                             >
                                 Notify Emergency Services
@@ -224,14 +220,14 @@ export default function EmergencyModal({
                             <View style={styles.iconContainer}>
                                 <Ionicons
                                     name="call"
-                                    color={currentTheme.primaryBttnText}
+                                    color={themes.primaryBttnText}
                                     size={30}
                                 />
                             </View>
                             <Text
                                 style={[
                                     styles.buttonText,
-                                    { color: currentTheme.primaryBttnText },
+                                    { color: themes.primaryBttnText },
                                 ]}
                             >
                                 Call Emergency Contact
@@ -286,7 +282,7 @@ export default function EmergencyModal({
 
                     <Text
                         style={{
-                            color: currentTheme.text,
+                            color: themes.text,
                             fontSize: 24,
                             fontWeight: "bold",
                             textAlign: "center",
@@ -299,7 +295,7 @@ export default function EmergencyModal({
                     {loadingContacts ? (
                         <ActivityIndicator
                             size="large"
-                            color={currentTheme.text}
+                            color={themes.text}
                             style={{ marginVertical: 20 }}
                         />
                     ) : contacts.length > 0 ? (
@@ -310,7 +306,7 @@ export default function EmergencyModal({
                                     onPress={() => handleCall(contact.phone)}
                                     style={[
                                         styles.contactRow,
-                                        { backgroundColor: currentTheme.element, borderBottomWidth: 0, borderColor: currentTheme.secondaryBttn },
+                                        { backgroundColor: themes.backgroundElement, borderBottomWidth: 0, borderColor: themes.secondaryBttn },
                                     ]}
                                 >
                                     <Host matchContents>
@@ -320,10 +316,10 @@ export default function EmergencyModal({
                                         })} />
                                     </Host>
                                     <View style={{ marginLeft: 12 }}>
-                                        <Text style={{ color: currentTheme.text, fontSize: 18, fontWeight: "bold" }}>
+                                        <Text style={{ color: themes.text, fontSize: 18, fontWeight: "bold" }}>
                                             {contact.name}
                                         </Text>
-                                        <Text style={{ color: currentTheme.text, fontSize: 14 }}>
+                                        <Text style={{ color: themes.text, fontSize: 14 }}>
                                             {contact.phone}
                                         </Text>
                                     </View>
@@ -333,7 +329,7 @@ export default function EmergencyModal({
                     ) : (
                         <Text
                             style={{
-                                color: currentTheme.textSecondary || "#888",
+                                color: themes.textSecondary || "#888",
                                 fontSize: 16,
                                 textAlign: "center",
                             }}

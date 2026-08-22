@@ -1,4 +1,4 @@
-import { Themes } from "@/constants/theme";
+import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import {
 	Alert,
@@ -118,10 +118,6 @@ const extractBirthdayParts = (data: any): { year: number; month: number; day: nu
 };
 
 export default function Profile() {
-	const colorScheme = useColorScheme();
-	const activeScheme = colorScheme === "dark" ? "dark" : "light";
-	const currentTheme = Themes[activeScheme];
-
 	const router = useRouter();
 
 	const { profileId } = useLocalSearchParams<{ profileId?: string }>();
@@ -615,7 +611,7 @@ export default function Profile() {
 
 	return (
 		<SafeAreaView
-			style={{ flex: 1, backgroundColor: currentTheme.background }}
+			style={{ flex: 1, backgroundColor: themes.background }}
 			edges={Platform.OS == "ios" ? ['left', 'right'] : ['left', 'right', "top"]}
 		>
 			<ScrollView
@@ -628,7 +624,7 @@ export default function Profile() {
 				<View style={[styles.container, { marginTop: -20, paddingBottom: 100 }]}>
 					<View style={{ flexDirection: "column", alignItems: "center", marginBottom: 0 }}>
 						<Image source={userIcon === "Not Set" || userIcon === "" || userIcon === null ? { uri: "https://pbs.twimg.com/media/C8SFjSYWAAA6452.jpg" } : { uri: userIcon }} style={{ width: 150, height: 150, borderRadius: 75 }} />
-						<Text style={[styles.pageHeader, { color: currentTheme.text, flex: 1 }]}>
+						<Text style={[styles.pageHeader, { color: themes.text, flex: 1 }]}>
 							{userName.split(" ")[0]}
 						</Text>
 						<Host matchContents>
@@ -677,17 +673,17 @@ export default function Profile() {
 								/>}
 						</Host>
 					</View>
-					<View style={{ borderColor: currentTheme.textSecondary, borderWidth: 1, opacity: 0.5, marginVertical: 20 }} />
+					<View style={{ borderColor: themes.textSecondary, borderWidth: 1, opacity: 0.5, marginVertical: 20 }} />
 					<View style={{ gap: 10 }}>
 
-						<Text style={{ fontFamily: "Condensed-Bold", color: currentTheme.text, fontSize: 24, marginTop: 10 }}>PERSONAL INFORMATION</Text>
+						<Text style={{ fontFamily: "Condensed-Bold", color: themes.text, fontSize: 24, marginTop: 10 }}>PERSONAL INFORMATION</Text>
 
 						<View style={styles.fieldContainer}>
-							<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
+							<Text style={[styles.infoLabel, { color: themes.textSecondary }]}>
 								NAME
 							</Text>
 							{editMode ?
-								<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
+								<View style={[styles.textInput, { backgroundColor: themes.backgroundElement }]}>
 									<Host matchContents>
 										<TextInput
 											// @ts-ignore
@@ -702,11 +698,11 @@ export default function Profile() {
 						</View>
 
 						<View style={styles.fieldContainer}>
-							<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
+							<Text style={[styles.infoLabel, { color: themes.textSecondary }]}>
 								EMAIL
 							</Text>
 							{editMode ?
-								<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
+								<View style={[styles.textInput, { backgroundColor: themes.backgroundElement }]}>
 									<Host matchContents>
 										<TextInput
 											// @ts-ignore
@@ -722,11 +718,11 @@ export default function Profile() {
 						</View>
 
 						<View style={styles.fieldContainer}>
-							<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
+							<Text style={[styles.infoLabel, { color: themes.textSecondary }]}>
 								PHONE NUMBER
 							</Text>
 							{editMode ?
-								<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
+								<View style={[styles.textInput, { backgroundColor: themes.backgroundElement }]}>
 									<Host matchContents>
 										<TextInput
 											// @ts-ignore
@@ -741,20 +737,20 @@ export default function Profile() {
 							}
 						</View>
 
-						<View style={{ borderColor: currentTheme.textSecondary, borderWidth: 1, opacity: 0.5, marginVertical: 10 }} />
+						<View style={{ borderColor: themes.textSecondary, borderWidth: 1, opacity: 0.5, marginVertical: 10 }} />
 
-						<Text style={{ fontFamily: "Condensed-Bold", color: currentTheme.text, fontSize: 24, marginBottom: 10 }}>HEALTH INFORMATION</Text>
+						<Text style={{ fontFamily: "Condensed-Bold", color: themes.text, fontSize: 24, marginBottom: 10 }}>HEALTH INFORMATION</Text>
 
 						<View style={{ flexDirection: "row", gap: 10, borderColor: "#000", borderWidth: 0 }}>
 							<View style={[styles.fieldContainer, { flex: 2.2 }]}>
-								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
+								<Text style={[styles.infoLabel, { color: themes.textSecondary }]}>
 									BIRTHDAY
 								</Text>
 								{editMode ?
 									<>
 										<View style={{ flexDirection: "row", gap: 6 }}>
 											{/* Month Input */}
-											<View style={[styles.textInput, { backgroundColor: currentTheme.element, flex: 1 }]}>
+											<View style={[styles.textInput, { backgroundColor: themes.backgroundElement, flex: 1 }]}>
 												<Host matchContents>
 													<TextInput
 														// @ts-ignore
@@ -766,7 +762,7 @@ export default function Profile() {
 												</Host>
 											</View>
 											{/* Day Input */}
-											<View style={[styles.textInput, { backgroundColor: currentTheme.element, flex: 1 }]}>
+											<View style={[styles.textInput, { backgroundColor: themes.backgroundElement, flex: 1 }]}>
 												<Host matchContents>
 													<TextInput
 														// @ts-ignore
@@ -778,7 +774,7 @@ export default function Profile() {
 												</Host>
 											</View>
 											{/* Year Input */}
-											<View style={[styles.textInput, { backgroundColor: currentTheme.element, flex: 1.5 }]}>
+											<View style={[styles.textInput, { backgroundColor: themes.backgroundElement, flex: 1.5 }]}>
 												<Host matchContents>
 													<TextInput
 														// @ts-ignore
@@ -820,13 +816,13 @@ export default function Profile() {
 								}
 							</View>
 							<View style={[styles.fieldContainer, { flex: .75 }]}>
-								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
+								<Text style={[styles.infoLabel, { color: themes.textSecondary }]}>
 									AGE
 								</Text>
 								<TextBlock text={getAge()} />
 							</View>
 							<View style={[styles.fieldContainer, { flex: 1.75 }]}>
-								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
+								<Text style={[styles.infoLabel, { color: themes.textSecondary }]}>
 									ZODIAC
 								</Text>
 								<TextBlock text={getZodiacSign()} />
@@ -835,12 +831,12 @@ export default function Profile() {
 
 						<View style={{ flexDirection: "row", gap: 10, borderColor: "#000", borderWidth: 0 }}>
 							<View style={[styles.fieldContainer, { flex: 1.2 }]}>
-								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
+								<Text style={[styles.infoLabel, { color: themes.textSecondary }]}>
 									HEIGHT {isMetric ? "(CM)" : "(FT / IN)"}
 								</Text>
 								{editMode ? (
 									isMetric ? (
-										<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
+										<View style={[styles.textInput, { backgroundColor: themes.backgroundElement }]}>
 											<Host matchContents>
 												<TextInput
 													// @ts-ignore
@@ -854,7 +850,7 @@ export default function Profile() {
 									) : (
 										<View style={{ flexDirection: "row", gap: 6 }}>
 											{/* Feet Input */}
-											<View style={[styles.textInput, { backgroundColor: currentTheme.element, flex: 1 }]}>
+											<View style={[styles.textInput, { backgroundColor: themes.backgroundElement, flex: 1 }]}>
 												<Host matchContents>
 													<TextInput
 														// @ts-ignore
@@ -866,7 +862,7 @@ export default function Profile() {
 												</Host>
 											</View>
 											{/* Inches Input */}
-											<View style={[styles.textInput, { backgroundColor: currentTheme.element, flex: 1 }]}>
+											<View style={[styles.textInput, { backgroundColor: themes.backgroundElement, flex: 1 }]}>
 												<Host matchContents>
 													<TextInput
 														// @ts-ignore
@@ -884,11 +880,11 @@ export default function Profile() {
 								)}
 							</View>
 							<View style={[styles.fieldContainer, { flex: 1 }]}>
-								<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
+								<Text style={[styles.infoLabel, { color: themes.textSecondary }]}>
 									WEIGHT {isMetric ? "(KG)" : "(LB)"}
 								</Text>
 								{editMode ?
-									<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
+									<View style={[styles.textInput, { backgroundColor: themes.backgroundElement }]}>
 										<Host matchContents>
 											<TextInput
 												// @ts-ignore
@@ -906,11 +902,11 @@ export default function Profile() {
 						</View>
 
 						<View style={styles.fieldContainer}>
-							<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
+							<Text style={[styles.infoLabel, { color: themes.textSecondary }]}>
 								BLOOD TYPE
 							</Text>
 							{editMode ?
-								<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
+								<View style={[styles.textInput, { backgroundColor: themes.backgroundElement }]}>
 									<Host matchContents>
 										<TextInput
 											// @ts-ignore
@@ -927,11 +923,11 @@ export default function Profile() {
 						</View>
 
 						<View style={styles.fieldContainer}>
-							<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>
+							<Text style={[styles.infoLabel, { color: themes.textSecondary }]}>
 								ALLERGIES
 							</Text>
 							{editMode ?
-								<View style={[styles.textInput, { backgroundColor: currentTheme.element }]}>
+								<View style={[styles.textInput, { backgroundColor: themes.backgroundElement }]}>
 									<Host matchContents>
 										<TextInput
 											// @ts-ignore

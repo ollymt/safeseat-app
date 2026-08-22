@@ -1,4 +1,4 @@
-import { Themes } from "@/constants/theme";
+import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { Host, Icon, Picker } from "@expo/ui";
 // 1. Import the native scroll view wrapper designed specifically for Expo UI
 // Static import instead of a runtime import() — Icon.select needs an actual
@@ -48,10 +48,6 @@ export default function SettingPicker({
   onPress,
   onValueChange,
 }: SettingPickerProps) {
-  const colorScheme = useColorScheme();
-  const activeScheme = colorScheme === "dark" ? "dark" : "light";
-  const currentTheme = Themes[activeScheme];
-
   const [selectedBloodType, setSelectedBloodType] = useState(value);
   const [bloodTypeIsPresented, setBloodTypeIsPresented] = useState(false);
   // 4. FIX: Holds a tapped value until the native sheet has fully finished
@@ -94,9 +90,9 @@ export default function SettingPicker({
         style={[
           setitem.setItemBase,
           {
-            backgroundColor: currentTheme.element,
+            backgroundColor: themes.backgroundElement,
             borderBottomWidth: isLast ? 0 : 1,
-            borderBottomColor: currentTheme.border,
+            borderBottomColor: themes.secondaryBttn,
           },
         ]}
       >
@@ -108,18 +104,18 @@ export default function SettingPicker({
               style={[
                 setitem.iconWrapper,
                 {
-                  backgroundColor: currentTheme.primaryBttn,
+                  backgroundColor: themes.primaryBttn,
                   padding: 6,
                   borderRadius: 8,
                 },
               ]}
             >
               <Host style={{ width: 22, height: 22 }}>
-                <Icon name={iconName} color={currentTheme.primaryBttnText} />
+                <Icon name={iconName} color={themes.primaryBttnText} />
               </Host>
             </View>
           )}
-          <Text style={[setitem.settingName, { color: currentTheme.text }]}>
+          <Text style={[setitem.settingName, { color: themes.text }]}>
             {name}
           </Text>
         </View>
@@ -147,7 +143,7 @@ export default function SettingPicker({
               <Text
                 style={[
                   setitem.settingValue,
-                  { color: currentTheme.primaryBttn },
+                  { color: themes.primaryBttn },
                 ]}
               >
                 {currentLabel}
@@ -158,7 +154,7 @@ export default function SettingPicker({
                     ios: "chevron.up.chevron.down",
                     android: unfoldMoreIcon,
                   })}
-                  color={currentTheme.primaryBttn}
+                  color={themes.primaryBttn}
                 />
               </Host>
             </View>

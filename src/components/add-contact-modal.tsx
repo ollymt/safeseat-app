@@ -1,5 +1,5 @@
 // components/AddContactModal.tsx
-import { Themes } from "@/constants/theme";
+import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { BottomSheet, Button, Column, FieldGroup, Host, Icon, Row, Slider, Spacer, Text, TextInput } from "@expo/ui";
 import { ConfirmationDialog, Button as SwiftButton } from "@expo/ui/swift-ui";
 import { buttonBorderShape, buttonStyle, controlSize, submitLabel } from "@expo/ui/swift-ui/modifiers";
@@ -22,10 +22,6 @@ export default function AddContactModal({ visible, onClose, onSuccess }: Props) 
 
     const [name, setName] = useState("");
     const [phone, setPhone] = useState("");
-
-    const colorScheme = useColorScheme();
-    const activeScheme = colorScheme === "dark" ? "dark" : "light";
-    const currentTheme = Themes[activeScheme];
 
     const [priority, setPriority] = useState(0);
     const [priorityString, setPriorityString] = useState("");
@@ -220,7 +216,7 @@ export default function AddContactModal({ visible, onClose, onSuccess }: Props) 
                     </Row>
 
                     <Column spacing={0} alignment="center">
-                        <Text textStyle={{ fontSize: 36, color: currentTheme.text, fontWeight: "bold", textAlign: "center" }}>
+                        <Text textStyle={{ fontSize: 36, color: themes.text, fontWeight: "bold", textAlign: "center" }}>
                             New Contact
                         </Text>
                         <FieldGroup>
@@ -262,7 +258,7 @@ export default function AddContactModal({ visible, onClose, onSuccess }: Props) 
                         </FieldGroup>
                         {priority !== 0 && (
                             // @ts-ignore
-                            <Text textStyle={{ fontSize: 13, color: currentTheme.textSecondary, textAlign: "center" }}>
+                            <Text textStyle={{ fontSize: 13, color: themes.textSecondary, textAlign: "center" }}>
                                 {name.trim() === "" ? "This" : name} will be your {priorityString} emergency contact.
                             </Text>
                         )}

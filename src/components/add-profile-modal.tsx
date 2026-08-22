@@ -1,5 +1,5 @@
 // components/AddProfileModal.tsx
-import { Themes } from "@/constants/theme";
+import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { BottomSheet, Button, Column, FieldGroup, Host, Icon, Row, Spacer, Text, TextInput } from "@expo/ui";
 import { ConfirmationDialog, Button as SwiftButton } from "@expo/ui/swift-ui";
 import { buttonBorderShape, buttonStyle, controlSize, submitLabel } from "@expo/ui/swift-ui/modifiers";
@@ -83,10 +83,6 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
     const [weightLb, setWeightLb] = useState("");
 
     const [bloodType, setBloodType] = useState("");
-
-    const colorScheme = useColorScheme();
-    const activeScheme = colorScheme === "dark" ? "dark" : "light";
-    const currentTheme = Themes[activeScheme];
 
     const [discardConfirmVisible, setDiscardConfirmVisible] = useState(false);
 
@@ -396,7 +392,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                     </Row>
 
                     <Column spacing={0} alignment="center">
-                        <Text textStyle={{ fontSize: 36, color: currentTheme.text, fontWeight: "bold", textAlign: "center" }}>New Profile</Text>
+                        <Text textStyle={{ fontSize: 36, color: themes.text, fontWeight: "bold", textAlign: "center" }}>New Profile</Text>
                         <FieldGroup>
                             <FieldGroup.Section>
                                 <TextInput

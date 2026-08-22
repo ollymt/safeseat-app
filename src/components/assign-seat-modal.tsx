@@ -1,5 +1,5 @@
 // components/AssignSeatModal.tsx
-import { Themes } from "@/constants/theme";
+import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { BottomSheet, Button, Column, Host, Icon, List, Row, Spacer, Text } from "@expo/ui";
 import { buttonBorderShape, buttonStyle, controlSize } from "@expo/ui/swift-ui/modifiers";
 import * as Haptics from "expo-haptics";
@@ -31,11 +31,7 @@ const SEAT_ASSIGNMENTS_KEY = "seatAssignments";
 export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: Props) {
     const [isLoading, setIsLoading] = useState(false);
     const [isFetchingProfiles, setIsFetchingProfiles] = useState(false);
-
-    const colorScheme = useColorScheme();
-    const activeScheme = colorScheme === "dark" ? "dark" : "light";
-    const currentTheme = Themes[activeScheme];
-
+    
     const [role, setRole] = useState("");
     const [profiles, setProfiles] = useState<Profile[]>([]);
     const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
@@ -280,18 +276,18 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
                     {/* Content Section */}
                     <Column spacing={12} alignment="center">
                         {/* @ts-ignore */}
-                        <Text textStyle={{ fontSize: 32, color: currentTheme.text, fontWeight: "bold", textAlign: "center" }}>
+                        <Text textStyle={{ fontSize: 32, color: themes.text, fontWeight: "bold", textAlign: "center" }}>
                             Assign {role}
                         </Text>
 
                         {isFetchingProfiles ? (
                             /* @ts-ignore */
-                            <Text textStyle={{ fontSize: 16, color: currentTheme.textSecondary, textAlign: "center" }}>
+                            <Text textStyle={{ fontSize: 16, color: themes.textSecondary, textAlign: "center" }}>
                                 Loading Profiles...
                             </Text>
                         ) : profiles.length === 0 ? (
                             /* @ts-ignore */
-                            <Text textStyle={{ fontSize: 16, color: currentTheme.textSecondary, textAlign: "center" }}>
+                            <Text textStyle={{ fontSize: 16, color: themes.textSecondary, textAlign: "center" }}>
                                 All available profiles have been assigned.
                             </Text>
                         ) : (
@@ -307,7 +303,7 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
                                         >
                                             <Row spacing={12} alignment="center">
                                                 {/* @ts-ignore */}
-                                                <Text textStyle={{ fontSize: 18, color: currentTheme.text }}>
+                                                <Text textStyle={{ fontSize: 18, color: themes.text }}>
                                                     {profile.name}
                                                 </Text>
 

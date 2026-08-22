@@ -1,13 +1,13 @@
-import { Themes } from "@/constants/theme";
+import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { GlassView } from "expo-glass-effect";
 import * as Haptics from "expo-haptics";
-import { Pressable, StyleSheet, Text, useColorScheme, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 type ButtonProps = {
-	variant?: "primary" | "secondary" | "warn" | "tertiary"; // Using literal types instead of generic string prevents typing bugs!
+	variant?: "primary" | "secondary" | "warn" | "tertiary";
 	label?: string;
-	enabled?: boolean; // Made optional with ? so it defaults nicely
-	fullWidth?: boolean; // Made optional with ? so it defaults nicely
+	enabled?: boolean;
+	fullWidth?: boolean;
 	onPress: () => void;
 	style?: any;
 	children?: any;
@@ -24,51 +24,35 @@ export default function Button({
 	children,
 	glass = false,
 }: ButtonProps) {
-	const colorScheme = useColorScheme();
-	const activeScheme = colorScheme === "dark" ? "dark" : "light";
-	const currentTheme = Themes[activeScheme];
-
 	const handlePress = () => {
-		// Triggers a light, crisp native tap feel
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-		// Then fire the regular onPress action passed by the parent screen
 		onPress();
 	};
 
 	const containerStyle = [
-		style,
 		button.baseButton,
-		fullWidth && { width: "100%" as const }, // Wired up the fullWidth check dynamically
-		{ alignItems: "center" as const, justifyContent: "center" as const },
-		// Dynamic styling check
-		variant === "primary"
-			? { backgroundColor: currentTheme.primaryBttn }
-			: variant === "secondary"
-				? { backgroundColor: currentTheme.secondaryBttn }
-				: variant === "warn"
-					? { backgroundColor: currentTheme.warnBttn }
-					: { backgroundColor: "transparent" }, // Fixed the "varian" typo to point to warn
-
-		!enabled && button.disabledButton, // Applies opacity if disabled is passed
+		variant === "primary" && button.primaryButton,
+		variant === "secondary" && button.secondaryButton,
+		variant === "warn" && button.warnButton,
+		variant === "tertiary" && button.tertiaryButton,
+		fullWidth && button.fullWidth,
+		!enabled && button.disabledButton,
+		style,
 	];
 
 	const textStyle = [
 		button.baseText,
-		variant === "primary" || variant === "warn"
-			? { color: currentTheme.primaryBttnText, fontWeight: "bold" as const }
-			: variant === "secondary"
-				? { color: currentTheme.text }
-				: { color: currentTheme.primaryBttn },
-
+		(variant === "primary" || variant === "warn") && button.primaryText,
+		variant === "secondary" && button.secondaryText,
+		variant === "tertiary" && button.tertiaryText,
 		!enabled && button.disabledText,
 	];
 
 	const content = (
 		<Pressable
-			style={{ width: "100%", alignItems: "center" }}
+			style={button.pressableContent}
 			onPress={handlePress}
-			disabled={!enabled} // Wired up the native disabled state
+			disabled={!enabled}
 		>
 			{children}
 			{label && <Text style={textStyle}>{label}</Text>}
@@ -83,41 +67,54 @@ export default function Button({
 }
 
 const button = StyleSheet.create({
-	disabledButton: {
-		opacity: 0.5,
-	},
 	baseButton: {
-		padding: 16,
-		borderRadius: 100,
-		alignItems: "center", // Centers text inside horizontal capsules
+		paddingTop: spacing.one,
+		paddingBottom: spacing.one,
+		paddingLeft: spacing.two,
+		paddingRight: spacing.two,
+		borderRadius: spacing.edge,
+		height: spacing.six,
+		alignItems: "center",
 		justifyContent: "center",
 	},
 	primaryButton: {
-		backgroundColor: "#25601D",
+		backgroundColor: themes.primaryBttn,
 	},
 	secondaryButton: {
-		backgroundColor: "#cccccc",
+		backgroundColor: themes.secondaryBttn,
 	},
 	warnButton: {
-		backgroundColor: "#f5425d",
+		backgroundColor: themes.warnBttn,
 	},
-	disabledText: {
+	tertiaryButton: {
+		backgroundColor: "transparent",
+	},
+	fullWidth: {
+		width: "100%",
+	},
+	disabledButton: {
 		opacity: 0.5,
 	},
+	pressableContent: {
+		width: "100%",
+		alignItems: "center",
+	},
 	baseText: {
-		fontSize: 16,
+		fontSize: fontsize.button,
 		fontWeight: "600",
 	},
 	primaryText: {
-		color: "#ffffff",
-		fontFamily: "Body-Bold",
+		color: themes.primaryBttnText,
+		fontWeight: "bold",
 	},
 	secondaryText: {
-		color: "#000000",
-		fontFamily: "Body-Medium",
+		color: themes.text,
 	},
-	warnText: {
-		color: "#ffffff",
-		fontFamily: "Body-Medium",
+	tertiaryText: {
+		color: themes.primaryBttn,
+		textDecorationLine: "underline",
+	},
+	disabledText: {
+		opacity: 0.5,
 	},
 });

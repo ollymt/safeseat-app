@@ -1,5 +1,5 @@
 // components/assign-card.tsx
-import { Themes } from "@/constants/theme";
+import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { Host, Icon } from "@expo/ui";
 import { opacity } from "@expo/ui/swift-ui/modifiers";
 import {
@@ -40,15 +40,11 @@ export default function AssignCard({
   locked = true,
   onPress,
 }: AssignCardProps) {
-  const colorScheme = useColorScheme();
-  const activeScheme = colorScheme === "dark" ? "dark" : "light";
-  const currentTheme = Themes[activeScheme];
-
   const displayName = assignedProfile?.name ?? name;
   const displayIcon = assignedProfile?.icon ?? pfp;
 
   // Green outline when a seat is assigned; subtle gray dashed outline when unassigned
-  const borderColor = displayName ? currentTheme.primaryBttn : currentTheme.textSecondary;
+  const borderColor = displayName ? themes.primaryBttn : themes.textSecondary;
 
   return (
     <Pressable
@@ -56,14 +52,14 @@ export default function AssignCard({
       style={[
         assigncard.baseCard,
         {
-          backgroundColor: currentTheme.element,
+          backgroundColor: themes.backgroundElement,
           borderColor: state == "safe"
-            ? currentTheme.primaryBttn
+            ? themes.primaryBttn
             : state == "warning"
-              ? currentTheme.yellow
+              ? themes.lightOrange
               : state == "emergency"
-                ? currentTheme.warnBttn
-                : currentTheme.text,
+                ? themes.warnBttn
+                : themes.text,
           opacity: state == "empty" ? 0.5 : 1,
           borderStyle: displayName ? "solid" : "dashed",
         },
@@ -78,12 +74,12 @@ export default function AssignCard({
                 assigncard.avatar,
                 {
                   borderColor: state == "safe"
-                    ? currentTheme.primaryBttn
+                    ? themes.primaryBttn
                     : state == "warning"
-                      ? currentTheme.yellow
+                      ? themes.lightOrange
                       : state == "emergency"
-                        ? currentTheme.warnBttn
-                        : currentTheme.text,
+                        ? themes.warnBttn
+                        : themes.text,
 
                   borderWidth: 2
                 },
@@ -93,21 +89,21 @@ export default function AssignCard({
             <View
               style={[
                 assigncard.avatarFallback,
-                { backgroundColor: currentTheme.primaryBttn },
+                { backgroundColor: themes.primaryBttn },
               ]}
             >
-              <Text style={[assigncard.monogram, { color: currentTheme.primaryBttnText }]}>
+              <Text style={[assigncard.monogram, { color: themes.primaryBttnText }]}>
                 {displayName.charAt(0).toUpperCase()}
               </Text>
             </View>
           )}
           <Text
             numberOfLines={1}
-            style={[assigncard.profileName, { color: currentTheme.text }]}
+            style={[assigncard.profileName, { color: themes.text }]}
           >
             {displayName}
           </Text>
-          <Text style={[assigncard.seatCode, { color: currentTheme.textSecondary }]}>
+          <Text style={[assigncard.seatCode, { color: themes.textSecondary }]}>
             {seatCode.toUpperCase()}
           </Text>
         </View>
@@ -119,22 +115,22 @@ export default function AssignCard({
                 ios: "plus",
                 android: import("@expo/material-symbols/add.xml"),
               })}
-              color={currentTheme.textSecondary}
+              color={themes.textSecondary}
             />
           </Host>
-          <Text style={[assigncard.seatCode, { color: currentTheme.textSecondary }]}>
+          <Text style={[assigncard.seatCode, { color: themes.textSecondary }]}>
             {seatCode.toUpperCase()}
           </Text>
         </View>
       )}
       <Text style={{
         color: state == "safe"
-          ? currentTheme.primaryBttn
+          ? themes.primaryBttn
           : state == "warning"
-            ? currentTheme.yellow
+            ? themes.lightOrange
             : state == "emergency"
-              ? currentTheme.warnBttn
-              : currentTheme.text,
+              ? themes.warnBttn
+              : themes.text,
 
         fontFamily: "Body-Bold",
         fontSize: 16,

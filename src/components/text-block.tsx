@@ -1,4 +1,4 @@
-import { Themes } from "@/constants/theme";
+import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { Text, useColorScheme, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import * as Clipboard from "expo-clipboard"; // 🛠️ Import Expo Clipboard
 import * as Haptics from "expo-haptics"; // 🛠️ Optional: for nice tap feedback
@@ -10,10 +10,6 @@ type TextBlockProps = {
 };
 
 export default function TextBlock({ text, copyable = false, label }: TextBlockProps) {
-	const colorScheme = useColorScheme();
-	const activeScheme = colorScheme === "dark" ? "dark" : "light";
-	const currentTheme = Themes[activeScheme];
-
 	// 🛠️ Copy Action Handler
 	const handlePress = async () => {
 		if (!copyable || text === "Not Set") return;
@@ -40,10 +36,10 @@ export default function TextBlock({ text, copyable = false, label }: TextBlockPr
 			onPress={handlePress}
 			style={[
 				textblockstyles.baseCard,
-				{ backgroundColor: currentTheme.element },
+				{ backgroundColor: themes.backgroundElement },
 			]}
 		>
-			<Text style={{ color: currentTheme.text, fontSize: 18, fontFamily: "Body-Bold" }}>
+			<Text style={{ color: themes.text, fontSize: 18, fontFamily: "Body-Bold" }}>
 				{text}
 			</Text>
 		</TouchableOpacity>
