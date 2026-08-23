@@ -7,20 +7,23 @@
     "icon": "./assets/images/icon.png",
     "scheme": "safeseatapp",
     "userInterfaceStyle": "automatic",
+    "backgroundColor": "#101322",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.ollymt.safeseatapp"
+      "bundleIdentifier": "com.ollymt.safeseatapp",
+      "backgroundColor": "#101322"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#101322",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.ollymt.safeseatapp",
-      "softwareKeyboardLayoutMode": "pan"
+      "softwareKeyboardLayoutMode": "pan",
+      "backgroundColor": "#101322"
     },
     "web": {
       "output": "static",
@@ -31,7 +34,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#101322",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }

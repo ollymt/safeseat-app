@@ -202,7 +202,7 @@ export default function Settings() {
 			style={{ flex: 1, backgroundColor: themes.background }}
 			edges={Platform.OS == "android" ? ["left", "right", "top"] : ["left", "right"]}
 		>
-			<ScrollView contentContainerStyle={[{ flexGrow: 1 }, Platform.OS == "ios" ? { marginTop: -31 } : { marginTop: 6 }]} showsVerticalScrollIndicator={true} bounces={true}>
+			<ScrollView contentContainerStyle={[{ flexGrow: 1 }, Platform.OS == "ios" ? { marginTop: 31 } : { marginTop: 6 }]} showsVerticalScrollIndicator={true} bounces={true}>
 				<View style={[styles.container, { borderWidth: 0, borderColor: themes.text}]}>
 					<Text style={[styles.pageHeader, { color: themes.text }]}>Settings</Text>
 					<View style={{ gap: 20, marginTop: 0, width: "100%" }}>
