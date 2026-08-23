@@ -1,5 +1,6 @@
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { useFocusEffect, useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
 	Alert,
 	Dimensions,
@@ -31,6 +32,9 @@ const { width: screenWidth } = Dimensions.get("window");
 
 export default function Settings() {
 	const router = useRouter();
+	const insets = useSafeAreaInsets();
+
+	const bottomPad = 104 + (insets.bottom / 2); // extra breathing room
 
 	// 1. Core Account States
 	const [userName, setUserName] = useState<string>("Guest");
@@ -200,12 +204,12 @@ export default function Settings() {
 	return (
 		<SafeAreaView
 			style={{ flex: 1, backgroundColor: themes.background }}
-			edges={["left", "right"]}
+			edges={["left", "right", "top"]}
 		>
-			<ScrollView contentContainerStyle={[{ flexGrow: 1 }, Platform.OS == "ios" ? { marginTop: 31 } : { marginTop: 6 }]} showsVerticalScrollIndicator={true} bounces={true}>
-				<View style={[styles.container, { borderWidth: 0, borderColor: themes.text}]}>
+			<ScrollView contentContainerStyle={[{ flexGrow: 1 }, { marginTop: spacing.one, paddingBottom: bottomPad }]} showsVerticalScrollIndicator={true} bounces={true}>
+				<View style={[styles.container, { borderWidth: spacing.none, borderColor: themes.text}]}>
 					<Text style={[styles.pageHeader, { color: themes.text }]}>Settings</Text>
-					<View style={{ gap: 20, marginTop: 0, width: "100%" }}>
+					<View style={{ gap: spacing.two, marginTop: spacing.none, width: "100%" }}>
 
 						{/* ACCOUNT SECTION */}
 						<View>
@@ -381,8 +385,21 @@ export default function Settings() {
 }
 
 const styles = StyleSheet.create({
-	container: { flex: 1, width: "100%", padding: 20 },
-	pageHeader: { fontSize: 40, fontFamily: "Logo-Font" },
+	container: {
+		flex: 1,
+		width: "100%",
+		paddingLeft: spacing.two,
+		paddingRight: spacing.two,
+		borderWidth: spacing.none,
+		borderColor: "#fff",
+		gap: spacing.three
+	},
+	pageHeader: {
+		fontSize: fontsize.pageHeader,
+		fontFamily: "Logo-Font",
+		color: themes.text,
+		margin: spacing.none
+	},
 	infoLabel: { fontFamily: "Condensed-Bold", fontSize: 14, margin: 0, marginBottom: 8 },
 	caption: { fontFeatureSettings: "Body-Medium", opacity: 0.8, fontSize: 13 },
 });

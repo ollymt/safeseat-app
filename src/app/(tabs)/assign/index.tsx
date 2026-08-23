@@ -1,11 +1,13 @@
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
-    Alert,
-    StyleSheet,
-    Text,
-    useColorScheme,
-    View
+	Alert,
+	StyleSheet,
+	Text,
+	useColorScheme,
+	View,
+	ScrollView,
+	Platform
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -149,7 +151,7 @@ export default function Assign() {
 				}
 			}
 		])
-		
+
 	};
 
 	// ⚡ Mutator: Update status for a specific locked seat ("safe" | "warning" | "emergency")
@@ -245,99 +247,100 @@ export default function Assign() {
 			}}
 			edges={['left', 'right']}
 		>
-			<View style={[styles.container, { marginTop: 40 }]}>
-				<Text style={[styles.pageHeader, { color: themes.text }]}>
-					Assign
-				</Text>
+			<ScrollView contentContainerStyle={[{ flexGrow: 1 }, Platform.OS == "ios" ? { marginTop: spacing.five } : { marginTop: spacing.one }]} showsVerticalScrollIndicator={true} bounces={true}>
+				<View style={[styles.container]}>
+					<Text style={[styles.pageHeader, { color: themes.text }]}>
+						Assign
+					</Text>
 
-				<View
-					style={{
-						gap: 10,
-						marginTop: 10,
-						width: "100%",
-						borderWidth: 0,
-						borderColor: themes.secondaryBttn,
-						borderRadius: 10,
-					}}
-				>
-					{/* Front Row */}
-					<View style={{ gap: 10, flexDirection: "row", height: 230 }}>
-						<AssignCard
-							seatNo={1}
-							assignedProfile={assignments[1]}
-							onPress={() => handleCardPress(1)}
-							state={getCardState(1)}
-							seatCode="driver"
-						/>
-						<AssignCard
-							seatNo={2}
-							assignedProfile={assignments[2]}
-							onPress={() => handleCardPress(2)}
-							state={getCardState(2)}
-							seatCode="passenger"
-						/>
+					<View
+						style={{
+							gap: 10,
+							marginTop: 10,
+							width: "100%",
+							borderWidth: 0,
+							borderColor: themes.secondaryBttn,
+							borderRadius: 10,
+						}}
+					>
+						{/* Front Row */}
+						<View style={{ gap: 10, flexDirection: "row", height: 230 }}>
+							<AssignCard
+								seatNo={1}
+								assignedProfile={assignments[1]}
+								onPress={() => handleCardPress(1)}
+								state={getCardState(1)}
+								seatCode="driver"
+							/>
+							<AssignCard
+								seatNo={2}
+								assignedProfile={assignments[2]}
+								onPress={() => handleCardPress(2)}
+								state={getCardState(2)}
+								seatCode="passenger"
+							/>
+						</View>
+
+						{/* Back Row */}
+						<View style={{ gap: 10, flexDirection: "row", height: 230 }}>
+							<AssignCard
+								seatNo={3}
+								assignedProfile={assignments[3]}
+								onPress={() => handleCardPress(3)}
+								state={getCardState(3)}
+								seatCode="l backseat"
+							/>
+							<AssignCard
+								seatNo={4}
+								assignedProfile={assignments[4]}
+								onPress={() => handleCardPress(4)}
+								state={getCardState(4)}
+								seatCode="c backseat"
+							/>
+							<AssignCard
+								seatNo={5}
+								assignedProfile={assignments[5]}
+								onPress={() => handleCardPress(5)}
+								state={getCardState(5)}
+								seatCode="r backseat"
+							/>
+						</View>
 					</View>
 
-					{/* Back Row */}
-					<View style={{ gap: 10, flexDirection: "row", height: 230 }}>
-						<AssignCard
-							seatNo={3}
-							assignedProfile={assignments[3]}
-							onPress={() => handleCardPress(3)}
-							state={getCardState(3)}
-							seatCode="l backseat"
-						/>
-						<AssignCard
-							seatNo={4}
-							assignedProfile={assignments[4]}
-							onPress={() => handleCardPress(4)}
-							state={getCardState(4)}
-							seatCode="c backseat"
-						/>
-						<AssignCard
-							seatNo={5}
-							assignedProfile={assignments[5]}
-							onPress={() => handleCardPress(5)}
-							state={getCardState(5)}
-							seatCode="r backseat"
-						/>
+					{/* Lock In / Unlock Action Controls */}
+					<View style={{ paddingVertical: 20 }}>
+						{isLockedIn ? (
+							<Button
+								label="Unlock"
+								onPress={handleUnlock}
+								fullWidth={true}
+								variant="warn"
+								glass={false}
+							/>
+						) : (
+							<Button
+								label="Lock In"
+								onPress={handleLockIn}
+								fullWidth={true}
+								variant="primary"
+								enabled={hasAssignedSeats}
+								glass={false}
+							/>
+						)}
 					</View>
-				</View>
 
-				{/* Lock In / Unlock Action Controls */}
-				<View style={{ paddingVertical: 20 }}>
-					{isLockedIn ? (
-						<Button
-							label="Unlock"
-							onPress={handleUnlock}
-							fullWidth={true}
-							variant="warn"
-							glass={false}
-						/>
-					) : (
-						<Button
-							label="Lock In"
-							onPress={handleLockIn}
-							fullWidth={true}
-							variant="primary"
-							enabled={hasAssignedSeats}
-							glass={false}
-						/>
-					)}
-				</View>
+					<AssignSeatModal
+						seat={selectedSeat}
+						visible={assignModalVisible}
+						onClose={() => {
+							setAssignModalVisible(false);
+						}}
+						onSuccess={(seatNum, profile) => {
+							handleSeatAssigned(seatNum, profile);
+						}}
+					/>
 
-				<AssignSeatModal
-					seat={selectedSeat}
-					visible={assignModalVisible}
-					onClose={() => {
-						setAssignModalVisible(false);
-					}}
-					onSuccess={(seatNum, profile) => {
-						handleSeatAssigned(seatNum, profile);
-					}}
-				/>
-
-				{/*
+					{/*
 				{emergencySeat && emergencyProfile && (
 					<EmergencytModal
 						seat={emergencySeat.seatNo}
@@ -352,7 +355,8 @@ export default function Assign() {
 					/>
 				)}
 				*/}
-			</View>
+				</View>
+			</ScrollView>
 		</SafeAreaView>
 	);
 }

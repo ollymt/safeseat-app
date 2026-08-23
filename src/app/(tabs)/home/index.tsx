@@ -3,12 +3,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
 	ScrollView,
 	StyleSheet,
 	Text,
 	useColorScheme,
 	View,
+	Platform
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -42,6 +44,10 @@ const SEAT_ROLES: Record<number, string> = {
 
 export default function Home() {
 	const router = useRouter();
+	const insets = useSafeAreaInsets();
+
+	const bottomPad = 104 + (insets.bottom / 2); // extra breathing room
+
 
 	const [isLockedIn, setIsLockedIn] = useState<boolean>(false);
 	const [assignments, setAssignments] = useState<Record<number, Profile>>({});
@@ -115,103 +121,98 @@ export default function Home() {
 			<SafeAreaView
 				style={{
 					flex: 1,
-					backgroundColor: themes.background,
-					position: "absolute",
-					borderWidth: 0,
-					borderColor: "red",
+					backgroundColor: themes.background
 				}}
-				edges={["left", "right"]}
+				edges={["left", "right", "top"]}
 			>
-				<View style={[styles.container]}>
-					{isLockedIn ? (
-						<ScrollView
-							showsVerticalScrollIndicator={false}
-							contentContainerStyle={{ paddingBottom: spacing.five }}
-						>
-							<Text style={[styles.pageHeader]}>
-								Home
-							</Text>
-							<View style={{ gap: spacing.one, marginTop: spacing.one }}>
-								<Text style={styles.sectionHeader}>Everyone's State</Text>
-								{[1, 2, 3, 4, 5].map((seatNo) => {
-									const profile = assignments[seatNo];
-									const state = getSeatState(seatNo);
+				<ScrollView contentContainerStyle={[{ flexGrow: 1 }, { marginTop: spacing.one, paddingBottom: bottomPad }]} showsVerticalScrollIndicator={true} bounces={true}>
+					<View style={[styles.container]}>
+						{isLockedIn ? (
+							<View>
+								<Text style={[styles.pageHeader]}>
+									Home
+								</Text>
+								<View style={{ gap: spacing.one, marginTop: spacing.one }}>
+									<Text style={styles.sectionHeader}>Everyone's State</Text>
+									{[1, 2, 3, 4, 5].map((seatNo) => {
+										const profile = assignments[seatNo];
+										const state = getSeatState(seatNo);
 
-									return (
-										<SeatCard
-											key={seatNo}
-											seatNo={seatNo}
-											role={SEAT_ROLES[seatNo]}
-											name={profile?.name}
-											pfp={profile?.icon ?? profile?.photoURL}
-											// @ts-ignore
-											state={state}
-											onPress={() => {
-												Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-											}}
+										return (
+											<SeatCard
+												key={seatNo}
+												seatNo={seatNo}
+												role={SEAT_ROLES[seatNo]}
+												name={profile?.name}
+												pfp={profile?.icon ?? profile?.photoURL}
+												// @ts-ignore
+												state={state}
+												onPress={() => {
+													Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+												}}
+											/>
+										);
+									})}
+								</View>
+
+								<View style={{ gap: spacing.one, marginTop: spacing.four }}>
+									<Text style={styles.sectionHeader}>Extra Info</Text>
+									<InfoCard
+										smolTopText="TOTAL PASSENGER WEIGHT*"
+										bigText="443 lbs"
+										icon={
+											<Host>
+												<Icon name={Icon.select({
+													ios: "scalemass.fill",
+													android: import("@expo/material-symbols/weight.xml")
+												})} size={spacing.five} />
+											</Host>
+										} />
+									<Text style={styles.caption}>* Total passenger weight calculation is based on entered weight per profile.</Text>
+								</View>
+							</View>
+						) : (
+							<View style={styles.unlockedContainer}>
+								<View style={{ marginVertical: spacing.two }}>
+									<Host matchContents>
+										<Icon name={Icon.select({
+											ios: "lock.slash.fill",
+											android: import("@expo/material-symbols/lock_open.xml")
+										})} size={180} color={themes.secondaryBttn}
 										/>
-									);
-								})}
-							</View>
-
-							<View style={{ gap: spacing.one, marginTop: spacing.four }}>
-								<Text style={styles.sectionHeader}>Extra Info</Text>
-								<InfoCard
-									smolTopText="TOTAL PASSENGER WEIGHT*"
-									bigText="443 lbs"
-									icon={
-										<Host>
-											<Icon name={Icon.select({
-												ios: "scalemass.fill",
-												android: import("@expo/material-symbols/weight.xml")
-											})} size={spacing.five} />
-										</Host>
-									} />
-								<Text style={styles.caption}>* Total passenger weight calculation is based on entered weight per profile.</Text>
-							</View>
-						</ScrollView>
-					) : (
-						<View style={styles.unlockedContainer}>
-							<View style={{ marginVertical: spacing.two }}>
-								<Host matchContents>
-									<Icon name={Icon.select({
-										ios: "lock.slash.fill",
-										android: import("@expo/material-symbols/lock_open.xml")
-									})} size={180} color={themes.secondaryBttn}
+									</Host>
+								</View>
+								<Text
+									style={[
+										styles.unlockedTitle,
+										{ color: themes.text },
+									]}
+								>
+									Trip Not Locked In
+								</Text>
+								<Text
+									style={[
+										styles.unlockedSubtitle,
+										{ color: themes.textSecondary },
+									]}
+								>
+									Assign passengers to seats and tap "Lock In" on the Assign page to start monitoring.
+								</Text>
+								<View style={{ width: "100%", marginTop: spacing.three }}>
+									<Button
+										label="Go to Assign"
+										onPress={() => {
+											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+											router.push("/assign");
+										}}
+										fullWidth={true}
+										glass={false}
 									/>
-								</Host>
+								</View>
 							</View>
-							<Text
-								style={[
-									styles.unlockedTitle,
-									{ color: themes.text },
-								]}
-							>
-								Trip Not Locked In
-							</Text>
-							<Text
-								style={[
-									styles.unlockedSubtitle,
-									{ color: themes.textSecondary },
-								]}
-							>
-								Assign passengers to seats and tap "Lock In" on the Assign page to start monitoring.
-							</Text>
-							<View style={{ width: "100%", marginTop: spacing.three }}>
-								<Button
-									label="Go to Assign"
-									onPress={() => {
-										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-										router.push("/assign");
-									}}
-									fullWidth={true}
-									glass={false}
-								/>
-							</View>
-						</View>
-					)}
+						)}
 
-					{/*
+						{/*
 				{emergencySeatNo !== undefined && emergencyProfile && (
 					<EmergencytModal
 						seat={emergencySeatNo}
@@ -226,7 +227,8 @@ export default function Home() {
 					/>
 				)}
 				*/}
-				</View>
+					</View>
+				</ScrollView>
 			</SafeAreaView>
 		</View>
 	);
@@ -241,7 +243,6 @@ const styles = StyleSheet.create({
 		borderWidth: spacing.none,
 		borderColor: "#fff",
 		gap: spacing.three,
-		paddingTop: spacing.six,
 	},
 	pageHeader: {
 		fontSize: fontsize.pageHeader,
