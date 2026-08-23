@@ -120,9 +120,9 @@ export default function Home() {
 					borderWidth: 0,
 					borderColor: "red",
 				}}
-				edges={["left", "right", "bottom"]}
+				edges={["left", "right"]}
 			>
-				<View style={[styles.container, {  }]}>
+				<View style={[styles.container]}>
 					{isLockedIn ? (
 						<ScrollView
 							showsVerticalScrollIndicator={false}
@@ -240,9 +240,8 @@ const styles = StyleSheet.create({
 		paddingRight: spacing.two,
 		borderWidth: spacing.none,
 		borderColor: "#fff",
-		marginTop: spacing.six,
 		gap: spacing.three,
-		paddingBottom: spacing.one,
+		paddingTop: spacing.six,
 	},
 	pageHeader: {
 		fontSize: fontsize.pageHeader,

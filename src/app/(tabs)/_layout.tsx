@@ -1,15 +1,19 @@
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
-import { withLayoutContext } from 'expo-router';
-import {
-	createMaterialTopTabNavigator,
-} from 'expo-router/js-top-tabs';
+import { withLayoutContext, router, usePathname } from 'expo-router';
+import { createMaterialTopTabNavigator } from 'expo-router/js-top-tabs';
 import { View, Pressable, Text, StyleSheet } from 'react-native';
-import { Icon, Host } from '@expo/ui'; // Import Icon from expo-ui
+import { useEffect } from "react";
+import { Icon, Host } from '@expo/ui';
+
+import * as Haptics from "expo-haptics";
 
 const { Navigator } = createMaterialTopTabNavigator();
 const Tabs = withLayoutContext<any, any, any, any>(Navigator);
 
 function MyCustomTabBar({ state, descriptors, navigation }: any) {
+	useEffect(() => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft)
+	}, [state.index])
 	return (
 		<View style={styles.tabContainer}>
 			<View style={styles.tabDrawer}>
@@ -18,16 +22,35 @@ function MyCustomTabBar({ state, descriptors, navigation }: any) {
 					const { options } = descriptors[route.key];
 					const label = options.title ?? route.name;
 
-					// Extract the icon component from options
 					const renderIcon = options.tabBarIcon;
+
+					const handlePress = () => {
+						const event = navigation.emit({
+							type: 'tabPress',
+							target: route.key,
+							canPreventDefault: true,
+						});
+
+						if (isFocused) {
+							// Option 1: Attempt to dismiss nested stack screens back to tab root
+							try {
+								router.dismissAll();
+							} catch {
+								// Option 2: Fallback to navigating directly to the root screen path
+								// @ts-ignore
+								router.navigate(`/(tabs)/${route.name}`);
+							}
+						} else if (!event.defaultPrevented) {
+							navigation.navigate(route.name);
+						}
+					};
 
 					return (
 						<Pressable
 							key={route.key}
-							onPress={() => navigation.navigate(route.name)}
+							onPress={handlePress}
 							style={[styles.tabButton]}
 						>
-							{/* Render icon if defined */}
 							{renderIcon && renderIcon({
 								focused: isFocused,
 								color: isFocused ? themes.text : themes.primaryBttn,
@@ -37,7 +60,7 @@ function MyCustomTabBar({ state, descriptors, navigation }: any) {
 								{label.charAt(0).toUpperCase() + label.slice(1)}
 							</Text>
 
-							<View style={{ width: spacing.two, height: spacing.half, backgroundColor: isFocused ? themes.primaryBttn : themes.backgroundElement, borderRadius: spacing.quarter}}/>
+							<View style={{ width: spacing.two, height: spacing.half, backgroundColor: isFocused ? themes.primaryBttn : themes.backgroundElement, borderRadius: spacing.quarter }} />
 						</Pressable>
 					);
 				})}
@@ -47,11 +70,20 @@ function MyCustomTabBar({ state, descriptors, navigation }: any) {
 }
 
 export default function TabLayout() {
+	const pathname = usePathname();
+
+	// Check if user is on a nested screen inside a tab (path length > 2 parts)
+	const isNestedScreen = pathname.split('/').filter(Boolean).length > 1;
+
 	return (
 		<Tabs
 			tabBarPosition="bottom"
 			// @ts-ignore
 			tabBar={(props) => <MyCustomTabBar {...props} />}
+			screenOptions={{
+				// Disable tab swipe only when pushed deeper into a stack
+				swipeEnabled: !isNestedScreen,
+			}}
 		>
 			<Tabs.Screen
 				name="home"

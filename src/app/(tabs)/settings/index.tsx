@@ -200,7 +200,7 @@ export default function Settings() {
 	return (
 		<SafeAreaView
 			style={{ flex: 1, backgroundColor: themes.background }}
-			edges={Platform.OS == "android" ? ["left", "right", "top"] : ["left", "right"]}
+			edges={["left", "right"]}
 		>
 			<ScrollView contentContainerStyle={[{ flexGrow: 1 }, Platform.OS == "ios" ? { marginTop: 31 } : { marginTop: 6 }]} showsVerticalScrollIndicator={true} bounces={true}>
 				<View style={[styles.container, { borderWidth: 0, borderColor: themes.text}]}>
