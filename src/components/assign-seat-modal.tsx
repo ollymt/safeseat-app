@@ -222,6 +222,29 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
         }
     };
 
+    const numToRole = (role: number) => {
+        switch (role) {
+            case 1:
+                return "Driver"
+                break
+            case 2:
+                return "Passenger"
+                break
+            case 3:
+                return "L Backseat"
+                break
+            case 4:
+                return "C Backseat"
+                break
+            case 5:
+                return "R Backseat"
+                break
+            default:
+                return "MISSINGNO"
+                break
+        }
+    }
+
     return (
         <Modal
             animationType="fade"
@@ -233,7 +256,7 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
             <View style={styles.backdrop}>
                 <View style={styles.container}>
                     <Text style={styles.header}>
-                        Assign {seat}
+                        Assign {numToRole(seat)}
                     </Text>
                     <View style={{ width: "100%" }}>
                         {isFetchingProfiles ? (
