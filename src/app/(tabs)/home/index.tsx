@@ -112,6 +112,12 @@ export default function Home() {
 	const emergencyProfile =
 		emergencySeatNo !== undefined ? assignments[emergencySeatNo] : undefined;
 
+	// Helper to transform the profile name to "Me" if they are the account owner
+	const getDisplayName = (profile?: Profile): string | undefined => {
+		if (!profile) return undefined;
+		return profile.isAccountOwner ? "Me" : profile.name;
+	};
+
 	return (
 		<View style={{
 			backgroundColor: themes.background,
@@ -143,7 +149,7 @@ export default function Home() {
 												key={seatNo}
 												seatNo={seatNo}
 												role={SEAT_ROLES[seatNo]}
-												name={profile?.name}
+												name={getDisplayName(profile)}
 												pfp={profile?.icon ?? profile?.photoURL}
 												// @ts-ignore
 												state={state}

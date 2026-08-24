@@ -1,14 +1,16 @@
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { useFocusEffect, useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
 	Alert,
+	ImageBackground,
+	Platform,
+	ScrollView,
 	StyleSheet,
 	Text,
-	useColorScheme,
-	View,
-	ScrollView,
-	Platform
+	View
 } from "react-native";
+import { Host, Icon } from "@expo/ui"
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import AssignCard from "@/components/assign-card";
@@ -18,7 +20,7 @@ import * as Haptics from "expo-haptics";
 import { useCallback, useState } from "react";
 
 import Button from "@/components/button";
-import EmergencytModal from "@/components/emergency-modal";
+import InfoCard from "@/components/info-card";
 
 type Profile = {
 	id: string;
@@ -44,6 +46,9 @@ const SEATS = [
 
 export default function Assign() {
 	const router = useRouter();
+	const insets = useSafeAreaInsets();
+
+	const bottomPad = 104 + (insets.bottom / 2); // extra breathing room
 
 	const [assignModalVisible, setAssignModalVisible] = useState(false);
 	const [selectedSeat, setSelectedSeat] = useState(1);
@@ -132,14 +137,14 @@ export default function Assign() {
 	// 🔓 Unlock Handler
 	const handleUnlock = () => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-		Alert.alert("Seats are locked in.", "Are you sure you want to unlock?", [
+		Alert.alert("Unlock?", "Are you sure you want to unlock current seat assignment?", [
 			{
-				text: "No",
+				text: "Cancel",
 				style: "cancel"
 			},
 			{
-				text: "Yes",
-				style: "destructive",
+				text: "Unlock",
+				style: "default",
 				onPress: async () => {
 					try {
 						await AsyncStorage.setItem(IS_LOCKED_IN_KEY, JSON.stringify(false));
@@ -239,82 +244,101 @@ export default function Assign() {
 
 	const emergencyProfile = emergencySeat ? assignments[emergencySeat.seatNo] : undefined;
 
+	// Helper to transform the profile name to "Me" if they are the account owner
+	const getDisplayProfile = (profile?: Profile): Profile | undefined => {
+		if (!profile) return undefined;
+		return {
+			...profile,
+			name: profile.isAccountOwner ? "Me" : profile.name,
+		};
+	};
+
 	return (
 		<SafeAreaView
 			style={{
 				flex: 1,
 				backgroundColor: themes.background,
 			}}
-			edges={['left', 'right']}
+			edges={['left', 'right', "top"]}
 		>
-			<ScrollView contentContainerStyle={[{ flexGrow: 1 }, Platform.OS == "ios" ? { marginTop: spacing.five } : { marginTop: spacing.one }]} showsVerticalScrollIndicator={true} bounces={true}>
+			<ScrollView contentContainerStyle={[{ flexGrow: 1 }, { marginTop: spacing.one, paddingBottom: bottomPad }]} showsVerticalScrollIndicator={true} bounces={true}>
 				<View style={[styles.container]}>
 					<Text style={[styles.pageHeader, { color: themes.text }]}>
 						Assign
 					</Text>
 
-					<View
-						style={{
-							gap: 10,
-							marginTop: 10,
-							width: "100%",
-							borderWidth: 0,
-							borderColor: themes.secondaryBttn,
-							borderRadius: 10,
-						}}
+					<ImageBackground
+						source={require("../../../../assets/images/appImgs/car-cropped.png")}
+						style={{ height: 416, marginTop: spacing.two }}
 					>
-						{/* Front Row */}
-						<View style={{ gap: 10, flexDirection: "row", height: 230 }}>
-							<AssignCard
-								seatNo={1}
-								assignedProfile={assignments[1]}
-								onPress={() => handleCardPress(1)}
-								state={getCardState(1)}
-								seatCode="driver"
-							/>
-							<AssignCard
-								seatNo={2}
-								assignedProfile={assignments[2]}
-								onPress={() => handleCardPress(2)}
-								state={getCardState(2)}
-								seatCode="passenger"
-							/>
-						</View>
+						<View
+							style={{
+								gap: spacing.one,
+								width: "100%",
+								borderWidth: spacing.none,
+								borderColor: themes.secondaryBttn,
+								borderRadius: spacing.one,
+							}}
+						>
 
-						{/* Back Row */}
-						<View style={{ gap: 10, flexDirection: "row", height: 230 }}>
-							<AssignCard
-								seatNo={3}
-								assignedProfile={assignments[3]}
-								onPress={() => handleCardPress(3)}
-								state={getCardState(3)}
-								seatCode="l backseat"
-							/>
-							<AssignCard
-								seatNo={4}
-								assignedProfile={assignments[4]}
-								onPress={() => handleCardPress(4)}
-								state={getCardState(4)}
-								seatCode="c backseat"
-							/>
-							<AssignCard
-								seatNo={5}
-								assignedProfile={assignments[5]}
-								onPress={() => handleCardPress(5)}
-								state={getCardState(5)}
-								seatCode="r backseat"
-							/>
+							{/* Front Row */}
+							<View style={{ gap: spacing.three, flexDirection: "row", height: 128, marginTop: spacing.ten, paddingHorizontal: spacing.eight }}>
+								<AssignCard
+									seatNo={1}
+									assignedProfile={getDisplayProfile(assignments[1])}
+									onPress={() => handleCardPress(1)}
+									state={getCardState(1)}
+									seatCode="driver"
+									locked={isLockedIn}
+								/>
+								<AssignCard
+									seatNo={2}
+									assignedProfile={getDisplayProfile(assignments[2])}
+									onPress={() => handleCardPress(2)}
+									state={getCardState(2)}
+									seatCode="passenger"
+									locked={isLockedIn}
+								/>
+							</View>
+
+							{/* Back Row */}
+							<View style={{ gap: spacing.one, flexDirection: "row", height: 128, paddingHorizontal: spacing.four, marginTop: spacing.two }}>
+								<AssignCard
+									seatNo={3}
+									assignedProfile={getDisplayProfile(assignments[3])}
+									onPress={() => handleCardPress(3)}
+									state={getCardState(3)}
+									seatCode="l backseat"
+									locked={isLockedIn}
+								/>
+								<AssignCard
+									seatNo={4}
+									assignedProfile={getDisplayProfile(assignments[4])}
+									onPress={() => handleCardPress(4)}
+									state={getCardState(4)}
+									seatCode="c backseat"
+									locked={isLockedIn}
+								/>
+								<AssignCard
+									seatNo={5}
+									assignedProfile={getDisplayProfile(assignments[5])}
+									onPress={() => handleCardPress(5)}
+									state={getCardState(5)}
+									seatCode="r backseat"
+									locked={isLockedIn}
+								/>
+							</View>
 						</View>
-					</View>
+					</ImageBackground>
 
 					{/* Lock In / Unlock Action Controls */}
-					<View style={{ paddingVertical: 20 }}>
+					<View style={{ paddingVertical: spacing.none, marginTop: -spacing.one }}>
 						{isLockedIn ? (
 							<Button
 								label="Unlock"
 								onPress={handleUnlock}
 								fullWidth={true}
-								variant="warn"
+								variant="secondary"
 								glass={false}
 							/>
 						) : (
@@ -327,6 +351,23 @@ export default function Assign() {
 								glass={false}
 							/>
 						)}
+					</View>
+
+					<View style={{ gap: spacing.one, marginTop: spacing.none }}>
+						<Text style={styles.sectionHeader}>Weight Balance</Text>
+						<InfoCard
+							smolTopText="Front of the vehicle is"
+							smolBottomText="than the rear*"
+							bigText="147.7 lbs"
+							icon={
+								<Host>
+									<Icon name={Icon.select({
+										ios: "scalemass.fill",
+										android: import("@expo/material-symbols/weight.xml")
+									})} size={spacing.five} />
+								</Host>
+							} />
+						<Text style={styles.caption}>* Weight balance calculation is based on entered weight per profile.</Text>
 					</View>
 
 					<AssignSeatModal
@@ -365,12 +406,26 @@ const styles = StyleSheet.create({
 	container: {
 		flex: 1,
 		width: "100%",
-		padding: 20,
-		borderWidth: 0,
-		borderColor: "#fff"
+		paddingLeft: spacing.two,
+		paddingRight: spacing.two,
+		borderWidth: spacing.none,
+		borderColor: "#fff",
+		gap: spacing.three,
 	},
 	pageHeader: {
-		fontSize: 40,
+		fontSize: fontsize.pageHeader,
 		fontFamily: "Logo-Font",
+		color: themes.text,
+		margin: spacing.none,
+	},
+	sectionHeader: {
+		fontSize: fontsize.header,
+		fontFamily: "Heading-Font",
+		color: themes.text
+	},
+	caption: {
+		fontSize: fontsize.caption,
+		color: themes.textSecondary,
+		fontFamily: "Body-Regular"
 	}
 });

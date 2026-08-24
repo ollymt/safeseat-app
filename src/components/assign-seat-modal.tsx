@@ -1,21 +1,22 @@
 // components/AssignSeatModal.tsx
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
-import { BottomSheet, Button, Column, Host, Icon, List, Row, Spacer, Text } from "@expo/ui";
-import { buttonBorderShape, buttonStyle, controlSize } from "@expo/ui/swift-ui/modifiers";
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
-import { useColorScheme, Alert } from "react-native";
+import { Alert, Modal, StyleSheet, View, Text, ScrollView, FlatList, ActivityIndicator } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
+
+import Button from "./button";
 
 // 🛠️ Firebase Imports
 import { auth, db } from "../firebase";
 import { collection, doc, getDoc, getDocs } from "firebase/firestore";
+import ProfileList from "./profile-list";
 
 export type Profile = {
     id: string;
     name: string;
-    icon?: string; // 👈 Updated to use 'icon'
+    icon?: string;
     isAccountOwner?: boolean;
 };
 
@@ -31,7 +32,7 @@ const SEAT_ASSIGNMENTS_KEY = "seatAssignments";
 export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: Props) {
     const [isLoading, setIsLoading] = useState(false);
     const [isFetchingProfiles, setIsFetchingProfiles] = useState(false);
-    
+
     const [role, setRole] = useState("");
     const [profiles, setProfiles] = useState<Profile[]>([]);
     const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
@@ -222,129 +223,90 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
     };
 
     return (
-        <Host matchContents>
-            <BottomSheet
-                isPresented={visible}
-                onDismiss={onClose}
-                showDragIndicator={false}
-                snapPoints={["half"]}
-            >
-                <Column spacing={16} alignment="center">
-                    {/* Header Controls */}
-                    <Row>
-                        <Button
-                            variant="outlined"
-                            onPress={onClose}
-                            disabled={isLoading}
-                            modifiers={[
-                                buttonStyle("glass"),
-                                controlSize("large"),
-                                buttonBorderShape("circle"),
-                            ]}
-                        >
-                            <Icon
-                                name={Icon.select({
-                                    ios: "xmark",
-                                    android: import("@expo/material-symbols/close.xml"),
-                                })}
-                            />
-                        </Button>
-
-                        <Spacer flexible />
-
-                        <Button
-                            onPress={handleSave}
-                            variant="filled"
-                            modifiers={[
-                                buttonStyle("borderedProminent"),
-                                controlSize("large"),
-                                buttonBorderShape("circle"),
-                            ]}
-                            disabled={isLoading || !selectedProfileId}
-                        >
-                            <Icon
-                                name={Icon.select({
-                                    ios: "checkmark",
-                                    android: import("@expo/material-symbols/check.xml"),
-                                })}
-                            />
-                        </Button>
-                    </Row>
-
-                    <Spacer />
-
-                    {/* Content Section */}
-                    <Column spacing={12} alignment="center">
-                        {/* @ts-ignore */}
-                        <Text textStyle={{ fontSize: 32, color: themes.text, fontWeight: "bold", textAlign: "center" }}>
-                            Assign {role}
-                        </Text>
-
+        <Modal
+            animationType="fade"
+            transparent={true}
+            visible={visible}
+            onRequestClose={onClose}
+        >
+            {/* Full-screen backdrop wrapper that centers children */}
+            <View style={styles.backdrop}>
+                <View style={styles.container}>
+                    <Text style={styles.header}>
+                        Assign {seat}
+                    </Text>
+                    <View style={{ width: "100%" }}>
                         {isFetchingProfiles ? (
-                            /* @ts-ignore */
-                            <Text textStyle={{ fontSize: 16, color: themes.textSecondary, textAlign: "center" }}>
-                                Loading Profiles...
-                            </Text>
-                        ) : profiles.length === 0 ? (
-                            /* @ts-ignore */
-                            <Text textStyle={{ fontSize: 16, color: themes.textSecondary, textAlign: "center" }}>
-                                All available profiles have been assigned.
-                            </Text>
+                            <ActivityIndicator size="large" color={themes.text} style={{ padding: spacing.two }} />
                         ) : (
-                            <List>
-                                {profiles.map((profile) => {
-                                    const isSelected = profile.id === selectedProfileId;
-                                    return (
-                                        <Button
-                                            key={profile.id}
-                                            onPress={() => handleSelectProfile(profile.id)}
-                                            // @ts-ignore
-                                            variant={"text"}
-                                        >
-                                            <Row spacing={12} alignment="center">
-                                                {/* @ts-ignore */}
-                                                <Text textStyle={{ fontSize: 18, color: themes.text }}>
-                                                    {profile.name}
-                                                </Text>
-
-                                                <Spacer flexible />
-
-                                                {isSelected && (
-                                                    <Icon
-                                                        name={Icon.select({
-                                                            ios: "checkmark",
-                                                            android: import("@expo/material-symbols/check.xml"),
-                                                        })}
-                                                    />
-                                                )}
-                                            </Row>
-                                        </Button>
-                                    );
-                                })}
-                            </List>
+                            <View style={{ maxHeight: 320, width: "100%" }}>
+                                <FlatList
+                                    data={profiles}
+                                    keyExtractor={(item) => item.id}
+                                    renderItem={({ item, index }) => (
+                                        <ProfileList
+                                            name={item.name}
+                                            pfp={item.icon}
+                                            checked={item.id === selectedProfileId}
+                                            onPress={() => handleSelectProfile(item.id)}
+                                            isLast={!(index === profiles.length - 1)}
+                                        />
+                                    )}
+                                    style={{ width: "100%" }}
+                                    ListEmptyComponent={
+                                        <Text style={{ color: themes.text }}>No available profiles found.</Text>
+                                    }
+                                />
+                            </View>
                         )}
+                    </View>
 
-                        {/* Unassign Button (Shown only when seat is currently assigned) */}
-                        {isCurrentlyAssigned && !isFetchingProfiles && (
-                            <Button
-                                variant="outlined"
-                                onPress={handleUnassign}
-                                disabled={isLoading}
-                                modifiers={[
-                                    buttonStyle("bordered"),
-                                    controlSize("regular"),
-                                ]}
-                            >
-                                {/* @ts-ignore */}
-                                <Text textStyle={{ color: "#FF3B30", fontWeight: "600" }}>
-                                    Unassign Seat
-                                </Text>
-                            </Button>
-                        )}
-                    </Column>
-                    <Spacer flexible />
-                </Column>
-            </BottomSheet>
-        </Host>
+                    <View style={styles.actionRow}>
+                        {isCurrentlyAssigned &&
+                            <Button variant="warn" label="Remove" onPress={handleUnassign} enabled={!isFetchingProfiles} />
+                        }
+                        <Button variant="secondary" label="Cancel" onPress={onClose} enabled={!isFetchingProfiles} />
+                        <View style={{ flex: 1 }}>
+                            <Button variant="primary" label="Assign" onPress={handleSave} enabled={!isFetchingProfiles && selectedProfileId} />
+                        </View>
+                    </View>
+
+                </View>
+            </View>
+        </Modal>
     );
 }
+
+const styles = StyleSheet.create({
+    // Full-screen overlay to dim screen and center content
+    backdrop: {
+        flex: 1,
+        backgroundColor: "rgba(0, 0, 0, 0.75)",
+        justifyContent: "center",
+        alignItems: "center",
+        paddingHorizontal: spacing.two, // Prevents modal from touching screen edges
+    },
+    // Centered card content container
+    container: {
+        width: "100%", // Or a fixed width/max-width like 320
+        maxWidth: 400,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: themes.backgroundElement,
+        borderWidth: spacing.quarter,
+        borderColor: themes.secondaryBttn,
+        padding: spacing.one,
+        borderRadius: spacing.edge,
+        gap: spacing.one
+    },
+    header: {
+        color: themes.text,
+        fontSize: fontsize.header,
+        fontFamily: "Heading-Font"
+    },
+    actionRow: {
+        flexDirection: "row",
+        gap: spacing.half,
+        maxWidth: "100%",
+    }
+});

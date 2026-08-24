@@ -45,6 +45,7 @@ export default function Button({
 		(variant === "primary" || variant === "warn") && button.primaryText,
 		variant === "secondary" && button.secondaryText,
 		variant === "tertiary" && button.tertiaryText,
+		variant === "warn" && button.warnText,
 		!enabled && button.disabledText,
 	];
 
@@ -59,11 +60,7 @@ export default function Button({
 		</Pressable>
 	);
 
-	return glass ? (
-		<GlassView style={containerStyle}>{content}</GlassView>
-	) : (
-		<View style={containerStyle}>{content}</View>
-	);
+	return <View style={containerStyle}>{content}</View>
 }
 
 const button = StyleSheet.create({
@@ -113,6 +110,9 @@ const button = StyleSheet.create({
 	tertiaryText: {
 		color: themes.primaryBttn,
 		textDecorationLine: "underline",
+	},
+	warnText: {
+		color: themes.warnBttnText
 	},
 	disabledText: {
 		opacity: 0.5,

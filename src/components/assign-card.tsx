@@ -3,188 +3,228 @@ import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/co
 import { Host, Icon } from "@expo/ui";
 import { opacity } from "@expo/ui/swift-ui/modifiers";
 import {
-  Pressable,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-  Image,
+	Pressable,
+	StyleSheet,
+	Text,
+	useColorScheme,
+	View,
+	Image,
 } from "react-native";
 
 type Profile = {
-  id: string;
-  name: string;
-  icon?: string;
-  isAccountOwner?: boolean;
+	id: string;
+	name: string;
+	icon?: string;
+	isAccountOwner?: boolean;
 };
 
 type AssignCardProps = {
-  seatNo: number;
-  seatCode: string;
-  assignedProfile?: Profile | null;
-  name?: string;
-  pfp?: string;
-  locked?: boolean
-  state: string
-  onPress: () => void;
+	seatNo: number;
+	seatCode: string;
+	assignedProfile?: Profile | null;
+	name?: string;
+	pfp?: string;
+	locked?: boolean
+	state: string
+	onPress: () => void;
 };
 
 
 export default function AssignCard({
-  seatNo,
-  seatCode,
-  assignedProfile,
-  name,
-  pfp,
-  state = "empty",
-  locked = true,
-  onPress,
+	seatNo,
+	seatCode,
+	assignedProfile,
+	name,
+	pfp,
+	state = "empty",
+	locked = true,
+	onPress,
 }: AssignCardProps) {
-  const displayName = assignedProfile?.name ?? name;
-  const displayIcon = assignedProfile?.icon ?? pfp;
+	const displayName = assignedProfile?.name ?? name;
+	const displayIcon = assignedProfile?.icon ?? pfp;
 
-  // Green outline when a seat is assigned; subtle gray dashed outline when unassigned
-  const borderColor = displayName ? themes.primaryBttn : themes.textSecondary;
+	return (
+		<Pressable
+			onPress={onPress}
+			style={[
+				assigncard.baseCard,
+				{
+					backgroundColor: themes.backgroundElement,
+					borderColor: state == "safe"
+						? themes.green
+						: state == "warning"
+							? themes.lightOrange
+							: state == "emergency"
+								? themes.warnBttn
+								: themes.text,
+					opacity: 0.8,
+					borderStyle: displayName ? "solid" : "dashed",
+				},
+			]}
+		>
+			{displayName ? (
+				<View style={[assigncard.profileContainer]}>
+					{displayIcon ? (
+						<Image
+							source={{ uri: displayIcon }}
+							style={[
+								assigncard.avatar,
+								{
+									borderColor: state == "safe"
+										? themes.green
+										: state == "warning"
+											? themes.lightOrange
+											: state == "emergency"
+												? themes.warnBttn
+												: themes.text,
 
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[
-        assigncard.baseCard,
-        {
-          backgroundColor: themes.backgroundElement,
-          borderColor: state == "safe"
-            ? themes.primaryBttn
-            : state == "warning"
-              ? themes.lightOrange
-              : state == "emergency"
-                ? themes.warnBttn
-                : themes.text,
-          opacity: state == "empty" ? 0.5 : 1,
-          borderStyle: displayName ? "solid" : "dashed",
-        },
-      ]}
-    >
-      {displayName ? (
-        <View style={assigncard.profileContainer}>
-          {displayIcon ? (
-            <Image
-              source={{ uri: displayIcon }}
-              style={[
-                assigncard.avatar,
-                {
-                  borderColor: state == "safe"
-                    ? themes.primaryBttn
-                    : state == "warning"
-                      ? themes.lightOrange
-                      : state == "emergency"
-                        ? themes.warnBttn
-                        : themes.text,
+									borderWidth: spacing.quarter,
+									aspectRatio: 1,
+								},
+							]}
+						/>
+					) : (
+						<View
+							style={[
+								assigncard.avatarFallback,
+								{
+									backgroundColor: themes.backgroundElement,
+									borderColor: state == "safe"
+										? themes.green
+										: state == "warning"
+											? themes.lightOrange
+											: state == "emergency"
+												? themes.warnBttn
+												: themes.text,
 
-                  borderWidth: 2
-                },
-              ]}
-            />
-          ) : (
-            <View
-              style={[
-                assigncard.avatarFallback,
-                { backgroundColor: themes.primaryBttn },
-              ]}
-            >
-              <Text style={[assigncard.monogram, { color: themes.primaryBttnText }]}>
-                {displayName.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
-          <Text
-            numberOfLines={1}
-            style={[assigncard.profileName, { color: themes.text }]}
-          >
-            {displayName}
-          </Text>
-          <Text style={[assigncard.seatCode, { color: themes.textSecondary }]}>
-            {seatCode.toUpperCase()}
-          </Text>
-        </View>
-      ) : (
-        <View style={assigncard.iconContainer}>
-          <Host matchContents>
-            <Icon
-              name={Icon.select({
-                ios: "plus",
-                android: import("@expo/material-symbols/add.xml"),
-              })}
-              color={themes.textSecondary}
-            />
-          </Host>
-          <Text style={[assigncard.seatCode, { color: themes.textSecondary }]}>
-            {seatCode.toUpperCase()}
-          </Text>
-        </View>
-      )}
-      <Text style={{
-        color: state == "safe"
-          ? themes.primaryBttn
-          : state == "warning"
-            ? themes.lightOrange
-            : state == "emergency"
-              ? themes.warnBttn
-              : themes.text,
+									borderWidth: spacing.quarter,
+									aspectRatio: 1,
+								},
+							]}
+						>
+							<Text style={[assigncard.monogram, { color: themes.text }]}>
+								{displayName.charAt(0).toUpperCase()}
+							</Text>
+						</View>
+					)}
 
-        fontFamily: "Body-Bold",
-        fontSize: 16,
-        marginTop: 4
-      }}>{state.toUpperCase()}</Text>
-    </Pressable>
-  );
+					<View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.half }}>
+						{state === "safe" ? (
+							<Host matchContents style={{ width: spacing.two, height: spacing.two, justifyContent: 'center', alignItems: 'center' }}>
+								<Icon
+									name={Icon.select({
+										ios: "checkmark.circle.fill",
+										android: import("@expo/material-symbols/check.xml"),
+									})}
+									color={themes.green}
+									size={spacing.two}
+								/>
+							</Host>
+						) : state === "warning" ? (
+								<Host matchContents style={{ width: spacing.two, height: spacing.two, justifyContent: 'center', alignItems: 'center' }}>
+								<Icon
+									name={Icon.select({
+										ios: "exclamationmark.triangle.fill",
+										android: import("@expo/material-symbols/warning.xml"),
+									})}
+									color={themes.lightOrange}
+									size={spacing.two}
+								/>
+							</Host>
+						) : state === "emergency" ? (
+									<Host matchContents style={{ width: spacing.two, height: spacing.two, justifyContent: 'center', alignItems: 'center' }}>
+								<Icon
+									name={Icon.select({
+										ios: "light.beacon.max.fill",
+										android: import("@expo/material-symbols/siren.xml"),
+									})}
+									color={themes.warnBttn}
+									size={spacing.two}
+								/>
+							</Host>
+						) : null}
+						<Text
+							numberOfLines={1}
+							style={[assigncard.profileName, {
+								color: state == "safe"
+									? themes.green
+									: state == "warning"
+										? themes.lightOrange
+										: state == "emergency"
+											? themes.warnBttn
+											: themes.text, }]}
+						>
+							{displayName}
+						</Text>
+					</View>
+				</View>
+			) : (
+				<View style={assigncard.iconContainer}>
+					{!locked &&
+						<Host matchContents>
+							<Icon
+								name={Icon.select({
+									ios: "plus",
+									android: import("@expo/material-symbols/add.xml"),
+								})}
+								color={themes.text}
+							/>
+						</Host>
+					}
+					<Text style={[assigncard.seatCode, { color: themes.text }]}>
+						{locked ? "EMPTY" : "ASSIGN"}
+					</Text>
+				</View>
+			)}
+		</Pressable>
+	);
 }
 
 const assigncard = StyleSheet.create({
-  baseCard: {
-    flex: 1,
-    borderRadius: 12,
-    borderWidth: 2,
-    justifyContent: "center",
-    alignItems: "center",
-    overflow: "hidden",
-    padding: 8,
-  },
-  profileContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    width: "100%",
-  },
-  avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    resizeMode: "cover",
-  },
-  avatarFallback: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  monogram: {
-    fontSize: 22,
-    fontWeight: "600",
-  },
-  profileName: {
-    fontSize: 14,
-    fontWeight: "600",
-    textAlign: "center",
-    paddingHorizontal: 4,
-  },
-  iconContainer: {
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 8,
-  },
-  seatCode: {
-    fontSize: 12,
-  },
+	baseCard: {
+		flex: 1,
+		borderRadius: spacing.edge,
+		borderWidth: spacing.quarter,
+		justifyContent: "center",
+		alignItems: "center",
+		overflow: "hidden",
+		padding: spacing.one,
+	},
+	profileContainer: {
+		alignItems: "center",
+		justifyContent: "center",
+		gap: spacing.one,
+		width: "100%",
+	},
+	avatar: {
+		width: spacing.eight,
+		height: spacing.eight,
+		borderRadius: spacing.four,
+		resizeMode: "cover",
+	},
+	avatarFallback: {
+		width: spacing.eight,
+		height: spacing.eight,
+		borderRadius: spacing.four,
+		justifyContent: "center",
+		alignItems: "center",
+	},
+	monogram: {
+		fontSize: fontsize.header,
+		fontWeight: "600",
+	},
+	profileName: {
+		fontSize: fontsize.body,
+		fontWeight: "600",
+		textAlign: "center",
+		paddingHorizontal: spacing.half,
+	},
+	iconContainer: {
+		justifyContent: "center",
+		alignItems: "center",
+		gap: spacing.one,
+	},
+	seatCode: {
+		fontSize: fontsize.caption,
+	},
 });

@@ -36,10 +36,11 @@ export default function InfoCard({
             </View>
             <View
                 style={{
-                    paddingVertical: spacing.two,
+                    paddingVertical: spacing.one,
                     flex: 1,
                     borderWidth: spacing.none,
                     borderColor: "#fff",
+                    gap: spacing.half
                 }}
             >
                 {smolTopText &&
@@ -100,18 +101,20 @@ const seatcard = StyleSheet.create({
         backgroundColor: themes.secondaryBttn,
     },
     name: {
-        fontSize: fontsize.header,
+        fontSize: fontsize.pageHeader,
         fontFamily: "Body-Bold",
         color: themes.text,
+        margin: spacing.none
     },
     stateName: {
         fontSize: fontsize.body,
         fontFamily: "Body-Bold",
     },
     role: {
-        fontSize: fontsize.caption,
+        fontSize: fontsize.body,
         fontFamily: "Body-Bold",
-        color: themes.textSecondary
+        color: themes.textSecondary,
+        margin: spacing.none
     },
     emptySeat: {
         opacity: 0.5,

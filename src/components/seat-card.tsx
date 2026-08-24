@@ -40,7 +40,7 @@ export default function SeatCard({
 								? themes.lightOrange
 								: state == "emergency"
 									? themes.warnBttn
-									: themes.text,
+									: themes.secondaryBttn,
 				},
 			]}
 		>
@@ -55,7 +55,7 @@ export default function SeatCard({
 									? themes.lightOrange
 									: state == "emergency"
 										? themes.warnBttn
-										: themes.text,
+										: themes.secondaryBttn,
 					},
 				]}
 			/>
@@ -75,8 +75,8 @@ export default function SeatCard({
 					</Text>
 				}
 
-				<Text style={[seatcard.name, { color: themes.text, textTransform: "capitalize" }]}>
-					{name}
+				<Text style={[seatcard.name, { color: themes.text }]}>
+					{name == "empty" ? "Empty" : name}
 				</Text>
 			</View>
 			{state == "safe" ? (
@@ -154,20 +154,8 @@ export default function SeatCard({
 					</Text>
 				</View>
 			) : (
-				<View
-					style={[{
-						flexDirection: "row",
-						gap: spacing.half,
-						alignItems: "center",
-						justifyContent: "center",
-						borderWidth: spacing.none,
-						paddingRight: spacing.two,
-					}]}
-				>
-					<Text style={[seatcard.stateName, { color: themes.text }]}>
-						{state.toUpperCase()}
-					</Text>
-				</View>
+				<>
+				</>
 			)}
 		</Pressable>
 	);
@@ -177,7 +165,7 @@ const seatcard = StyleSheet.create({
 	baseCard: {
 		width: "100%",
 		borderWidth: spacing.none,
-		borderColor: "#fff",
+		borderColor: themes.text,
 		flexDirection: "row",
 		gap: spacing.one,
 		borderRadius: spacing.edge,
@@ -209,6 +197,6 @@ const seatcard = StyleSheet.create({
 		fontFamily: "Body-Bold"
 	},
 	emptySeat: {
-		opacity: 0.5,
+		opacity: 1,
 	},
 });
