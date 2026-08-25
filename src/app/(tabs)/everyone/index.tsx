@@ -494,6 +494,7 @@ export default function Everyone() {
 							visible={addProfileVisible}
 							onClose={() => {
 								setAddProfileVisible(false);
+								loadAllUserData();
 							}}
 						/>
 					</KeyboardAvoidingView>

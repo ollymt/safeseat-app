@@ -67,8 +67,6 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
 
     const [name, setName] = useState("");
     const [icon, setIcon] = useState("");
-    const [email, setEmail] = useState("");
-    const [phone, setPhone] = useState("");
 
     // Controlled string states for easy input typing
     const [birthYear, setBirthYear] = useState("");
@@ -120,16 +118,13 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                             const settingsData = settingsDocSnap.data();
                             const cloudMetricVal = settingsData.useMetric !== undefined ? settingsData.useMetric : settingsData.isMetric;
 
-                            if (cloudMetricVal !== undefined) {
-                                const normalizedMetric = cloudMetricVal === true || cloudMetricVal === "true";
-                                setIsMetric(normalizedMetric);
+                            // Don't flip units if the user has already started entering values
+                            const userHasEnteredMeasurements =
+                                heightCm !== "" || heightFt !== "" || heightIn !== "" ||
+                                weightKg !== "" || weightLb !== "";
 
-                                const combinedPrivacy = {
-                                    useMetric: normalizedMetric,
-                                    consent: settingsData.consent ?? true,
-                                    emergencyEscalation: settingsData.emergencyEscalation ?? true,
-                                };
-                                await SecureStore.setItemAsync("user_privacy_prefs", JSON.stringify(combinedPrivacy));
+                            if (cloudMetricVal !== undefined && !userHasEnteredMeasurements) {
+                                setIsMetric(cloudMetricVal === true || cloudMetricVal === "true");
                             }
                         }
                     }
@@ -147,8 +142,6 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
     const hasUnsavedChanges =
         name !== "" ||
         icon !== "" ||
-        email !== "" ||
-        phone !== "" ||
         birthMonth !== "" ||
         birthDate !== "" ||
         birthYear !== "" ||
@@ -198,8 +191,6 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
 
     const isFormInvalid =
         name.trim() === "" ||
-        email.trim() === "" ||
-        phone.trim() === "" ||
         !isValidDateInput ||
         isUnder18 ||
         bloodType.trim() === "" ||
@@ -209,8 +200,6 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
     const handleResetAndClose = () => {
         setName("");
         setIcon("");
-        setEmail("");
-        setPhone("");
         setBirthYear("");
         setBirthMonth("");
         setBirthDate("");
@@ -254,8 +243,6 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
             await addDoc(subcollectionRef, {
                 name: name.trim(),
                 icon: icon.trim() || null,
-                email: email.trim(),
-                phone: phone.trim(),
 
                 // Integers
                 birthYear: parsedYear,
@@ -274,6 +261,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
             });
 
             handleResetAndClose();
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
             if (onSuccess) onSuccess();
         } catch (error) {
             console.error("Error saving profile to Firestore: ", error);
@@ -308,7 +296,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                                     type="text"
                                     variant="regular"
                                     placeholder="Name"
-                                    enabled={true}
+                                    enabled={!isLoading}
                                     value={name}
                                     onChangeText={setName}
                                 />
@@ -318,7 +306,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                                         type="number"
                                         variant="regular"
                                         placeholder="MM"
-                                        enabled={true}
+                                        enabled={!isLoading}
                                         value={birthMonth}
                                         onChangeText={setBirthMonth}
                                     />
@@ -326,7 +314,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                                         type="number"
                                         variant="regular"
                                         placeholder="DD"
-                                        enabled={true}
+                                        enabled={!isLoading}
                                         value={birthDate}
                                         onChangeText={setBirthDate}
                                     />
@@ -334,7 +322,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                                         type="number"
                                         variant="regular"
                                         placeholder="YYYY"
-                                        enabled={true}
+                                        enabled={!isLoading}
                                         value={birthYear}
                                         onChangeText={setBirthYear}
                                     />
@@ -346,7 +334,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                                                 type="number"
                                                 variant="regular"
                                                 placeholder="Height (cm)"
-                                                enabled={true}
+                                                enabled={!isLoading}
                                                 value={heightCm}
                                                 onChangeText={setHeightCm}
                                             />
@@ -356,7 +344,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                                                 type="number"
                                                 variant="regular"
                                                 placeholder="Weight (kg)"
-                                                enabled={true}
+                                                enabled={!isLoading}
                                                 value={weightKg}
                                                 onChangeText={setWeightKg}
                                             />
@@ -370,7 +358,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                                                     type="number"
                                                     variant="regular"
                                                     placeholder="Height (ft)"
-                                                    enabled={true}
+                                                    enabled={!isLoading}
                                                     value={heightFt}
                                                     onChangeText={setHeightFt}
                                                 />
@@ -380,7 +368,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                                                     type="number"
                                                     variant="regular"
                                                     placeholder="Height (in)"
-                                                    enabled={true}
+                                                        enabled={!isLoading}
                                                     value={heightIn}
                                                     onChangeText={setHeightIn}
                                                 />
@@ -390,7 +378,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                                             type="number"
                                             variant="regular"
                                             placeholder="Weight (lb)"
-                                            enabled={true}
+                                                enabled={!isLoading}
                                             value={weightLb}
                                             onChangeText={setWeightLb}
                                         />
@@ -406,6 +394,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                                     placeholder="Blood Type"
                                     placeholderStyle={{ color: themes.textInputPlaceholder }}
                                     value={bloodType}
+                                    disable={isLoading}
                                     style={[
                                         styles.input
                                     ]}
@@ -432,15 +421,15 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                                     }}
                                     activeColor={themes.primaryBttn}
                                     maxHeight={spacing.ten * 3}
-                                    onChange={(value) => { setBloodType(value) }}
+                                    onChange={(item) => { setBloodType(item.value) }}
                                     autoScroll={false}
                                 />
 
                                 <TextInput
                                     type="text"
                                     variant="regular"
-                                    placeholder="Allergies"
-                                    enabled={true}
+                                    placeholder="Allergies (optional)"
+                                    enabled={!isLoading}
                                     value={allergies}
                                     onChangeText={setAllergies}
                                 />
@@ -450,6 +439,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                                 <Button 
                                     variant={hasUnsavedChanges ? "warn" : "secondary"}
                                     label={hasUnsavedChanges ? "Discard" : "Cancel"}
+                                    enabled={!isLoading}
                                     onPress={() => {
                                         if (hasUnsavedChanges) {
                                             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
@@ -464,11 +454,20 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                                                     style: "destructive"
                                                 }
                                             ])
+                                        } else {
+                                            handleResetAndClose()
                                         }
                                 }} 
                                     style={{ borderRadius: 6 }} />
                                 <View style={{ flex: 1 }}>
-                                    <Button variant="primary" label="Create" onPress={handleSave} style={{ borderRadius: 6 }} enabled={!isFormInvalid}/>
+                                    <Button
+                                        variant="primary" 
+                                        label="Create" 
+                                        onPress={handleSave} 
+                                        style={{ borderRadius: 6 }} 
+                                        enabled={!isFormInvalid || !isLoading}
+                                        loading={isLoading}
+                                    />
                                 </View>
                             </View>
 

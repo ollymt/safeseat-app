@@ -400,6 +400,15 @@ const styles = StyleSheet.create({
 		color: themes.text,
 		margin: spacing.none
 	},
-	infoLabel: { fontFamily: "Condensed-Bold", fontSize: 14, margin: 0, marginBottom: 8 },
-	caption: { fontFeatureSettings: "Body-Medium", opacity: 0.8, fontSize: 13 },
+	infoLabel: { 
+		fontFamily: "Condensed-Bold", 
+		fontSize: fontsize.caption, 
+		margin: spacing.none, 
+		marginBottom: spacing.one 
+	},
+	caption: { 
+		fontFeatureSettings: "Body-Medium", 
+		opacity: 0.8, 
+		fontSize: fontsize.caption 
+	},
 });

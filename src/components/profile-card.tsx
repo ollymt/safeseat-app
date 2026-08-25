@@ -1,17 +1,18 @@
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
-import { Host, Icon } from "@expo/ui";
+import { useEffect, useState } from "react";
 import {
     Pressable,
     StyleSheet,
     Text,
-    useColorScheme,
     View,
     Image,
 } from "react-native";
+import * as SecureStore from "expo-secure-store";
 
 type ProfileCardProps = {
     name?: string;
     img?: string;
+    profileId?: string; // Optional: Pass profileId if rendering sub-profiles
     isLast?: boolean;
     enabled?: boolean;
     onPress?: () => void;
@@ -20,10 +21,47 @@ type ProfileCardProps = {
 export default function ProfileCard({
     name = "empty",
     img,
+    profileId,
     isLast = false,
     enabled = true,
     onPress,
 }: ProfileCardProps) {
+    const [avatarUri, setAvatarUri] = useState<string>("");
+
+    useEffect(() => {
+        // 1. If an img prop was explicitly passed down, use it directly
+        if (img && img !== "Not Set" && img !== "") {
+            setAvatarUri(img);
+            return;
+        }
+
+        // 2. Fallback to SecureStore cache
+        const loadCachedAvatar = async () => {
+            try {
+                const cacheKey = profileId ? `profile_${profileId}` : "user_health_profile";
+                const cachedHealth = await SecureStore.getItemAsync(cacheKey);
+
+                if (cachedHealth) {
+                    const parsed = JSON.parse(cachedHealth);
+                    const iconVal = parsed.icon || parsed.pfp;
+                    if (iconVal && iconVal !== "Not Set" && iconVal !== "") {
+                        setAvatarUri(iconVal);
+                    }
+                }
+            } catch (error) {
+                console.error("Error loading cached avatar:", error);
+            }
+        };
+
+        loadCachedAvatar();
+    }, [img, profileId]);
+
+    const fallbackUri = "https://pbs.twimg.com/media/C8SFjSYWAAA6452.jpg";
+
+    // Validate URI to prevent empty strings from breaking Image component
+    const isValidUri = avatarUri && avatarUri.trim().length > 0 && avatarUri !== "Not Set";
+    const imageSource = isValidUri ? { uri: avatarUri } : { uri: fallbackUri };
+
     return (
         <Pressable
             style={[
@@ -34,17 +72,18 @@ export default function ProfileCard({
                     backgroundColor: themes.backgroundElement,
                     opacity: enabled ? 1 : 0.5,
                     flexDirection: "row",
-                    // 🌟 Align items vertically along the main row axis (keeps image and text centered together)
                     alignItems: "center"
                 }
             ]}
             onPress={onPress}
         >
-            <View style={{ borderRadius: 12, borderColor: "#fff", flexDirection: "row", gap: 0 }}>
-                <Image source={{ uri: img }} style={{ width: 50, height: 50, borderRadius: 25 }} />
+            <View style={{ borderRadius: 12, overflow: "hidden" }}>
+                <Image
+                    source={imageSource}
+                    style={{ width: 50, height: 50, borderRadius: 25 }}
+                />
             </View>
 
-            {/* 🛠️ Fix 1: Use justifyContent: "center" instead of alignContent */}
             <View style={{ justifyContent: "center", flex: 1, paddingLeft: 10 }}>
                 <Text style={[seatcard.profileName, { color: themes.text }]}>{name}</Text>
             </View>
@@ -64,6 +103,5 @@ const seatcard = StyleSheet.create({
     profileName: {
         fontFamily: "Body-Medium",
         fontSize: 18,
-        // 🛠️ Fix 2: Removed "flex: 1" from here so the text doesn't stretch and distort alignment bounds
     }
 });
