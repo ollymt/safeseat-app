@@ -1,16 +1,18 @@
 // components/AddProfileModal.tsx
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
-import { BottomSheet, Button, Column, FieldGroup, Host, Icon, Row, Spacer, Text, TextInput } from "@expo/ui";
-import { ConfirmationDialog, Button as SwiftButton } from "@expo/ui/swift-ui";
-import { buttonBorderShape, buttonStyle, controlSize, submitLabel } from "@expo/ui/swift-ui/modifiers";
+import { Host, Icon } from "@expo/ui";
 import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
-import { Alert, Platform, StyleSheet, useColorScheme } from "react-native";
+import { Alert, Platform, StyleSheet, useColorScheme, Modal, Text, View, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard } from "react-native";
+
+import Button from "./button";
+import { Dropdown } from "react-native-element-dropdown"
 
 // 🛠️ Firebase Imports
 import { addDoc, collection, doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
+import TextInput from "./text-input";
 
 type Props = {
     visible: boolean;
@@ -84,6 +86,8 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
 
     const [bloodType, setBloodType] = useState("");
 
+    const [allergies, setAllergies] = useState("");
+
     const [discardConfirmVisible, setDiscardConfirmVisible] = useState(false);
 
     useEffect(() => {
@@ -149,6 +153,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
         birthDate !== "" ||
         birthYear !== "" ||
         bloodType !== "" ||
+        allergies !== "" ||
         parseNum(heightCm) > 0 ||
         parseNum(heightFt) > 0 ||
         parseNum(heightIn) > 0 ||
@@ -183,10 +188,6 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
         return parsedDate > currentDay; // If birth day has not occurred yet this month, they are under 18
     })();
 
-    // 🌟 3. Blood Type String Validation
-    const normalizedBloodInput = bloodType.trim().toLowerCase();
-    const isBloodTypeInvalid = bloodType.trim() !== "" && !bloodTypes.some(t => t.value === normalizedBloodInput);
-
     const isHeightInvalid = isMetric
         ? parseNum(heightCm) <= 0
         : (parseNum(heightFt) <= 0 || parseNum(heightIn) <= 0);
@@ -201,7 +202,6 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
         phone.trim() === "" ||
         !isValidDateInput ||
         isUnder18 ||
-        isBloodTypeInvalid ||
         bloodType.trim() === "" ||
         isHeightInvalid ||
         isWeightInvalid;
@@ -220,6 +220,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
         setWeightKg("");
         setWeightLb("");
         setBloodType("");
+        setAllergies("");
         setDiscardConfirmVisible(false);
         onClose();
     };
@@ -249,6 +250,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
             }
 
             // 🌟 Stored strictly as integers & strings
+            // 🌟 Stored strictly as integers & strings
             await addDoc(subcollectionRef, {
                 name: name.trim(),
                 icon: icon.trim() || null,
@@ -261,7 +263,8 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                 birthDate: parsedDate,
 
                 // String
-                bloodType: normalizedBloodInput.toUpperCase(),
+                bloodType: bloodType,
+                allergies: allergies.trim() || null, // 👈 Added here
 
                 heightCm: finalHeightCm,
                 weightKg: finalWeightKg,
@@ -282,383 +285,254 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
     };
 
     return (
-        <Host matchContents>
-            <BottomSheet
-                isPresented={visible}
-                onDismiss={onClose}
-                showDragIndicator={false}
-                snapPoints={["full"]}
-            >
-                <Column spacing={16} alignment="center">
-                    <Row>
-                        {Platform.OS === "ios" ? (
-                            <ConfirmationDialog
-                                title="Discard your progress?"
-                                isPresented={discardConfirmVisible}
-                                onIsPresentedChange={setDiscardConfirmVisible}
-                                titleVisibility="visible"
-                            >
-                                <ConfirmationDialog.Trigger>
-                                    <Button
-                                        variant="outlined"
-                                        onPress={() => {
-                                            if (hasUnsavedChanges) {
-                                                setDiscardConfirmVisible(true);
-                                            } else {
-                                                onClose();
-                                            }
-                                        }}
-                                        disabled={isLoading}
-                                        modifiers={[
-                                            buttonStyle("glass"),
-                                            controlSize("large"),
-                                            buttonBorderShape("circle"),
-                                        ]}
-                                    >
-                                        <Icon
-                                            name={Icon.select({
-                                                ios: "xmark",
-                                                android: import("@expo/material-symbols/close.xml"),
-                                            })}
-                                        />
-                                    </Button>
-                                </ConfirmationDialog.Trigger>
-                                <ConfirmationDialog.Actions>
-                                    <SwiftButton
-                                        label="Discard"
-                                        role="destructive"
-                                        onPress={handleResetAndClose}
-                                    />
-                                    <SwiftButton
-                                        label="Cancel"
-                                        onPress={() => setDiscardConfirmVisible(false)}
-                                    />
-                                </ConfirmationDialog.Actions>
-                            </ConfirmationDialog>
-                        ) : (
-                            <Button
-                                variant="outlined"
-                                onPress={() => {
-                                    if (hasUnsavedChanges) {
-                                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                                        Alert.alert("Discard?", "You have unsaved changes. Discard?", [
-                                            {
-                                                text: "Cancel",
-                                                style: "cancel"
-                                            },
-                                            {
-                                                text: "Discard",
-                                                style: "destructive",
-                                                onPress: () => handleResetAndClose()
-                                            }
-                                        ]);
-                                    } else {
-                                        onClose();
-                                    }
-                                }}
-                                disabled={isLoading}
-                                modifiers={[
-                                    buttonStyle("glass"),
-                                    controlSize("large"),
-                                    buttonBorderShape("circle"),
-                                ]}
-                            >
-                                <Icon
-                                    name={Icon.select({
-                                        ios: "xmark",
-                                        android: import("@expo/material-symbols/close.xml"),
-                                    })}
-                                />
-                            </Button>
-                        )}
-                        <Spacer flexible />
-                        <Button
-                            onPress={handleSave}
-                            variant={isFormInvalid ? "outlined" : "filled"}
-                            modifiers={[
-                                isFormInvalid ? buttonStyle("glass") : buttonStyle("borderedProminent"),
-                                controlSize("large"),
-                                buttonBorderShape("circle"),
-                            ]}
-                            disabled={isLoading || isFormInvalid}
-                        >
-                            <Icon
-                                name={Icon.select({
-                                    ios: "checkmark",
-                                    android: import("@expo/material-symbols/check.xml"),
-                                })}
-                            />
-                        </Button>
-                    </Row>
+        <Modal
+            animationType="fade"
+            transparent={true}
+            visible={visible}
+            onRequestClose={onClose}
+        >
+            {/* Full-screen backdrop wrapper that centers children */}
+            <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
+                <View style={styles.backdrop}>
+                    <KeyboardAvoidingView
+                        behavior={Platform.OS == "ios" ? "padding" : "height"}
+                        style={{ width: "100%" }}
+                    >
 
-                    <Column spacing={0} alignment="center">
-                        <Text textStyle={{ fontSize: 36, color: themes.text, fontWeight: "bold", textAlign: "center" }}>New Profile</Text>
-                        <FieldGroup>
-                            <FieldGroup.Section>
+                        <View style={styles.container}>
+                            <Text style={styles.header}>
+                                New Profile
+                            </Text>
+                            <View style={{ width: "100%", gap: spacing.one }}>
                                 <TextInput
+                                    type="text"
+                                    variant="regular"
                                     placeholder="Name"
-                                    editable={!isLoading}
-                                    onChangeText={setName}
-                                    // @ts-ignore
+                                    enabled={true}
                                     value={name}
-                                    modifiers={[submitLabel("next")]}
-                                    // @ts-ignore
-                                    textAlign="left"
+                                    onChangeText={setName}
                                 />
-                                <TextInput
-                                    placeholder="Icon URL (optional)"
-                                    editable={!isLoading}
-                                    onChangeText={setIcon}
-                                    // @ts-ignore
-                                    value={icon}
-                                    modifiers={[submitLabel("next")]}
-                                    // @ts-ignore
-                                    textAlign="left"
-                                />
-                                <TextInput
-                                    placeholder="Email"
-                                    editable={!isLoading}
-                                    onChangeText={setEmail}
-                                    // @ts-ignore
-                                    value={email}
-                                    modifiers={[submitLabel("next")]}
-                                    keyboardType="email-address"
-                                    // @ts-ignore
-                                    textAlign="left"
-                                />
-                                <TextInput
-                                    placeholder="Phone"
-                                    editable={!isLoading}
-                                    onChangeText={setPhone}
-                                    // @ts-ignore
-                                    value={phone}
-                                    modifiers={[submitLabel("next")]}
-                                    keyboardType="phone-pad"
-                                    // @ts-ignore
-                                    textAlign="left"
-                                />
-                                <Row alignment="center">
-                                    <Text>Birthday</Text>
-                                    <Spacer flexible />
-                                    <Row spacing={8} style={{ width: 180 }}>
-                                        <TextInput
-                                            placeholder="MM"
-                                            editable={!isLoading}
-                                            // @ts-ignore
-                                            value={birthMonth}
-                                            onChangeText={setBirthMonth}
-                                            modifiers={[submitLabel("next")]}
-                                            keyboardType="number-pad"
-                                            textAlign="center"
-                                            maxLength={2}
-                                            style={{ width: 45 }}
-                                        />
-                                        <TextInput
-                                            placeholder="DD"
-                                            editable={!isLoading}
-                                            // @ts-ignore
-                                            value={birthDate}
-                                            onChangeText={setBirthDate}
-                                            modifiers={[submitLabel("next")]}
-                                            keyboardType="number-pad"
-                                            textAlign="center"
-                                            maxLength={2}
-                                            style={{ width: 45 }}
-                                        />
-                                        <TextInput
-                                            placeholder="YYYY"
-                                            editable={!isLoading}
-                                            // @ts-ignore
-                                            value={birthYear}
-                                            onChangeText={setBirthYear}
-                                            modifiers={[submitLabel("next")]}
-                                            keyboardType="number-pad"
-                                            textAlign="center"
-                                            maxLength={4}
-                                            style={{ width: 65 }}
-                                        />
-                                    </Row>
-                                </Row>
-                            </FieldGroup.Section>
-
-                            <FieldGroup.Section>
-                                {Platform.OS === "ios" ? (
-                                    isMetric ? (
-                                        <Row>
-                                            <TextInput
-                                                placeholder="Height (cm)"
-                                                editable={!isLoading}
-                                                onChangeText={setHeightCm}
-                                                // @ts-ignore
-                                                value={heightCm}
-                                                modifiers={[submitLabel("next")]}
-                                                keyboardType="number-pad"
-                                                // @ts-ignore
-                                                textAlign="left"
-                                            />
-                                            <TextInput
-                                                placeholder="Weight (kg)"
-                                                editable={!isLoading}
-                                                onChangeText={setWeightKg}
-                                                // @ts-ignore
-                                                value={weightKg}
-                                                modifiers={[submitLabel("next")]}
-                                                keyboardType="number-pad"
-                                                // @ts-ignore
-                                                textAlign="left"
-                                            />
-                                        </Row>
-                                    ) : (
-                                        <>
-                                            <Row>
-                                                <TextInput
-                                                    placeholder="Height (ft)"
-                                                    editable={!isLoading}
-                                                    onChangeText={setHeightFt}
-                                                    // @ts-ignore
-                                                    value={heightFt}
-                                                    modifiers={[submitLabel("next")]}
-                                                    keyboardType="number-pad"
-                                                    // @ts-ignore
-                                                    textAlign="left"
-                                                />
-                                                <TextInput
-                                                    placeholder="Height (in)"
-                                                    editable={!isLoading}
-                                                    onChangeText={setHeightIn}
-                                                    // @ts-ignore
-                                                    value={heightIn}
-                                                    modifiers={[submitLabel("next")]}
-                                                    keyboardType="number-pad"
-                                                    // @ts-ignore
-                                                    textAlign="left"
-                                                />
-                                            </Row>
-                                            <TextInput
-                                                placeholder="Weight (lb)"
-                                                editable={!isLoading}
-                                                onChangeText={setWeightLb}
-                                                // @ts-ignore
-                                                value={weightLb}
-                                                modifiers={[submitLabel("next")]}
-                                                keyboardType="number-pad"
-                                                // @ts-ignore
-                                                textAlign="left"
-                                            />
-                                        </>
-                                    )
-                                ) : (
-                                    /* Android: Render each input in its own clean row */
-                                    isMetric ? (
-                                        <>
-                                            <TextInput
-                                                placeholder="Height (cm)"
-                                                editable={!isLoading}
-                                                onChangeText={setHeightCm}
-                                                // @ts-ignore
-                                                value={heightCm}
-                                                modifiers={[submitLabel("next")]}
-                                                keyboardType="number-pad"
-                                                // @ts-ignore
-                                                textAlign="left"
-                                            />
-                                            <TextInput
-                                                placeholder="Weight (kg)"
-                                                editable={!isLoading}
-                                                onChangeText={setWeightKg}
-                                                // @ts-ignore
-                                                value={weightKg}
-                                                modifiers={[submitLabel("next")]}
-                                                keyboardType="number-pad"
-                                                // @ts-ignore
-                                                textAlign="left"
-                                            />
-                                        </>
-                                    ) : (
-                                        <>
-                                            <TextInput
-                                                placeholder="Height (ft)"
-                                                editable={!isLoading}
-                                                onChangeText={setHeightFt}
-                                                // @ts-ignore
-                                                value={heightFt}
-                                                modifiers={[submitLabel("next")]}
-                                                keyboardType="number-pad"
-                                                // @ts-ignore
-                                                textAlign="left"
-                                            />
-                                            <TextInput
-                                                placeholder="Height (in)"
-                                                editable={!isLoading}
-                                                onChangeText={setHeightIn}
-                                                // @ts-ignore
-                                                value={heightIn}
-                                                modifiers={[submitLabel("next")]}
-                                                keyboardType="number-pad"
-                                                // @ts-ignore
-                                                textAlign="left"
-                                            />
-                                            <TextInput
-                                                placeholder="Weight (lb)"
-                                                editable={!isLoading}
-                                                onChangeText={setWeightLb}
-                                                // @ts-ignore
-                                                value={weightLb}
-                                                modifiers={[submitLabel("next")]}
-                                                keyboardType="number-pad"
-                                                // @ts-ignore
-                                                textAlign="left"
-                                            />
-                                        </>
-                                    )
-                                )}
-                                <Row alignment="center">
+                                <View style={{ flexDirection: "row", gap: spacing.one, alignItems: "center" }}>
+                                    <Text style={{ marginHorizontal: spacing.one, flex: 1, textAlign: "center", fontSize: fontsize.body, color: themes.text, fontFamily: "Body-Medium" }}>Birthday</Text>
                                     <TextInput
-                                        placeholder="Blood Type (e.g. O+)"
-                                        editable={!isLoading}
-                                        onChangeText={setBloodType}
-                                        // @ts-ignore
-                                        value={bloodType}
-                                        modifiers={[submitLabel("done")]}
-                                        // @ts-ignore
-                                        textAlign="left"
-                                        maxLength={3}
+                                        type="number"
+                                        variant="regular"
+                                        placeholder="MM"
+                                        enabled={true}
+                                        value={birthMonth}
+                                        onChangeText={setBirthMonth}
                                     />
-                                </Row>
-                            </FieldGroup.Section>
-                        </FieldGroup>
+                                    <TextInput
+                                        type="number"
+                                        variant="regular"
+                                        placeholder="DD"
+                                        enabled={true}
+                                        value={birthDate}
+                                        onChangeText={setBirthDate}
+                                    />
+                                    <TextInput
+                                        type="number"
+                                        variant="regular"
+                                        placeholder="YYYY"
+                                        enabled={true}
+                                        value={birthYear}
+                                        onChangeText={setBirthYear}
+                                    />
+                                </View>
+                                {isMetric ? (
+                                    <View style={{ flexDirection: "row", gap: spacing.one }}>
+                                        <View style={{ flex: 1 }}>
+                                            <TextInput
+                                                type="number"
+                                                variant="regular"
+                                                placeholder="Height (cm)"
+                                                enabled={true}
+                                                value={heightCm}
+                                                onChangeText={setHeightCm}
+                                            />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <TextInput
+                                                type="number"
+                                                variant="regular"
+                                                placeholder="Weight (kg)"
+                                                enabled={true}
+                                                value={weightKg}
+                                                onChangeText={setWeightKg}
+                                            />
+                                        </View>
+                                    </View>
+                                ) : (
+                                    <View style={{ gap: spacing.one }}>
+                                        <View style={{ flexDirection: "row", gap: spacing.one }}>
+                                            <View style={{ flex: 1 }}>
+                                                <TextInput
+                                                    type="number"
+                                                    variant="regular"
+                                                    placeholder="Height (ft)"
+                                                    enabled={true}
+                                                    value={heightFt}
+                                                    onChangeText={setHeightFt}
+                                                />
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <TextInput
+                                                    type="number"
+                                                    variant="regular"
+                                                    placeholder="Height (in)"
+                                                    enabled={true}
+                                                    value={heightIn}
+                                                    onChangeText={setHeightIn}
+                                                />
+                                            </View>
+                                        </View>
+                                        <TextInput
+                                            type="number"
+                                            variant="regular"
+                                            placeholder="Weight (lb)"
+                                            enabled={true}
+                                            value={weightLb}
+                                            onChangeText={setWeightLb}
+                                        />
+                                    </View>
+                                )}
 
-                        {/* 🌟 Diagnostic warnings */}
-                        {birthYear !== "" && birthMonth !== "" && birthDate !== "" && !isValidDateInput && (
-                            <Text textStyle={{ fontSize: 13, color: "#FF3B30", textAlign: "center" }}>
-                                Please enter a valid calendar date.
-                            </Text>
-                        )}
-                        {isValidDateInput && isUnder18 && (
-                            <Text textStyle={{ fontSize: 13, color: "#FF3B30", textAlign: "center" }}>
-                                Profile holder must be at least 18 years old.
-                            </Text>
-                        )}
-                        {isBloodTypeInvalid && (
-                            <Text textStyle={{ fontSize: 13, color: "#FF3B30", textAlign: "center" }}>
-                                Please enter a valid blood type (A, B, AB, O with +/-).
-                            </Text>
-                        )}
-                    </Column>
-                </Column>
-            </BottomSheet>
-        </Host>
+                                <Dropdown
+                                    mode="default"
+                                    data={bloodTypes}
+                                    labelField="label"
+                                    valueField="value"
+                                    selectedTextStyle={{ color: themes.text, fontFamily: "Body-Medium" }}
+                                    placeholder="Blood Type"
+                                    placeholderStyle={{ color: themes.textInputPlaceholder }}
+                                    value={bloodType}
+                                    style={[
+                                        styles.input
+                                    ]}
+                                    containerStyle={{
+                                        backgroundColor: themes.backgroundElement,
+                                        borderRadius: spacing.edge,
+                                        borderWidth: spacing.quarter,
+                                        borderColor: themes.secondaryBttn,
+                                        overflow: "hidden",
+                                        gap: spacing.none,
+                                    }}
+                                    itemTextStyle={{
+                                        color: themes.text,
+                                        margin: spacing.none,
+                                        padding: spacing.none,
+                                        fontFamily: "Body-Medium"
+                                    }}
+                                    itemContainerStyle={{
+                                        margin: spacing.none,
+                                        marginHorizontal: spacing.none,
+                                        padding: spacing.none,
+                                        borderBottomWidth: spacing.quarter,
+                                        borderColor: themes.secondaryBttn
+                                    }}
+                                    activeColor={themes.primaryBttn}
+                                    maxHeight={spacing.ten * 3}
+                                    onChange={(value) => { setBloodType(value) }}
+                                    autoScroll={false}
+                                />
+
+                                <TextInput
+                                    type="text"
+                                    variant="regular"
+                                    placeholder="Allergies"
+                                    enabled={true}
+                                    value={allergies}
+                                    onChangeText={setAllergies}
+                                />
+                            </View>
+
+                            <View style={styles.actionRow}>
+                                <Button 
+                                    variant={hasUnsavedChanges ? "warn" : "secondary"}
+                                    label={hasUnsavedChanges ? "Discard" : "Cancel"}
+                                    onPress={() => {
+                                        if (hasUnsavedChanges) {
+                                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+                                            Alert.alert("Discard?", "You have unsaved changes. Discard?", [
+                                                {
+                                                    text: "Cancel",
+                                                    style: "cancel"
+                                                },
+                                                {
+                                                    text: "Discard",
+                                                    onPress: handleResetAndClose,
+                                                    style: "destructive"
+                                                }
+                                            ])
+                                        }
+                                }} 
+                                    style={{ borderRadius: 6 }} />
+                                <View style={{ flex: 1 }}>
+                                    <Button variant="primary" label="Create" onPress={handleSave} style={{ borderRadius: 6 }} enabled={!isFormInvalid}/>
+                                </View>
+                            </View>
+
+                        </View>
+
+                    </KeyboardAvoidingView>
+                </View>
+            </TouchableWithoutFeedback>
+        </Modal>
     );
 }
 
 const styles = StyleSheet.create({
-    title: {
-        fontSize: 36,
-        textAlign: "center",
-        height: 100,
-        fontFamily: "Logo-Font",
-        borderWidth: 1,
-        borderColor: "#fff",
-        marginBottom: 8,
+    // Full-screen overlay to dim screen and center content
+    backdrop: {
+        flex: 1,
+        backgroundColor: "rgba(0, 0, 0, 0.75)",
+        justifyContent: "center",
+        alignItems: "center",
+        paddingHorizontal: spacing.two, // Prevents modal from touching screen edges
+    },
+    // Centered card content container
+    container: {
+        width: "100%", // Or a fixed width/max-width like 320
+        maxWidth: 400,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: themes.backgroundElement,
+        borderWidth: spacing.quarter,
+        borderColor: themes.secondaryBttn,
+        padding: spacing.one,
+        borderRadius: spacing.edge,
+        gap: spacing.one
+    },
+    header: {
+        color: themes.text,
+        fontSize: fontsize.header,
+        fontFamily: "Heading-Font"
+    },
+    actionRow: {
+        flexDirection: "row",
+        gap: spacing.half,
+        maxWidth: "100%",
+    },
+    input: {
+        height: spacing.six,
+        borderWidth: spacing.quarter,
+        paddingHorizontal: spacing.two,
+        fontSize: fontsize.button,
+        borderRadius: spacing.edge,
+        color: themes.text,
+        fontFamily: "Body-Medium",
+        backgroundColor: themes.backgroundElement,
+        borderColor: themes.textSecondary,
+        borderStyle: "dashed"
+    },
+    focused: {
+        borderColor: themes.text,
+        borderStyle: "solid"
+    },
+    warnInput: {
+        borderColor: themes.warnBttn,
+    },
+    disabledInput: {
+        opacity: 0.5,
     },
 });

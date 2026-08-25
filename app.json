@@ -6,14 +6,19 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "safeseatapp",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "backgroundColor": "#101322",
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.ollymt.safeseatapp",
-      "backgroundColor": "#101322"
+      "backgroundColor": "#101322",
+      "userInterfaceStyle": "dark",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "userInterfaceStyle": "dark",
       "adaptiveIcon": {
         "backgroundColor": "#101322",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -31,6 +36,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-system-ui",
       [
         "expo-splash-screen",
         {
@@ -45,6 +51,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "908c1bb2-f235-47cb-8e62-575a06625a27"
+      }
     }
   }
 }

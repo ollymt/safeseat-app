@@ -1,15 +1,25 @@
 // components/AddContactModal.tsx
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
-import { BottomSheet, Button, Column, FieldGroup, Host, Icon, Row, Slider, Spacer, Text, TextInput } from "@expo/ui";
-import { ConfirmationDialog, Button as SwiftButton } from "@expo/ui/swift-ui";
-import { buttonBorderShape, buttonStyle, controlSize, submitLabel } from "@expo/ui/swift-ui/modifiers";
+import { Host, Icon } from "@expo/ui";
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
-import { StyleSheet, useColorScheme, Alert, Platform } from "react-native";
+import { Alert, Platform, StyleSheet, useColorScheme, Modal, Text, View, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard } from "react-native";
 
 // 🛠️ Firebase Imports
 import { auth, db } from "../firebase";
 import { collection, addDoc } from "firebase/firestore";
+
+import Button from "./button";
+import TextInput from "./text-input";
+import { Dropdown } from "react-native-element-dropdown"
+
+const HIERARCHIES = [
+    { label: "Primary", value: 1 },
+    { label: "Secondary", value: 2 },
+    { label: "Tertiary", value: 3 },
+    { label: "Quaternary", value: 4 },
+    { label: "Quinary", value: 5 }
+]
 
 type Props = {
     visible: boolean;
@@ -24,29 +34,6 @@ export default function AddContactModal({ visible, onClose, onSuccess }: Props) 
     const [phone, setPhone] = useState("");
 
     const [priority, setPriority] = useState(0);
-    const [priorityString, setPriorityString] = useState("");
-
-    useEffect(() => {
-        switch (priority) {
-            case 1:
-                setPriorityString("primary");
-                break;
-            case 2:
-                setPriorityString("secondary");
-                break;
-            case 3:
-                setPriorityString("tertiary");
-                break;
-            case 4:
-                setPriorityString("quaternary");
-                break;
-            case 5:
-                setPriorityString("quinary");
-                break;
-            default:
-                setPriorityString("not set");
-        }
-    }, [priority]);
 
     const [discardConfirmVisible, setDiscardConfirmVisible] = useState(false);
 
@@ -106,177 +93,153 @@ export default function AddContactModal({ visible, onClose, onSuccess }: Props) 
     };
 
     return (
-        <Host matchContents>
-            <BottomSheet
-                isPresented={visible}
-                onDismiss={onClose}
-                showDragIndicator={false}
-                snapPoints={["full"]}
-            >
-                <Column spacing={16} alignment="center">
-                    <Row>
-                        {Platform.OS === "ios" ? (
-                            <ConfirmationDialog
-                                title="Discard your progress?"
-                                isPresented={discardConfirmVisible}
-                                onIsPresentedChange={setDiscardConfirmVisible}
-                                titleVisibility="visible"
-                            >
-                                <ConfirmationDialog.Trigger>
-                                    <Button
-                                        variant="outlined"
-                                        onPress={() => {
-                                            if (hasUnsavedChanges) {
-                                                setDiscardConfirmVisible(true);
-                                            } else {
-                                                onClose();
-                                            }
-                                        }}
-                                        disabled={isLoading}
-                                        modifiers={[
-                                            buttonStyle("glass"),
-                                            controlSize("large"),
-                                            buttonBorderShape("circle"),
-                                        ]}
-                                    >
-                                        <Icon
-                                            name={Icon.select({
-                                                ios: "xmark",
-                                                android: import("@expo/material-symbols/close.xml"),
-                                            })}
-                                        />
-                                    </Button>
-                                </ConfirmationDialog.Trigger>
-                                <ConfirmationDialog.Actions>
-                                    <SwiftButton
-                                        label="Discard"
-                                        role="destructive"
-                                        onPress={handleResetAndClose}
-                                    />
-                                    <SwiftButton
-                                        label="Cancel"
-                                        onPress={() => setDiscardConfirmVisible(false)}
-                                    />
-                                </ConfirmationDialog.Actions>
-                            </ConfirmationDialog>
-                        ) : (
-                            <Button
-                                variant="outlined"
-                                onPress={() => {
-                                    if (hasUnsavedChanges) {
-                                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                                        Alert.alert("Discard?", "You have unsaved changes. Discard?", [
-                                            {
-                                                text: "Cancel",
-                                                style: "cancel"
-                                            },
-                                            {
-                                                text: "Discard",
-                                                style: "destructive",
-                                                onPress: () => handleResetAndClose()
-                                            }
-                                        ]);
-                                    } else {
-                                        onClose();
-                                    }
-                                }}
-                                disabled={isLoading}
-                                modifiers={[
-                                    buttonStyle("glass"),
-                                    controlSize("large"),
-                                    buttonBorderShape("circle"),
-                                ]}
-                            >
-                                <Icon
-                                    name={Icon.select({
-                                        ios: "xmark",
-                                        android: import("@expo/material-symbols/close.xml"),
-                                    })}
-                                />
-                            </Button>
-                        )}
-                        <Spacer flexible />
-                        <Button
-                            onPress={handleSave}
-                            variant={isFormInvalid ? "outlined" : "filled"}
-                            modifiers={[
-                                isFormInvalid ? buttonStyle("glass") : buttonStyle("borderedProminent"),
-                                controlSize("large"),
-                                buttonBorderShape("circle"),
-                            ]}
-                            disabled={isLoading || isFormInvalid}
-                        >
-                            <Icon
-                                name={Icon.select({
-                                    ios: "checkmark",
-                                    android: import("@expo/material-symbols/check.xml"),
-                                })}
-                            />
-                        </Button>
-                    </Row>
+        <Modal
+            animationType="fade"
+            transparent={true}
+            visible={visible}
+            onRequestClose={onClose}
+        >
+            {/* Full-screen backdrop wrapper that centers children */}
+            <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
+                <View style={styles.backdrop}>
+                    <KeyboardAvoidingView
+                        behavior={Platform.OS == "ios" ? "padding" : "height"}
+                        style={{ width: "100%" }}
+                    >
 
-                    <Column spacing={0} alignment="center">
-                        <Text textStyle={{ fontSize: 36, color: themes.text, fontWeight: "bold", textAlign: "center" }}>
-                            New Contact
-                        </Text>
-                        <FieldGroup>
-                            <FieldGroup.Section>
-                                <TextInput
-                                    placeholder="Name"
-                                    editable={!isLoading}
-                                    onChangeText={setName}
-                                    // @ts-ignore
-                                    value={name}
-                                    modifiers={[submitLabel("next")]}
-                                    // @ts-ignore
-                                    textAlign="left"
-                                />
-                                <TextInput
-                                    placeholder="Phone"
-                                    editable={!isLoading}
-                                    onChangeText={setPhone}
-                                    // @ts-ignore
-                                    value={phone}
-                                    modifiers={[submitLabel("next")]}
-                                    keyboardType="phone-pad"
-                                    // @ts-ignore
-                                    textAlign="left"
-                                />
-                                <Row spacing={8} alignment="center">
-                                    <Text>Priority</Text>
-                                    <Column>
-                                        <Slider
-                                            value={priority}
-                                            onValueChange={setPriority}
-                                            min={0}
-                                            max={5}
-                                            step={1}
-                                        />
-                                    </Column>
-                                </Row>
-                            </FieldGroup.Section>
-                        </FieldGroup>
-                        {priority !== 0 && (
-                            // @ts-ignore
-                            <Text textStyle={{ fontSize: 13, color: themes.textSecondary, textAlign: "center" }}>
-                                {name.trim() === "" ? "This" : name} will be your {priorityString} emergency contact.
+                        <View style={styles.container}>
+                            <Text style={styles.header}>
+                                New Contact
                             </Text>
-                        )}
-                    </Column>
-                </Column>
-            </BottomSheet>
-        </Host>
+                            <View style={{ width: "100%", gap: spacing.one }}>
+
+                                <TextInput
+                                    type="text"
+                                    variant="regular"
+                                    placeholder="Name"
+                                    enabled={true}
+                                    value={name}
+                                    onChangeText={setName}
+                                />
+
+                                <TextInput
+                                    type="phone"
+                                    variant="regular"
+                                    placeholder="Phone Number"
+                                    enabled={true}
+                                    value={phone}
+                                    onChangeText={setPhone}
+                                />
+
+                                <Dropdown 
+                                    mode="default"
+                                    data={HIERARCHIES}
+                                    labelField="label"
+                                    valueField="value"
+                                    selectedTextStyle={{ color: themes.text, fontFamily: "Body-Medium" }}
+                                    placeholder="Heirarchy"
+                                    placeholderStyle={{ color: themes.textInputPlaceholder, fontFamily: "Body-Medium" }}
+                                    value={priority}
+                                    style={[
+                                        styles.input,
+                                        
+                                    ]}
+                                    containerStyle={{
+                                        backgroundColor: themes.backgroundElement,
+                                        borderRadius: spacing.edge,
+                                        borderWidth: spacing.quarter,
+                                        borderColor: themes.secondaryBttn,
+                                        overflow: "hidden",
+                                        gap: spacing.none,
+                                    }}
+                                    itemTextStyle={{
+                                        color: themes.text,
+                                        margin: spacing.none,
+                                        padding: spacing.none,
+                                        fontFamily: "Body-Medium",
+                                    }}
+                                    itemContainerStyle={{
+                                        margin: spacing.none,
+                                        marginHorizontal: spacing.none,
+                                        padding: spacing.none,
+                                        borderBottomWidth: spacing.quarter,
+                                        borderColor: themes.secondaryBttn,
+                                    }}
+                                    activeColor={themes.primaryBttn}
+                                    maxHeight={spacing.ten * 3}
+                                    onChange={(value) => {setPriority(value)}}
+                                    autoScroll={false}
+                                />
+                            </View>
+
+                            <View style={styles.actionRow}>
+                                <Button variant="secondary" label="Cancel" onPress={handleResetAndClose} style={{ borderRadius: 6 }} />
+                                <View style={{ flex: 1 }}>
+                                    <Button variant="primary" label="Create" onPress={handleSave} style={{ borderRadius: 6 }} />
+                                </View>
+                            </View>
+
+                        </View>
+
+                    </KeyboardAvoidingView>
+                </View>
+            </TouchableWithoutFeedback>
+        </Modal>
     );
 }
 
 const styles = StyleSheet.create({
-    title: {
-        fontSize: 36,
-        textAlign: "center",
-        height: 100,
-        fontFamily: "Logo-Font",
-        borderWidth: 1,
-        borderColor: "#fff",
-        marginBottom: 8,
+    // Full-screen overlay to dim screen and center content
+    backdrop: {
+        flex: 1,
+        backgroundColor: "rgba(0, 0, 0, 0.75)",
+        justifyContent: "center",
+        alignItems: "center",
+        paddingHorizontal: spacing.two, // Prevents modal from touching screen edges
+    },
+    // Centered card content container
+    container: {
+        width: "100%", // Or a fixed width/max-width like 320
+        maxWidth: 400,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: themes.backgroundElement,
+        borderWidth: spacing.quarter,
+        borderColor: themes.secondaryBttn,
+        padding: spacing.one,
+        borderRadius: spacing.edge,
+        gap: spacing.one
+    },
+    header: {
+        color: themes.text,
+        fontSize: fontsize.header,
+        fontFamily: "Heading-Font"
+    },
+    actionRow: {
+        flexDirection: "row",
+        gap: spacing.half,
+        maxWidth: "100%",
+    },
+    input: {
+        height: spacing.six,
+        borderWidth: spacing.quarter,
+        paddingHorizontal: spacing.two,
+        fontSize: fontsize.button,
+        borderRadius: spacing.edge,
+        color: themes.text,
+        fontFamily: "Body-Medium",
+        backgroundColor: themes.backgroundElement,
+        borderColor: themes.textSecondary,
+        borderStyle: "dashed"
+    },
+    focused: {
+        borderColor: themes.text,
+        borderStyle: "solid"
+    },
+    warnInput: {
+        borderColor: themes.warnBttn,
+    },
+    disabledInput: {
+        opacity: 0.5,
     },
 });

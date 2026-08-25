@@ -260,10 +260,13 @@ export default function Login() {
 									}}
 								>
 									<Button
-										label={isSubmitting ? "Creating account..." : "Sign-up"}
+										label={"Sign-up"}
 										onPress={() => {
 											if (!isSubmitting) handleSignUp();
 										}}
+										enabled={!isSubmitting}
+										fullWidth={true}
+										loading={isSubmitting}
 									/>
 								</View>
 							</View>

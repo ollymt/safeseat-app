@@ -1,7 +1,7 @@
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { GlassView } from "expo-glass-effect";
 import * as Haptics from "expo-haptics";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, ActivityIndicator, StyleProp, PressableProps, ViewStyle } from "react-native";
 
 type ButtonProps = {
 	variant?: "primary" | "secondary" | "warn" | "tertiary";
@@ -9,9 +9,9 @@ type ButtonProps = {
 	enabled?: boolean;
 	fullWidth?: boolean;
 	onPress: () => void;
-	style?: any;
+	style?: StyleProp<ViewStyle>;
 	children?: any;
-	glass?: boolean;
+	loading?: boolean;
 };
 
 export default function Button({
@@ -22,11 +22,13 @@ export default function Button({
 	onPress,
 	style,
 	children,
-	glass = false,
+	loading = false,
 }: ButtonProps) {
 	const handlePress = () => {
-		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-		onPress();
+		if (enabled) {
+			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+			onPress();
+		}
 	};
 
 	const containerStyle = [
@@ -42,7 +44,7 @@ export default function Button({
 
 	const textStyle = [
 		button.baseText,
-		(variant === "primary" || variant === "warn") && button.primaryText,
+		variant === "primary" && button.primaryText,
 		variant === "secondary" && button.secondaryText,
 		variant === "tertiary" && button.tertiaryText,
 		variant === "warn" && button.warnText,
@@ -51,12 +53,16 @@ export default function Button({
 
 	const content = (
 		<Pressable
-			style={button.pressableContent}
+			style={[style, button.pressableContent]}
 			onPress={handlePress}
 			disabled={!enabled}
 		>
-			{children}
-			{label && <Text style={textStyle}>{label}</Text>}
+			{loading ? <ActivityIndicator color={themes.text} /> : (
+				<>
+					{children}
+					{label && <Text style={textStyle}>{label}</Text>}
+				</>
+			)}
 		</Pressable>
 	);
 

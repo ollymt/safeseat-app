@@ -43,14 +43,14 @@ export default function TextInput({
                 styles.input,
                 variant === "warn" && styles.warnInput,
                 !enabled && styles.disabledInput,
-                isFocused && styles.focused,
+                isFocused && enabled && styles.focused,
             ]}
+            editable={enabled}
             onChangeText={onChangeText || setInternalText}
             value={value !== undefined ? value : internalText}
             placeholder={placeholder}
-            editable={enabled}
             placeholderTextColor={themes.textInputPlaceholder}
-            onFocus={() => setIsFocused(true)}
+            onFocus={() => enabled && setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
 
             // Native input type configurations
@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
         fontSize: fontsize.button,
         borderRadius: spacing.edge,
         color: themes.text,
-        fontWeight: 600,
+        fontFamily: "Body-Medium",
         backgroundColor: themes.backgroundElement,
         borderColor: themes.textSecondary,
         borderStyle: "dashed"

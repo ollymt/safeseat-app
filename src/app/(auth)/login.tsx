@@ -180,13 +180,14 @@ export default function Login() {
 									}}
 								>
 									<Button
-										variant={isSubmitting ? "secondary" : "primary"}
+										variant={"primary"}
 										enabled={!isSubmitting}
-										label={isSubmitting ? "Logging in..." : "Log-in"}
+										label={"Log-in"}
 										onPress={() => {
 											if (!isSubmitting) handleLogin();
 										}}
 										fullWidth={true}
+										loading={isSubmitting}
 									/>
 									<Button
 										label="Forgot Password"

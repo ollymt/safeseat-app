@@ -1,10 +1,10 @@
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { Themes as themes } from "@/constants/theme";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
 export { ErrorBoundary } from "expo-router";
 
-import { View } from "react-native";
+import { useColorScheme, View } from "react-native";
 
 import {
 	Inter_400Regular,
@@ -18,11 +18,19 @@ import {
 
 import * as SplashScreen from "expo-splash-screen";
 import { db } from "../firebase";
+// ⚠️ FIXED: Removed the broken "@expo/ui/swift-ui/modifiers" import
 
 // Keep the splash screen visible while fonts and auth initialize
 SplashScreen.preventAutoHideAsync();
 
+import * as SystemUI from 'expo-system-ui';
+
+// Force the underlying native iOS frame window to change colors
+SystemUI.setBackgroundColorAsync("#101322")
+
+
 export default function RootLayout() {
+	const colorScheme = useColorScheme();
 	const [loaded, error] = useFonts({
 		"Heading-Font": Inter_600SemiBold,
 		"Logo-Font": Inter_900Black,
@@ -89,12 +97,26 @@ export default function RootLayout() {
 		return null;
 	}
 
+	const CustomTheme = {
+		colors: {
+			background: "#101322" // This fixes your keyboard white flashing issue!
+		}
+	};
+
 	return (
-		<View style={{ backgroundColor: themes.background, flex: 1 }}>
-			<Stack screenOptions={{ headerShown: false }}>
-				<Stack.Screen name="(auth)" />
-				<Stack.Screen name="(tabs)" />
-			</Stack>
-		</View>
+		<>
+			{/* The View wrapper guarantees that the React Native layer remains your theme color */}
+			<View style={{ backgroundColor: themes.background || "#101322", flex: 1 }}>
+				<Stack screenOptions={{ 
+					headerShown: false,
+					contentStyle: {
+						backgroundColor: themes.background,
+					},
+				}}>
+					<Stack.Screen name="(auth)" />
+					<Stack.Screen name="(tabs)" />
+				</Stack>
+			</View>
+		</>
 	);
 }

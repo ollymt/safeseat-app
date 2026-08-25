@@ -286,11 +286,11 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
 
                     <View style={styles.actionRow}>
                         {isCurrentlyAssigned &&
-                            <Button variant="warn" label="Remove" onPress={handleUnassign} enabled={!isFetchingProfiles} />
+                            <Button variant="warn" label="Remove" onPress={handleUnassign} enabled={!isFetchingProfiles} style={{ borderRadius: 6 }} />
                         }
-                        <Button variant="secondary" label="Cancel" onPress={onClose} enabled={!isFetchingProfiles} />
+                        <Button variant="secondary" label="Cancel" onPress={onClose} enabled={!isFetchingProfiles} style={{ borderRadius: 6 }} />
                         <View style={{ flex: 1 }}>
-                            <Button variant="primary" label="Assign" onPress={handleSave} enabled={!isFetchingProfiles && selectedProfileId} />
+                            <Button variant="primary" label="Assign" onPress={handleSave} enabled={!isFetchingProfiles && selectedProfileId} style={{ borderRadius: 6 }} />
                         </View>
                     </View>
 

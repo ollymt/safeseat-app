@@ -1,9 +1,10 @@
-import { Themes } from "@/constants/theme";
-import { Host, Button, Icon } from "@expo/ui";
+import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { Host, Icon } from "@expo/ui";
 import { useState } from "react";
 import { MenuView } from '@expo/ui/community/menu';
 import { Pressable, StyleSheet, Text, useColorScheme, View, Linking, Alert } from "react-native";
 import { useRouter } from "expo-router";
+import Button from "./button";
 
 import * as Haptics from "expo-haptics";
 
@@ -20,27 +21,17 @@ export default function ContactCard({
     order,
     onPress
 }: ContactCardProps) {
-    const colorScheme = useColorScheme();
-    const activeScheme = colorScheme === "dark" ? "dark" : "light";
-    const currentTheme = Themes[activeScheme];
-
     const router = useRouter();
 
     // 🌟 Helper function to determine badge/border color based on order
     const getOrderColor = () => {
         switch (order) {
             case "primary":
-                return currentTheme.warnBttn;
+                return themes.green;
             case "secondary":
-                return currentTheme.yellow;
-            case "tertiary":
-                return currentTheme.primaryBttn;
-            case "quaternary":
-                return currentTheme.blue;
-            case "quinary":
-                return currentTheme.purple;
+                return themes.lightOrange;
             default:
-                return currentTheme.textSecondary; // 🌟 Defaults to textSecondary when priority is not set
+                return themes.text; // 🌟 Defaults to textSecondary when priority is not set
         }
     };
 
@@ -79,92 +70,162 @@ export default function ContactCard({
         }
     };
 
-    return (
-        <MenuView
-            shouldOpenOnLongPress={true}
-            title={""}
-            onPressAction={({ nativeEvent }) => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const isUnimportant = (order != "primary" && order != "secondary" && order != "tertiary")
 
-                switch (nativeEvent.event) {
-                    case 'call':
-                        handleMakeCall(phone);
-                        break;
-                    case 'msg':
-                        handleSendSMS(phone);
-                        break;
-                    case 'edit':
-                        console.log("Edit requested for:", name);
-                        router.navigate("/settings");
-                        break;
-                    default:
-                        break;
-                }
-            }}
-            actions={[
-                { id: 'call', title: `Call ${name}`, image: 'phone.fill' },
-                { id: 'msg', title: `Message ${name}`, image: 'bubble.left.fill' },
-                { id: 'edit', title: `Edit ${name}'s Info`, image: 'pencil' },
+    return (
+        <Pressable
+            style={[
+                contcard.baseCard,
+                isUnimportant && contcard.emptySeat,
+                {
+                    backgroundColor: themes.backgroundElement,
+                    borderWidth: spacing.quarter,
+                    boxSizing: "border-box",
+                    borderColor:
+                        order == "primary"
+                            ? themes.green
+                            : order == "secondary"
+                                ? themes.lightOrange
+                                : order == "tertiary"
+                                    ? themes.warnBttn
+                                    : themes.secondaryBttn,
+                },
             ]}
+            onPress={onPress}
         >
             <View
                 style={[
-                    contcard.baseCard,
+                    contcard.leftArea,
                     {
-                        backgroundColor: currentTheme.element,
-                        flexDirection: "row",
-                        borderWidth: 2,
-                        borderColor: accentColor // 🌟 Applied dynamic accent color
-                    }
+                        backgroundColor:
+                            order == "primary"
+                                ? themes.green
+                                : order == "secondary"
+                                    ? themes.lightOrange
+                                    : order == "tertiary"
+                                        ? themes.warnBttn
+                                        : themes.secondaryBttn,
+                    },
                 ]}
+            />
+            <View
+                style={{
+                    paddingVertical: spacing.one,
+                    flex: 1,
+                    borderWidth: spacing.none,
+                    borderColor: "#fff",
+                    gap: spacing.half
+                }}
             >
-                <View style={{ flex: 1 }}>
-                    <Text style={[contcard.orderLabel, { color: accentColor }]}>
-                        {order.toUpperCase()}
-                    </Text>
-                    <Text style={[contcard.contName, { color: currentTheme.text }]}>{name}</Text>
-                    <Text style={[contcard.numLabel, { color: currentTheme.text }]}>{phone}</Text>
-                </View>
-                <View style={{ alignItems: "center", justifyContent: "center", borderWidth: 0, borderColor: "#fff", marginRight: 10 }}>
-                    <Pressable
-                        style={{ backgroundColor: currentTheme.primaryBttn, padding: 8, borderRadius: 100 }}
-                        onPress={() => {
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                            handleMakeCall(phone);
-                        }}
-                    >
-                        <Host matchContents>
-                            <Icon
-                                name={Icon.select({
-                                    ios: "phone.fill",
-                                    android: import("@expo/material-symbols/call.xml")
-                                })}
-                                color={currentTheme.primaryBttnText}
-                            />
-                        </Host>
-                    </Pressable>
-                </View>
+
+                <Text
+                    style={[contcard.role, {
+                        color: order == "primary"
+                            ? themes.green
+                            : order == "secondary"
+                                ? themes.lightOrange
+                                : order == "tertiary"
+                                    ? themes.warnBttn
+                                    : themes.textSecondary
+                    }]}
+                >
+                    {order.toUpperCase()}
+                </Text>
+
+                <Text style={[contcard.name, { color: themes.text }]}>
+                    {name == "empty" ? "Empty" : name}
+                </Text>
+
+                <Text
+                    style={[contcard.role, {
+                        color: order == "primary"
+                            ? themes.green
+                            : order == "secondary"
+                                ? themes.lightOrange
+                                : order == "tertiary"
+                                    ? themes.warnBttn
+                                    : themes.textSecondary
+                    }]}
+                >
+                    {phone}
+                </Text>
             </View>
-        </MenuView>
+
+            <Pressable
+                style={[
+                    contcard.rightArea,
+                    {
+                        backgroundColor:
+                            order == "primary"
+                                ? themes.green
+                                : order == "secondary"
+                                    ? themes.lightOrange
+                                    : order == "tertiary"
+                                        ? themes.warnBttn
+                                        : themes.secondaryBttn,
+                    },
+                ]}
+                onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    handleMakeCall(phone);
+                }}
+            >
+                <Host matchContents>
+                    <Icon name={Icon.select({
+                        ios: "phone.fill",
+                        android: import("@expo/material-symbols/call.xml")
+                    })} color={isUnimportant ? themes.text : themes.background} size={spacing.five}/>
+                </Host>
+            </Pressable>
+        </Pressable>
     );
 }
 
 const contcard = StyleSheet.create({
     baseCard: {
         width: "100%",
-        padding: 10,
-        borderRadius: 12
+        borderWidth: spacing.none,
+        borderColor: themes.text,
+        flexDirection: "row",
+        gap: spacing.one,
+        borderRadius: spacing.edge,
+        overflow: "hidden",
+        padding: spacing.quarter,
     },
-    contName: {
+    seatNoCont: {
+        width: "15%",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    leftArea: {
+        width: spacing.three,
+        borderTopLeftRadius: spacing.one,
+        borderTopRightRadius: spacing.quarter,
+        borderBottomLeftRadius: spacing.one,
+        borderBottomRightRadius: spacing.quarter
+    },
+    rightArea: {
+        width: spacing.eight,
+        borderTopLeftRadius: spacing.quarter,
+        borderTopRightRadius: spacing.one,
+        borderBottomLeftRadius: spacing.quarter,
+        borderBottomRightRadius: spacing.one,
+        alignItems: "center",
+        justifyContent: "center"
+    },
+    name: {
+        fontSize: fontsize.header,
         fontFamily: "Body-Bold",
-        fontSize: 36,
     },
-    orderLabel: {
-        fontFamily: "Condensed-Bold",
-        fontSize: 14
-    },
-    numLabel: {
+    stateName: {
+        fontSize: fontsize.body,
         fontFamily: "Body-Bold",
-        fontSize: 18
-    }
+    },
+    role: {
+        fontSize: fontsize.body,
+        fontFamily: "Body-Bold"
+    },
+    emptySeat: {
+        opacity: 1,
+    },
 });

@@ -83,6 +83,16 @@ export default function TabLayout() {
 			screenOptions={{
 				// Disable tab swipe only when pushed deeper into a stack
 				swipeEnabled: !isNestedScreen,
+				headerShown: false,
+				// Forces the tab view container frame to be dark
+				sceneContainerStyle: {
+					backgroundColor: themes.background,
+				},
+				tabBarStyle: {
+					backgroundColor: themes.backgroundElement,
+					borderTopColor: "transparent",
+				},
+
 			}}
 		>
 			<Tabs.Screen

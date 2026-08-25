@@ -1,21 +1,18 @@
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
-import { Host, Icon, Row } from "@expo/ui";
-import { GlassView } from "expo-glass-effect";
+import { Host, Icon } from "@expo/ui";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
 	Dimensions,
 	FlatList,
-	Keyboard,
 	KeyboardAvoidingView,
 	Platform,
 	Pressable,
 	SectionList,
 	StyleSheet,
 	Text,
-	useColorScheme,
 	View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -30,7 +27,8 @@ import AddContactModal from "@/components/add-contact-modal";
 import AddProfileModal from "@/components/add-profile-modal";
 import ContactCard from "@/components/contact-card";
 import ProfileCard from "@/components/profile-card";
-import SegmentedControl from "@expo/ui/community/segmented-control";
+import MiniTab from "@/components/mini-tab";
+
 import {
 	buttonBorderShape,
 	buttonStyle,
@@ -48,12 +46,11 @@ interface UserProfile {
 	createdBy: string;
 }
 
-// 🌟 New Interface for Emergency Contacts
 interface EmergencyContact {
 	id: string;
 	name: string;
 	phone: string;
-	hierarchy: number; // 1-5
+	hierarchy: number;
 }
 
 interface ProfileSection {
@@ -63,6 +60,7 @@ interface ProfileSection {
 
 export default function Everyone() {
 	const router = useRouter();
+	const insets = useSafeAreaInsets();
 
 	const [userName, setUserName] = useState<string>("Guest");
 	const [userEmail, setUserEmail] = useState<string>("Not Set");
@@ -73,11 +71,7 @@ export default function Everyone() {
 	const [refreshing, setRefreshing] = useState(false);
 
 	const [sections, setSections] = useState<ProfileSection[]>([]);
-
-	// 🌟 1. State for Emergency Contacts
-	const [emergencyContacts, setEmergencyContacts] = useState<
-		EmergencyContact[]
-	>([]);
+	const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([]);
 
 	const [addProfileVisible, setAddProfileVisible] = useState(false);
 	const [addContactVisible, setAddContactVisible] = useState(false);
@@ -87,10 +81,7 @@ export default function Everyone() {
 	const loadAllUserData = useCallback(async () => {
 		setRefreshing(true);
 		try {
-			// --- A. LOAD CACHED HEALTH DATA ---
-			const cachedHealth = await SecureStore.getItemAsync(
-				"user_health_profile",
-			);
+			const cachedHealth = await SecureStore.getItemAsync("user_health_profile");
 			if (cachedHealth) {
 				const localData = JSON.parse(cachedHealth);
 				if (localData.name) setUserName(localData.name);
@@ -99,17 +90,14 @@ export default function Everyone() {
 				if (localData.img) setUserImg(localData.img);
 			}
 
-			const cachedPrivacy =
-				await SecureStore.getItemAsync("user_privacy_prefs");
+			const cachedPrivacy = await SecureStore.getItemAsync("user_privacy_prefs");
 			if (cachedPrivacy) {
 				const privacyData = JSON.parse(cachedPrivacy);
-				if (privacyData.useMetric !== undefined)
-					setUseMetric(privacyData.useMetric);
+				if (privacyData.useMetric !== undefined) setUseMetric(privacyData.useMetric);
 			}
 
 			const currentUser = auth.currentUser;
 			if (currentUser) {
-				// --- B. FETCH USER DATA FROM CLOUD ---
 				const userDocRef = doc(db, "users", currentUser.uid);
 				const userDocSnap = await getDoc(userDocRef);
 
@@ -129,8 +117,7 @@ export default function Everyone() {
 						setUserImg(cloudData.img);
 						freshUserImg = cloudData.img;
 					}
-					if (cloudData.useMetric !== undefined)
-						setUseMetric(cloudData.useMetric);
+					if (cloudData.useMetric !== undefined) setUseMetric(cloudData.useMetric);
 
 					const combinedProfile = {
 						name: cloudData.name || "",
@@ -149,7 +136,6 @@ export default function Everyone() {
 						JSON.stringify(combinedProfile),
 					);
 
-					// Preserve the existing local useMetric value — it's device-only and never stored in Firestore
 					const existingPrivacyRaw = await SecureStore.getItemAsync("user_privacy_prefs");
 					const existingPrivacy = existingPrivacyRaw ? JSON.parse(existingPrivacyRaw) : {};
 
@@ -164,13 +150,7 @@ export default function Everyone() {
 					);
 				}
 
-				// --- C. FETCH USER'S NESTED PROFILES SUBCOLLECTION ---
-				const subcollectionRef = collection(
-					db,
-					"users",
-					currentUser.uid,
-					"profiles",
-				);
+				const subcollectionRef = collection(db, "users", currentUser.uid, "profiles");
 				const querySnapshot = await getDocs(subcollectionRef);
 
 				const loadedProfiles: UserProfile[] = querySnapshot.docs.map((doc) => ({
@@ -217,36 +197,29 @@ export default function Everyone() {
 
 				setSections([ownerSection, ...sortedGroupSections]);
 
-				// 🌟 2. FETCH EMERGENCY CONTACTS SUBCOLLECTION
-				// Adjust subcollection name "emergencyContacts" to match whatever you named it in Firestore
-				const contactsRef = collection(
-					db,
-					"users",
-					currentUser.uid,
-					"emergencyContacts",
-				);
+				const contactsRef = collection(db, "users", currentUser.uid, "emergencyContacts");
 				const contactsSnap = await getDocs(contactsRef);
 
-				const loadedContacts: EmergencyContact[] = contactsSnap.docs.map(
-					(doc) => {
-						const data = doc.data();
-						return {
-							id: doc.id,
-							name: data.name || "Unknown Name",
-							phone: data.phone || "No Phone Number",
-							hierarchy: data.hierarchy != null && !isNaN(Number(data.hierarchy)) && Number(data.hierarchy) > 0
+				const loadedContacts: EmergencyContact[] = contactsSnap.docs.map((doc) => {
+					const data = doc.data();
+					return {
+						id: doc.id,
+						name: data.name || "Unknown Name",
+						phone: data.phone || "No Phone Number",
+						hierarchy:
+							data.hierarchy != null &&
+								!isNaN(Number(data.hierarchy)) &&
+								Number(data.hierarchy) > 0
 								? Number(data.hierarchy)
-								: 0, // 0 means "unset" — do NOT default to 5
-						};
-					},
-				);
+								: 0,
+					};
+				});
 
-				// 🌟 Sort by hierarchy (1-5 ascending), unset (0) always last
 				loadedContacts.sort((a, b) => {
 					if (a.hierarchy === 0 && b.hierarchy === 0) return 0;
-					if (a.hierarchy === 0) return 1;  // a is unset, push it after b
-					if (b.hierarchy === 0) return -1; // b is unset, push it after a
-					return a.hierarchy - b.hierarchy; // normal ascending sort
+					if (a.hierarchy === 0) return 1;
+					if (b.hierarchy === 0) return -1;
+					return a.hierarchy - b.hierarchy;
 				});
 				setEmergencyContacts(loadedContacts);
 			}
@@ -286,293 +259,296 @@ export default function Everyone() {
 			.filter((section) => section.data.length > 0);
 	}, [sections, searchQuery]);
 
-	const isiOS = Platform.OS == "ios"
-
-	const [isKeyboardVisible, setKeyboardVisible] = useState(false);
-
-	useEffect(() => {
-		const keyboardDidShowListener = Keyboard.addListener(
-			'keyboardDidShow',
-			() => setKeyboardVisible(true)
-		);
-		const keyboardDidHideListener = Keyboard.addListener(
-			'keyboardDidHide',
-			() => setKeyboardVisible(false)
-		);
-
-		return () => {
-			keyboardDidShowListener.remove();
-			keyboardDidHideListener.remove();
-		};
-	}, []);
-
 	return (
-		<SafeAreaView
-			style={{ flex: 1, backgroundColor: themes.background }}
-			edges={["left", "right"]}
-		>
-			<View style={[styles.container, { marginTop: 60 }]}>
-				<View
-					style={{
-						flexDirection: "row",
-						alignItems: "center",
-						marginBottom: 10,
-						paddingRight: 0,
-					}}
-				>
-					<Text
-						style={[styles.pageHeader, { color: themes.text, flex: 1 }]}
-					>
-						Everyone
-					</Text>
-				</View>
-
-				<View style={{ paddingBottom: 10 }}>
-					<SegmentedControl
-						values={["Profiles", "Contacts"]}
-						selectedIndex={selectedIndex}
-						onChange={(event) => {
-							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
-							setSelectedIndex(event.nativeEvent.selectedSegmentIndex);
+		<View style={{ flex: 1, backgroundColor: themes.background }}>
+			<SafeAreaView style={[styles.safeArea, { backgroundColor: themes.background }]} edges={["left", "right", "top", "bottom"]}>
+				<View style={styles.container}>
+					<View
+						style={{
+							flexDirection: "row",
+							alignItems: "center",
+							marginBottom: spacing.one,
+							paddingRight: spacing.none,
 						}}
-						style={{ paddingBottom: 10 }}
-					/>
-				</View>
+					>
+						<Text style={[styles.pageHeader, { color: themes.text, flex: 1 }]}>
+							Everyone
+						</Text>
+					</View>
 
-				{selectedIndex === 0 ? (
-					<View style={{ flex: 1, borderWidth: 0, borderColor: themes.text }}>
-						<SectionList
-							sections={filteredSections}
-							keyExtractor={(item) => item.id}
-							onRefresh={loadAllUserData}
-							refreshing={refreshing}
-							contentContainerStyle={Platform.OS == "android" ? { marginTop: 0, paddingBottom: 70 } : { marginTop: 0, paddingBottom: 160 }}
-							stickySectionHeadersEnabled={false}
-							showsVerticalScrollIndicator={false}
-							showsHorizontalScrollIndicator={false}
-							renderItem={({ item, index, section }) => (
-								<View
-									style={{
-										backgroundColor: themes.backgroundElement,
-										overflow: "hidden",
-										borderTopLeftRadius: index === 0 ? 12 : undefined,
-										borderTopRightRadius: index === 0 ? 12 : undefined,
-										borderBottomLeftRadius:
-											index === section.data.length - 1 ? 12 : undefined,
-										borderBottomRightRadius:
-											index === section.data.length - 1 ? 12 : undefined,
-									}}
-								>
-									<ProfileCard
-										name={item.name}
-										img={
-											item.img ||
-											"https://pbs.twimg.com/media/C8SFjSYWAAA6452.jpg"
-										}
-										isLast={index === section.data.length - 1}
-										onPress={() => {
-											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-											if (item.id === "owner-profile") {
-												// @ts-ignore
-												router.push("/(tabs)/everyone/profile");
-											} else {
-												router.push({
-													// @ts-ignore
-													pathname: "/(tabs)/everyone/profile",
-													params: { profileId: item.id }, // 🌟 Changed key from "id" to "profileId"
-												});
-											}
-										}}
-									/>
-								</View>
-							)}
-							renderSectionHeader={({ section: { title } }) => (
-								<View
-									style={[
-										styles.sectionHeaderContainer,
-										{ backgroundColor: themes.background },
-									]}
-								>
-									<Text
-										style={[
-											styles.sectionHeaderTitle,
-											{ color: themes.text },
-										]}
-									>
-										{title}
-									</Text>
-								</View>
-							)}
-							renderSectionFooter={() => (
-								<View style={[styles.sectionFooterSpacer]} />
-							)}
-							ListEmptyComponent={() => (
-								<View style={{ padding: 20, alignItems: "center" }}>
-									<Text style={{ color: themes.text, opacity: 0.6 }}>
-										No profiles found. Create one to get started!
-									</Text>
-								</View>
-							)}
+					<View style={{ paddingBottom: spacing.one }}>
+						<MiniTab
+							values={["Profiles", "Contacts"]}
+							selectedIndex={selectedIndex}
+							onChange={(index: number) => {
+								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
+								setSelectedIndex(index);
+							}}
+							style={{ paddingBottom: spacing.one }}
 						/>
 					</View>
-				) : (
-					// 🌟 3. RENDERING EMERGENCY CONTACTS TAB
-					<View style={{ flex: 1 }}>
-						<FlatList
-							data={emergencyContacts}
-							keyExtractor={(item) => item.id}
-							onRefresh={loadAllUserData}
-							refreshing={refreshing}
-							showsVerticalScrollIndicator={false}
-							contentContainerStyle={{ paddingBottom: 0, gap: 10 }}
-							renderItem={({ item, index }) => (
+
+					{selectedIndex === 0 ? (
+						<View style={{ flexDirection: "row", gap: spacing.one }}>
+							<Pressable
+								style={{ flex: 1 }}
+								onPress={() => {
+									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
+									searchInputRef.current?.focus();
+								}}
+							>
+								<TextInput
+									ref={searchInputRef}
+									placeholder="Search"
+									value={searchQuery}
+									onChangeText={setSearchQuery}
+									enabled={true}
+								/>
+							</Pressable>
+
+							<Button
+								variant="secondary"
+								onPress={() => {
+									setAddProfileVisible(true);
+								}}
+							>
 								<View
 									style={{
-										backgroundColor: themes.backgroundElement,
-										overflow: "hidden",
-										borderTopLeftRadius: index === 0 ? 12 : 0,
-										borderTopRightRadius: index === 0 ? 12 : 0,
-										borderBottomLeftRadius:
-											index === emergencyContacts.length - 1 ? 12 : 0,
-										borderBottomRightRadius:
-											index === emergencyContacts.length - 1 ? 12 : 0,
+										paddingHorizontal: spacing.two,
+										paddingVertical: spacing.one,
 									}}
 								>
-									<ContactCard
-										name={item.name}
-										phone={item.phone}
-										order={
-											item.hierarchy === 1 ? "primary"
-												: item.hierarchy === 2 ? "secondary"
-													: item.hierarchy === 3 ? "tertiary"
-														: item.hierarchy === 4 ? "quaternary"
-															: item.hierarchy === 5 ? "quinary"
-																: "none"
-										}
-									/>
+									<Host>
+										<Icon
+											name={Icon.select({
+												ios: "plus",
+												android: import("@expo/material-symbols/add.xml"),
+											})}
+											size={spacing.three}
+										/>
+									</Host>
 								</View>
-							)}
-							ListEmptyComponent={() => (
-								<View style={{ padding: 20, alignItems: "center" }}>
-									<Text style={{ color: themes.text, opacity: 0.6 }}>
-										No emergency contacts added yet.
-									</Text>
-								</View>
-							)}
-						/>
-					</View>
-				)}
-
-				{/* 🌟 4. ABSOLUTE POSITIONED BAR (SHARED BY BOTH INDICES FOR UNIFORM LAYOUT) */}
-				<KeyboardAvoidingView
-					behavior={Platform.OS === "ios" ? "padding" : undefined}
-					keyboardVerticalOffset={Platform.OS == "ios" ? 50 : 0}
-					style={{
-						position: "absolute",
-						// 🌟 DYNAMIC BOTTOM VALUE
-						bottom: isKeyboardVisible
-							? (Platform.OS == "ios" ? 100 : 40)
-							: (Platform.OS === "ios" ? 112 : 15),
-						left: spacing.two,
-						right: spacing.two,
-						zIndex: 10,
-						maxHeight: spacing.six
-					}}
-				>
-					<View style={{ flexDirection: "row", gap: spacing.one, width: "100%", borderWidth: spacing.none, borderColor: "white" }}>
-						{selectedIndex === 0 ? (
-							<>
-								{/* 🌟 Wrap the GlassView in a Pressable to handle taps anywhere on the bar */}
-								<Pressable
-									style={{ flex: 1, marginBottom: spacing.two, width: "100%" }}
-									onPress={() => {
-										Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
-										searchInputRef.current?.focus();
-									}}
-								>
-									<TextInput placeholder="Search" value={searchQuery} onChangeText={setSearchQuery} />
-								</Pressable>
-
-								<Button variant="secondary" onPress={() => { setAddProfileVisible(true) }}>
-									<View style={{ paddingHorizontal: spacing.two, paddingVertical: spacing.one }}>
-										<Host>
-											<Icon
-												name={Icon.select({
-													ios: "plus",
-													android: import("@expo/material-symbols/add.xml"),
-												})}
-												size={spacing.three}
-											/>
-										</Host>
-									</View>
-								</Button>
-							</>
-						) : (
-							// Buttons layout on Emergency Contacts tab. We match width properties to keep action items cleanly aligned.
-							<>
-								{/* Keeps the button pushed cleanly to the right side */}
-								<View style={{ flex: 1 }} />
-								<Host matchContents ignoreSafeArea="keyboard">
-									<Button
-										variant={Platform.OS == "ios" ? "outlined" : "filled"}
-										modifiers={[
-											controlSize("large"),
-											buttonStyle("glass"),
-											buttonBorderShape("circle"),
-										]}
-										onPress={() => {
-											setAddContactVisible(true);
-										}}
-									>
+							</Button>
+						</View>
+					) : (
+						<View style={{ paddingBottom: spacing.one }}>
+							<Button
+								variant="secondary"
+								onPress={() => {
+									setAddContactVisible(true);
+								}}
+							>
+								<View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.half }}>
+									<Host matchContents>
 										<Icon
 											name={Icon.select({
 												ios: "plus",
 												android: import("@expo/material-symbols/add.xml"),
 											})}
 										/>
-									</Button>
-								</Host>
-							</>
-						)}
-					</View>
-				</KeyboardAvoidingView>
+									</Host>
+									<Text style={{ color: themes.secondaryBttnText, fontSize: fontsize.button, fontFamily: "Body-Medium" }}>New Contact</Text>
+								</View>
+							</Button>
+						</View>
+					)}
 
-				<AddProfileModal
-					visible={addProfileVisible}
-					onClose={() => {
-						setAddProfileVisible(false);
-					}}
-				/>
+					{selectedIndex === 0 ? (
+						<View style={{ flex: 1, borderWidth: spacing.none, borderColor: themes.text }}>
+							<SectionList
+								sections={filteredSections}
+								keyExtractor={(item) => item.id}
+								onRefresh={loadAllUserData}
+								refreshing={refreshing}
+								contentContainerStyle={{
+									marginTop: spacing.none,
+									paddingBottom: 100 + insets.bottom,
+								}}
+								stickySectionHeadersEnabled={true}
+								showsVerticalScrollIndicator={false}
+								showsHorizontalScrollIndicator={false}
+								renderItem={({ item, index, section }) => (
+									<View
+										style={{
+											backgroundColor: themes.backgroundElement,
+											overflow: "hidden",
+											borderTopLeftRadius: index === 0 ? spacing.edge : spacing.none,
+											borderTopRightRadius: index === 0 ? spacing.edge : spacing.none,
+											borderBottomLeftRadius:
+												index === section.data.length - 1 ? spacing.edge : spacing.none,
+											borderBottomRightRadius:
+												index === section.data.length - 1 ? spacing.edge : spacing.none,
+										}}
+									>
+										<ProfileCard
+											name={item.name}
+											img={
+												item.img ||
+												"https://pbs.twimg.com/media/C8SFjSYWAAA6452.jpg"
+											}
+											isLast={index === section.data.length - 1}
+											onPress={() => {
+												Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+												if (item.id === "owner-profile") {
+													// @ts-ignore
+													router.push("/(tabs)/everyone/profile");
+												} else {
+													router.push({
+														// @ts-ignore
+														pathname: "/(tabs)/everyone/profile",
+														params: { profileId: item.id },
+													});
+												}
+											}}
+										/>
+									</View>
+								)}
+								renderSectionHeader={({ section: { title } }) => (
+									<View
+										style={[
+											styles.sectionHeaderContainer,
+											{ backgroundColor: themes.background },
+										]}
+									>
+										<Text
+											style={[
+												styles.sectionHeaderTitle,
+												{ color: themes.textSecondary },
+											]}
+										>
+											{title}
+										</Text>
+									</View>
+								)}
+								renderSectionFooter={() => (
+									<View style={[styles.sectionFooterSpacer]} />
+								)}
+								ListEmptyComponent={() => (
+									<View style={{ padding: spacing.two, alignItems: "center" }}>
+										<Text style={{ color: themes.textSecondary }}>
+											No profiles found. Create one to get started!
+										</Text>
+									</View>
+								)}
+							/>
+						</View>
+					) : (
+						<View style={{ flex: 1 }}>
+							<FlatList
+								data={emergencyContacts}
+								keyExtractor={(item) => item.id}
+								onRefresh={loadAllUserData}
+								refreshing={refreshing}
+								showsVerticalScrollIndicator={false}
+								contentContainerStyle={{
+									paddingBottom: 100 + insets.bottom,
+									gap: spacing.one,
+								}}
+								renderItem={({ item, index }) => (
+									<View
+										style={{
+											backgroundColor: themes.backgroundElement,
+											overflow: "hidden",
+											borderTopLeftRadius: index === 0 ? spacing.edge : spacing.none,
+											borderTopRightRadius: index === 0 ? spacing.edge : spacing.none,
+											borderBottomLeftRadius:
+												index === emergencyContacts.length - 1 ? spacing.edge : spacing.none,
+											borderBottomRightRadius:
+												index === emergencyContacts.length - 1 ? spacing.edge : spacing.none,
+										}}
+									>
+										<ContactCard
+											name={item.name}
+											phone={item.phone}
+											order={
+												item.hierarchy === 1
+													? "primary"
+													: item.hierarchy === 2
+														? "secondary"
+														: item.hierarchy === 3
+															? "tertiary"
+															: item.hierarchy === 4
+																? "quaternary"
+																: item.hierarchy === 5
+																	? "quinary"
+																	: "none"
+											}
+										/>
+									</View>
+								)}
+								ListEmptyComponent={() => (
+									<View style={{ padding: spacing.two, alignItems: "center" }}>
+										<Text style={{ color: themes.textSecondary }}>
+											No emergency contacts added yet.
+										</Text>
+									</View>
+								)}
+							/>
+						</View>
+					)}
 
-				<AddContactModal
-					visible={addContactVisible}
-					onClose={() => {
-						setAddContactVisible(false);
-					}}
-				/>
-			</View>
-		</SafeAreaView>
+					<KeyboardAvoidingView
+						behavior={Platform.OS == "ios" ? "padding" : "height"}
+					>
+						<AddProfileModal
+							visible={addProfileVisible}
+							onClose={() => {
+								setAddProfileVisible(false);
+							}}
+						/>
+					</KeyboardAvoidingView>
+
+					<AddContactModal
+						visible={addContactVisible}
+						onClose={() => {
+							setAddContactVisible(false);
+						}}
+					/>
+				</View>
+			</SafeAreaView>
+		</View>
 	);
 }
 
 const styles = StyleSheet.create({
-	container: { flex: 1, width: "100%", paddingHorizontal: 20 },
-	fieldContainer: { gap: 4, width: "100%" },
-	pageHeader: { fontSize: 40, fontFamily: "Logo-Font" },
-	infoLabel: { fontFamily: "Condensed-Bold", fontSize: 14, margin: 0 },
-	caption: { fontFeatureSettings: "Body-Medium", opacity: 0.8, fontSize: 13 },
+	safeArea: {
+		flex: 1,
+		backgroundColor: themes.background,
+	},
+	container: {
+		flex: 1,
+		width: "100%",
+		paddingHorizontal: spacing.two,
+		backgroundColor: themes.background,
+	},
+	bottomBarWrapper: {
+		position: "absolute",
+		left: spacing.two,
+		right: spacing.two,
+		zIndex: 10,
+		backgroundColor: "transparent",
+	},
+	bottomBarInner: {
+		flexDirection: "row",
+		gap: spacing.one,
+		width: "100%",
+		alignItems: "center",
+	},
+	pageHeader: {
+		fontSize: fontsize.pageHeader,
+		fontFamily: "Logo-Font",
+	},
 	sectionHeaderContainer: {
-		paddingVertical: 8,
-		marginTop: 0,
+		paddingVertical: spacing.one,
+		marginTop: spacing.none,
 		justifyContent: "center",
 	},
 	sectionHeaderTitle: {
-		fontSize: 14,
-		fontFamily: "Condensed-Bold",
+		fontSize: fontsize.caption,
+		fontFamily: "Body-Bold",
 		textTransform: "uppercase",
-		opacity: 0.6,
 	},
 	sectionFooterSpacer: {
-		height: 10,
+		height: spacing.one,
 	},
 });
