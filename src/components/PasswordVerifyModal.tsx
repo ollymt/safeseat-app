@@ -69,7 +69,7 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
 
     useEffect(() => {
         if (visible) {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         }
     }, [visible]);
 

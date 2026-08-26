@@ -384,7 +384,7 @@ export default function Everyone() {
 											name={item.name}
 											img={
 												item.img ||
-												"https://pbs.twimg.com/media/C8SFjSYWAAA6452.jpg"
+												"https://josephwojowski.wordpress.com/wp-content/uploads/2016/02/orange-twitter-egg.png"
 											}
 											isLast={index === section.data.length - 1}
 											onPress={() => {
@@ -473,6 +473,14 @@ export default function Everyone() {
 																	? "quinary"
 																	: "none"
 											}
+											onPress={() => {
+												Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+												router.push({
+													// @ts-ignore
+													pathname: "/(tabs)/everyone/contact",
+													params: { contactId: item.id },
+												});
+											}}
 										/>
 									</View>
 								)}

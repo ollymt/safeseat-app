@@ -10,7 +10,7 @@ import {
 	Text,
 	View
 } from "react-native";
-import { Host, Icon } from "@expo/ui"
+import { Host, Icon } from "@expo/ui";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import AssignCard from "@/components/assign-card";
@@ -27,6 +27,7 @@ type Profile = {
 	name: string;
 	photoURL?: string;
 	icon?: string;
+	pfp?: string; // Added pfp key support
 	isAccountOwner?: boolean;
 };
 
@@ -149,14 +150,13 @@ export default function Assign() {
 					try {
 						await AsyncStorage.setItem(IS_LOCKED_IN_KEY, JSON.stringify(false));
 						setIsLockedIn(false);
-						Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+						Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 					} catch (error) {
 						console.error("Failed to unlock assignments:", error);
 					}
 				}
 			}
-		])
-
+		]);
 	};
 
 	// ⚡ Mutator: Update status for a specific locked seat ("safe" | "warning" | "emergency")
@@ -180,21 +180,6 @@ export default function Assign() {
 		}
 	};
 
-	// ⚡ Mutator: Update status for ALL assigned seats at once
-	const setAllSeatsStatus = async (status: "safe" | "warning" | "emergency") => {
-		const updatedStatuses: Record<number, SeatState> = {};
-		Object.keys(assignments).forEach((seatStr) => {
-			updatedStatuses[parseInt(seatStr, 10)] = status;
-		});
-
-		setSeatStatuses(updatedStatuses);
-		try {
-			await AsyncStorage.setItem(SEAT_STATUSES_KEY, JSON.stringify(updatedStatuses));
-		} catch (error) {
-			console.error("Failed to update status for all seats:", error);
-		}
-	};
-
 	// Callback when modal updates or unassigns a seat
 	const handleSeatAssigned = (seatNumber: number, profile: Profile | null) => {
 		setAssignments((prev) => {
@@ -213,11 +198,9 @@ export default function Assign() {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
 		if (isLockedIn) {
-			// Options or quick-status toggle when locked in
 			const currentStatus = getCardState(seatNo);
 			if (currentStatus === "empty") return;
 
-			// Example cycle when tapped while locked in: safe -> warning -> emergency -> safe
 			const nextStatus: Record<string, "safe" | "warning" | "emergency"> = {
 				safe: "warning",
 				warning: "emergency",
@@ -225,7 +208,6 @@ export default function Assign() {
 			};
 			updateSeatStatus(seatNo, nextStatus[currentStatus] ?? "safe");
 		} else {
-			// Open assignment modal when unlocked
 			setSelectedSeat(seatNo);
 			setAssignModalVisible(true);
 		}
@@ -233,23 +215,17 @@ export default function Assign() {
 
 	const [dismissedSeats, setDismissedSeats] = useState<Set<number>>(new Set());
 
-	const emergencySeat = isLockedIn
-		? SEATS.find(
-			({ seatNo }) =>
-				seatStatuses[seatNo] === "emergency" &&
-				assignments[seatNo] &&
-				!dismissedSeats.has(seatNo)
-		)
-		: undefined;
-
-	const emergencyProfile = emergencySeat ? assignments[emergencySeat.seatNo] : undefined;
-
-	// Helper to transform the profile name to "Me" if they are the account owner
+	// Helper to transform display parameters and guarantee Base64 pfp propagation
 	const getDisplayProfile = (profile?: Profile): Profile | undefined => {
 		if (!profile) return undefined;
+
+		// Extracts base64 profile string from whichever key it was stored under
+		const base64Pfp = profile.icon || profile.pfp || profile.photoURL;
+
 		return {
 			...profile,
 			name: profile.isAccountOwner ? "Me" : profile.name,
+			icon: base64Pfp, // Assigns back to icon for assignedProfile prop
 		};
 	};
 
@@ -280,12 +256,12 @@ export default function Assign() {
 								borderRadius: spacing.one,
 							}}
 						>
-
 							{/* Front Row */}
 							<View style={{ gap: spacing.three, flexDirection: "row", height: 128, marginTop: spacing.ten, paddingHorizontal: spacing.eight }}>
 								<AssignCard
 									seatNo={1}
 									assignedProfile={getDisplayProfile(assignments[1])}
+									pfp={assignments[1]?.icon || assignments[1]?.pfp || assignments[1]?.photoURL}
 									onPress={() => handleCardPress(1)}
 									state={getCardState(1)}
 									seatCode="driver"
@@ -294,6 +270,7 @@ export default function Assign() {
 								<AssignCard
 									seatNo={2}
 									assignedProfile={getDisplayProfile(assignments[2])}
+									pfp={assignments[2]?.icon || assignments[2]?.pfp || assignments[2]?.photoURL}
 									onPress={() => handleCardPress(2)}
 									state={getCardState(2)}
 									seatCode="passenger"
@@ -306,6 +283,7 @@ export default function Assign() {
 								<AssignCard
 									seatNo={3}
 									assignedProfile={getDisplayProfile(assignments[3])}
+									pfp={assignments[3]?.icon || assignments[3]?.pfp || assignments[3]?.photoURL}
 									onPress={() => handleCardPress(3)}
 									state={getCardState(3)}
 									seatCode="l backseat"
@@ -314,6 +292,7 @@ export default function Assign() {
 								<AssignCard
 									seatNo={4}
 									assignedProfile={getDisplayProfile(assignments[4])}
+									pfp={assignments[4]?.icon || assignments[4]?.pfp || assignments[4]?.photoURL}
 									onPress={() => handleCardPress(4)}
 									state={getCardState(4)}
 									seatCode="c backseat"
@@ -322,6 +301,7 @@ export default function Assign() {
 								<AssignCard
 									seatNo={5}
 									assignedProfile={getDisplayProfile(assignments[5])}
+									pfp={assignments[5]?.icon || assignments[5]?.pfp || assignments[5]?.photoURL}
 									onPress={() => handleCardPress(5)}
 									state={getCardState(5)}
 									seatCode="r backseat"
@@ -339,7 +319,6 @@ export default function Assign() {
 								onPress={handleUnlock}
 								fullWidth={true}
 								variant="secondary"
-								glass={false}
 							/>
 						) : (
 							<Button
@@ -348,7 +327,6 @@ export default function Assign() {
 								fullWidth={true}
 								variant="primary"
 								enabled={hasAssignedSeats}
-								glass={false}
 							/>
 						)}
 					</View>
@@ -380,22 +358,6 @@ export default function Assign() {
 							handleSeatAssigned(seatNum, profile);
 						}}
 					/>
-
-					{/*
-				{emergencySeat && emergencyProfile && (
-					<EmergencytModal
-						seat={emergencySeat.seatNo}
-						visible={true}
-						onClose={() =>
-							setDismissedSeats((prev) => new Set(prev).add(emergencySeat.seatNo))
-						}
-						id={emergencyProfile.id}
-						name={emergencyProfile.name}
-						icon={emergencyProfile.photoURL ?? emergencyProfile.icon}
-						isAccountOwner={emergencyProfile.isAccountOwner}
-					/>
-				)}
-				*/}
 				</View>
 			</ScrollView>
 		</SafeAreaView>

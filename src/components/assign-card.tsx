@@ -24,11 +24,10 @@ type AssignCardProps = {
 	assignedProfile?: Profile | null;
 	name?: string;
 	pfp?: string;
-	locked?: boolean
-	state: string
+	locked?: boolean;
+	state: string;
 	onPress: () => void;
 };
-
 
 export default function AssignCard({
 	seatNo,
@@ -41,7 +40,16 @@ export default function AssignCard({
 	onPress,
 }: AssignCardProps) {
 	const displayName = assignedProfile?.name ?? name;
-	const displayIcon = assignedProfile?.icon ?? pfp;
+	const rawIcon = assignedProfile?.icon ?? pfp;
+
+	// Format raw base64 or Data URI string safely
+	const getFormattedImageUri = (img?: string) => {
+		if (!img || img === "Not Set" || img.trim() === "") return null;
+		if (img.startsWith("http") || img.startsWith("data:")) return img;
+		return `data:image/jpeg;base64,${img}`;
+	};
+
+	const imageUri = getFormattedImageUri(rawIcon);
 
 	return (
 		<Pressable
@@ -64,9 +72,10 @@ export default function AssignCard({
 		>
 			{displayName ? (
 				<View style={[assigncard.profileContainer]}>
-					{displayIcon ? (
+					{imageUri ? (
 						<Image
-							source={{ uri: displayIcon }}
+							key={imageUri} // Forces clean re-render when Base64 string updates
+							source={{ uri: imageUri }}
 							style={[
 								assigncard.avatar,
 								{
@@ -121,7 +130,7 @@ export default function AssignCard({
 								/>
 							</Host>
 						) : state === "warning" ? (
-								<Host matchContents style={{ width: spacing.two, height: spacing.two, justifyContent: 'center', alignItems: 'center' }}>
+							<Host matchContents style={{ width: spacing.two, height: spacing.two, justifyContent: 'center', alignItems: 'center' }}>
 								<Icon
 									name={Icon.select({
 										ios: "exclamationmark.triangle.fill",
@@ -132,7 +141,7 @@ export default function AssignCard({
 								/>
 							</Host>
 						) : state === "emergency" ? (
-									<Host matchContents style={{ width: spacing.two, height: spacing.two, justifyContent: 'center', alignItems: 'center' }}>
+							<Host matchContents style={{ width: spacing.two, height: spacing.two, justifyContent: 'center', alignItems: 'center' }}>
 								<Icon
 									name={Icon.select({
 										ios: "light.beacon.max.fill",
@@ -152,7 +161,8 @@ export default function AssignCard({
 										? themes.lightOrange
 										: state == "emergency"
 											? themes.warnBttn
-											: themes.text, }]}
+											: themes.text,
+							}]}
 						>
 							{displayName}
 						</Text>
