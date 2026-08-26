@@ -1,19 +1,21 @@
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
-import { StyleSheet, View, Text, Pressable } from "react-native";
+import { StyleSheet, View, Text, Pressable, ViewStyle } from "react-native";
 
 type MiniTabProps = {
     values: string[];
     selectedIndex: number;
     onChange: (index: number) => void;
+    style?: ViewStyle
 };
 
 export default function MiniTab({
     values,
     selectedIndex,
     onChange,
+    style
 }: MiniTabProps) {
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, style]}>
             {values.map((item, index) => {
                 const isSelected = selectedIndex === index;
                 return (

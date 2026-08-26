@@ -9,6 +9,7 @@ import {
     Image,
     Keyboard,
     Linking,
+    Platform,
     Pressable,
     StyleSheet,
     Text,
@@ -17,6 +18,9 @@ import {
     ActivityIndicator
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import PasswordVerifyModal from "@/components/PasswordVerifyModal";
+import { isSessionValid } from "@/utils/securitySession";
 
 import * as Haptics from "expo-haptics";
 
@@ -54,8 +58,10 @@ export default function Contact() {
 
     const originalData = useRef({ name: "Guest", phone: "Not Set", hierarchy: 1 });
 
-    // UI Interaction State
+    // 4. UI Interaction State
     const [editMode, setEditMode] = useState(false);
+    const [authModalVisible, setAuthModalVisible] = useState(false);
+    const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
     const [saving, setSaving] = useState(false);
 
     const hasUnsavedChanges = () => {
@@ -96,6 +102,17 @@ export default function Contact() {
 
         return unsubscribe;
     }, [navigation]);
+
+    const executeSecureAction = async (action: () => void) => {
+        const authenticated = await isSessionValid();
+        if (authenticated) {
+            action();
+        } else {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            setPendingAction(() => () => action());
+            setAuthModalVisible(true);
+        }
+    };
 
     const discardChanges = () => {
         setUserName(originalData.current.name);
@@ -181,6 +198,25 @@ export default function Contact() {
         if (!userPhone || userPhone === "Not Set") return;
         Linking.openURL(`sms:${userPhone}`);
     };
+
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+    useEffect(() => {
+        const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+        const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+        const showSub = Keyboard.addListener(showEvent, (e) => {
+            setKeyboardHeight(e.endCoordinates.height);
+        });
+        const hideSub = Keyboard.addListener(hideEvent, () => {
+            setKeyboardHeight(0);
+        });
+
+        return () => {
+            showSub.remove();
+            hideSub.remove();
+        };
+    }, []);
 
     const bottomPad = 104 + (insets.bottom / 2);
 
@@ -493,8 +529,10 @@ export default function Contact() {
                                                 variant="secondary"
                                                 label="Edit Profile"
                                                 onPress={() => {
-                                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                                                    setEditMode(true);
+                                                    executeSecureAction(() => {
+                                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                                        setEditMode(true);
+                                                    });
                                                 }}
                                                 enabled={!saving}
                                             />
@@ -502,6 +540,21 @@ export default function Contact() {
                                     </>
                                 )}
                             </View>
+
+                            <PasswordVerifyModal
+                                visible={authModalVisible}
+                                onClose={() => {
+                                    setAuthModalVisible(false);
+                                    setPendingAction(null);
+                                }}
+                                onSuccess={() => {
+                                    setAuthModalVisible(false);
+                                    if (pendingAction) {
+                                        pendingAction();
+                                        setPendingAction(null);
+                                    }
+                                }}
+                            />
                         </View>
                     </View>
                 </KeyboardAwareScrollView>

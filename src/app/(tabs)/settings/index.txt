@@ -1,7 +1,6 @@
 import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
 import { useFocusEffect, useNavigation, useRouter, } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Linking } from 'react-native';
 import {
 	Alert,
 	Dimensions,
@@ -31,8 +30,6 @@ const { width: screenWidth } = Dimensions.get("window");
 import ChangeEmailModal from "@/components/change-email-modal";
 import ChangePhoneModal from "@/components/change-phone-modal";
 import MiniTab from "@/components/mini-tab";
-
-const IS_LOCKED_IN_KEY = "isLockedIn";
 
 export default function Settings() {
 	const router = useRouter();
@@ -88,10 +85,6 @@ export default function Settings() {
 				if (savedPrivacy.useMetric !== undefined) setIsMetric(savedPrivacy.useMetric);
 			}
 
-			// 👇 NEW: sync lock state with the Assign screen
-			const rawLockedIn = await AsyncStorage.getItem(IS_LOCKED_IN_KEY);
-			setIsLockedIn(rawLockedIn ? JSON.parse(rawLockedIn) : false);
-
 			const currentUser = auth.currentUser;
 			if (currentUser) {
 				// Set fallback/default email from Auth
@@ -136,6 +129,12 @@ export default function Settings() {
 			console.error("Failed to load user profile data:", error);
 		}
 	}, []);
+
+	useFocusEffect(
+		useCallback(() => {
+			loadAllUserData();
+		}, [loadAllUserData])
+	);
 
 	const saveHealthField = async (key: string, val: string) => {
 		try {
@@ -216,11 +215,19 @@ export default function Settings() {
 	const [changeEmailVisible, setChangeEmailVisible] = useState(false)
 	const [changePhoneVisible, setChangePhoneVisible] = useState(false)
 
-	useFocusEffect(
-		useCallback(() => {
-			loadAllUserData();
-		}, [loadAllUserData])
-	);
+	const loadData = useCallback(async () => {
+		try {
+			const [rawLockedIn] = await Promise.all([
+				AsyncStorage.getItem("isLockedIn"),
+			]);
+
+			const locked = rawLockedIn ? JSON.parse(rawLockedIn) : false;
+			setIsLockedIn(locked);
+
+		} catch (error) {
+			console.error("Failed to load home state from device:", error);
+		}
+	}, []);
 
 	return (
 		<SafeAreaView
@@ -356,10 +363,6 @@ export default function Settings() {
 													})}
 													isLast={false}
 													enabled={!isLockedIn}
-													onPress={() => {
-														if (isLockedIn) return;
-														// Add your Log Out logic here
-													}}
 												/>
 												<SettingPageItem
 													name="Nuke account"
@@ -370,15 +373,12 @@ export default function Settings() {
 													isLast={true}
 													destructive={true}
 													enabled={!isLockedIn}
-													onPress={() => {
-														if (isLockedIn) return;
-														// Add your Account Deletion logic here
-													}}
+
 												/>
 											</View>
 											{isLockedIn &&
-												<Text style={styles.caption}>
-													Seat assignment must be unlocked before you can log out or nuke your account.
+												<Text>
+													Unlock seat assignment before logging out or nuking account.
 												</Text>
 											}
 										</View>
@@ -390,79 +390,10 @@ export default function Settings() {
 					</View>
 
 					{/* FOOTER */}
-					<View style={{ paddingHorizontal: spacing.one, gap: spacing.two }}>
-						<View>
-
-							<Text style={[styles.caption, { color: themes.primaryBttn, textAlign: "center", textDecorationLine: "underline", marginBottom: spacing.two }]} onPress={() => {
-								Linking.openURL("https://github.com/ollymt/safeseat-app")
-							}}>
-								v.26w35d4r02
-							</Text>
-
-							<Text style={[styles.caption, { color: themes.textSecondary, textAlign: "center" }]}>
-								made with 🧡 by safeseat team
-							</Text>
-
-							<View style={{ flexDirection: "row", gap: spacing.half, justifyContent: "center" }}>
-								<Text style={[styles.caption, { color: themes.textSecondary, textAlign: "center" }]}>
-									frontend designer and developer -
-								</Text>
-								<Text style={[styles.caption, { color: themes.primaryBttn, textAlign: "center", textDecorationLine: "underline" }]} onPress={() => {
-									Linking.openURL("https://github.com/ollymt")
-								}}>
-									ollymt
-								</Text>
-							</View>
-
-							<View style={{ flexDirection: "row", gap: spacing.half, justifyContent: "center" }}>
-								<Text style={[styles.caption, { color: themes.textSecondary, textAlign: "center" }]}>
-									backend developer -
-								</Text>
-								<Text style={[styles.caption, { color: themes.primaryBttn, textAlign: "center", textDecorationLine: "underline" }]} onPress={() => {
-									Linking.openURL("https://github.com/ooniins")
-								}}>
-									ooniins
-								</Text>
-							</View>
-
-							<View style={{ flexDirection: "row", gap: spacing.half, justifyContent: "center" }}>
-								<Text style={[styles.caption, { color: themes.textSecondary, textAlign: "center" }]}>
-									hardware developer -
-								</Text>
-								<Text style={[styles.caption, { color: themes.primaryBttn, textAlign: "center", textDecorationLine: "underline" }]} onPress={() => {
-									Linking.openURL("https://github.com/Lycos-Blanza")
-								}}>
-									Lycos-Blanza
-								</Text>
-							</View>
-
-							<View style={{ flexDirection: "row", gap: spacing.half, justifyContent: "center" }}>
-								<Text style={[styles.caption, { color: themes.textSecondary, textAlign: "center" }]}>
-									ml developer -
-								</Text>
-								<Text style={[styles.caption, { color: themes.primaryBttn, textAlign: "center", textDecorationLine: "underline" }]} onPress={() => {
-									Linking.openURL("https://github.com/Francis-Medrano")
-								}}>
-									Francis-Medrano
-								</Text>
-							</View>
-
-						</View>
-						<View>
-							<Text style={[styles.caption, { color: themes.textSecondary, textAlign: "center" }]}>
-								CREDITS:
-							</Text>
-							<View style={{ flexDirection: "column", gap: spacing.quarter, justifyContent: "center" }}>
-								<Text style={[styles.caption, { color: themes.textSecondary, textAlign: "center" }]}>
-									Busy Night Traffic — StockCake:
-								</Text>
-								<Text style={[styles.caption, { color: themes.primaryBttn, textAlign: "center", textDecorationLine: "underline" }]} onPress={() => {
-									Linking.openURL("https://stockcake.com/i/busy-night-traffic_1374713_227178")
-								}}>
-									https://stockcake.com/i/busy-night-traffic_1374713_227178
-								</Text>
-							</View>
-						</View>
+					<View style={{ paddingHorizontal: 10 }}>
+						<Text style={[styles.caption, { color: themes.textSecondary, textAlign: "center" }]}>
+							v.26w30d5r02 • made with 🧡 by safeseat team
+						</Text>
 					</View>
 
 					<ChangeEmailModal

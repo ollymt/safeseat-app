@@ -2,6 +2,7 @@ import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/co
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+	ActivityIndicator,
 	Alert,
 	Dimensions,
 	Image,
@@ -22,7 +23,7 @@ import * as SecureStore from "expo-secure-store";
 
 import * as Haptics from "expo-haptics";
 
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
 
 import Button from "@/components/button";
 import TextInput from "@/components/text-input";
@@ -402,8 +403,6 @@ export default function Profile() {
 	const validateForm = () => {
 		// 0. Required fields — everything except allergies must be filled in
 		if (userName.trim() === "") return false;
-		if (userEmail.trim() === "" || userEmail === "Not Set") return false;
-		if (userPhone.trim() === "" || userPhone === "Not Set") return false;
 
 		if (birthYear.trim() === "" || birthMonth.trim() === "" || birthDate.trim() === "") return false;
 
@@ -471,8 +470,6 @@ export default function Profile() {
 		return (
 			userName !== orig.name ||
 			userIcon !== orig.icon || // <-- ADD THIS LINE
-			userEmail !== orig.email ||
-			userPhone !== orig.phone ||
 			height !== orig.height ||
 			weight !== orig.weight ||
 			bloodType !== orig.bloodType ||
@@ -566,6 +563,7 @@ export default function Profile() {
 
 			await updateDoc(profileDocRef, firestorePayload);
 			setEditMode(false);
+			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
 		} catch (error) {
 			Alert.alert("Failed to save changes");
 			console.error("Failed to save changes: ", error);
@@ -697,7 +695,7 @@ export default function Profile() {
 		}
 
 		const result = await ImagePicker.launchImageLibraryAsync({
-			mediaTypes: ImagePicker.MediaTypeOptions.Images,
+			mediaTypes: ["images"],
 			allowsEditing: true,
 			aspect: [1, 1],
 			quality: 0.3, // Compress heavily to keep Base64 string well under 1MB
@@ -709,6 +707,86 @@ export default function Profile() {
 			const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
 			setUserIcon(base64Image);
 		}
+	};
+
+	// Wipes stale data immediately when switching profiles so old profile data never renders
+	useEffect(() => {
+		setUserName("");
+		setUserIcon("");
+		setUserEmail("");
+		setUserPhone("");
+		setHeight("");
+		setWeight("");
+		setBloodType("");
+		setAllergies("");
+		setBirthYear("");
+		setBirthMonth("");
+		setBirthDate("");
+		setTempFeet("");
+		setTempInches("");
+		setTempLbs("");
+		originalDataRef.current = {};
+	}, [profileId, cacheKey]);
+
+	const [isLoaded, setIsLoaded] = useState(false);
+	useFocusEffect(
+		useCallback(() => {
+			let isMounted = true;
+
+			// Temporarily flag as loading while async SecureStore reads
+			setIsLoaded(false);
+
+			loadAllUserData().then(() => {
+				if (isMounted) setIsLoaded(true);
+			});
+
+			return () => {
+				isMounted = false;
+			};
+		}, [loadAllUserData])
+	);
+
+	if (!isLoaded) {
+		return (
+			<View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: themes.background }}>
+				<ActivityIndicator color={themes.text} size="large" />
+			</View>
+		)
+	}
+
+	const handleDeleteProfile = () => {
+		Alert.alert(
+			`Nuke ${userName}?`,
+			`Are you sure you want to nuke ${userName}? This action can't be undone.`,
+			[
+				{ text: "Cancel", style: "cancel" },
+				{
+					text: "Nuke",
+					style: "destructive",
+					onPress: async () => {
+						try {
+							setSaving(true);
+							const currentUser = auth.currentUser;
+							if (!currentUser || !isSubProfile) return;
+
+							const profileDocRef = doc(db, "users", currentUser.uid, "profiles", profileId as string);
+							await deleteDoc(profileDocRef);
+
+							await SecureStore.deleteItemAsync(cacheKey);
+
+							Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+							router.back();
+						} catch (error) {
+							Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+							Alert.alert("Failed to nuke profile");
+							console.error("Failed to nuke profile: ", error);
+						} finally {
+							setSaving(false);
+						}
+					},
+				},
+			]
+		);
 	};
 
 	return (
@@ -739,7 +817,7 @@ export default function Profile() {
 								<Image
 									source={
 										!userIcon || userIcon === "Not Set" || userIcon === ""
-											? { uri: "https://pbs.twimg.com/media/C8SFjSYWAAA6452.jpg" }
+											? { uri: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNyV3QnQOwXP124try4wkWE0xXqxT6KZitbq4TerzfLkMDDY-v1CXzTGw&s=10" }
 											: { uri: userIcon } // React Native Image natively supports base64 Data URIs
 									}
 									style={{
@@ -792,6 +870,7 @@ export default function Profile() {
 													value={userName}
 													onChangeText={setUserName}
 													placeholder="Name"
+													enabled={!saving}
 												/>
 											</View>
 										) : (
@@ -813,6 +892,7 @@ export default function Profile() {
 														value={birthMonth}
 														onChangeText={setBirthMonth}
 														placeholder="MM"
+														enabled={!saving}
 													/>
 												</View>
 												<View style={{ flex: 1 }}>
@@ -821,6 +901,7 @@ export default function Profile() {
 														value={birthDate}
 														onChangeText={setBirthDate}
 														placeholder="DD"
+														enabled={!saving}
 													/>
 												</View>
 												<View style={{ flex: 1 }}>
@@ -829,6 +910,7 @@ export default function Profile() {
 														value={birthYear}
 														onChangeText={setBirthYear}
 														placeholder="YYYY"
+														enabled={!saving}
 													/>
 												</View>
 											</View>
@@ -885,6 +967,7 @@ export default function Profile() {
 															value={tempFeet}
 															placeholder="(ft)"
 															onChangeText={setTempFeet}
+															enabled={!saving}
 														/>
 													</View>
 
@@ -894,6 +977,7 @@ export default function Profile() {
 															value={tempInches}
 															placeholder="(in)"
 															onChangeText={setTempInches}
+															enabled={!saving}
 														/>
 													</View>
 												</>
@@ -905,6 +989,7 @@ export default function Profile() {
 															value={height}
 															placeholder="(cm)"
 															onChangeText={setHeight}
+															enabled={!saving}
 														/>
 													</View>
 												</>
@@ -926,6 +1011,7 @@ export default function Profile() {
 													type="number"
 													value={isMetric ? weight : tempLbs}
 													placeholder={isMetric ? "(kg)" : "(lb)"}
+													enabled={!saving}
 													onChangeText={(val) => {
 														if (isMetric) {
 															setWeight(val);
@@ -964,6 +1050,7 @@ export default function Profile() {
 													placeholder="Blood Type"
 													placeholderStyle={{ color: themes.textInputPlaceholder }}
 													value={bloodType}
+													disable={saving}
 													style={[
 														styles.input
 													]}
@@ -992,15 +1079,13 @@ export default function Profile() {
 													}}
 													activeColor={themes.primaryBttn}
 													maxHeight={spacing.ten * 3}
-													onChange={setBloodType}
+													onChange={(item) => setBloodType(item.value)}
 													autoScroll={false}
 												/>
 											</View>
 										) : (
 											<Text style={{ color: themes.text, fontFamily: "Body-Medium", fontSize: fontsize.body }}>
-												{ // @ts-ignore
-													bloodType.label
-												}
+												{bloodTypes.find(bt => bt.value === bloodType)?.label ?? "Not Set"}
 											</Text>
 										)}
 									</View>
@@ -1016,6 +1101,7 @@ export default function Profile() {
 													value={allergies}
 													onChangeText={setAllergies}
 													placeholder="(e.g. peanuts)"
+													enabled={!saving}
 												/>
 											</View>
 										) : (
@@ -1027,31 +1113,46 @@ export default function Profile() {
 								</View>
 							</View>
 
-							<View style={{ flexDirection: "row", gap: spacing.one }}>
-								{editMode &&
-									<View style={{}}>
+							<View style={{ flexDirection: "column", gap: spacing.one }}>
+								<View style={{ flexDirection: "row", gap: spacing.one }}>
+									{editMode &&
+										<View style={{}}>
 
-										{hasUnsavedChanges() ? (
-											<Button variant="warn" label="Discard" onPress={() => { handleCancelEdit() }} />
-										) : (
-											<Button variant="secondary" label="Cancel" onPress={() => { handleCancelEdit() }} />
-										)}
+											<Button 
+												variant="secondary" 
+												label={hasUnsavedChanges() ? "Discard" : "Cancel"} 
+												onPress={() => { handleCancelEdit() }} 
+												enabled={!saving}
+											/>
 
+										</View>
+									}
+									<View style={{ flex: 1 }}>
+										<Button 
+											variant={editMode ? "primary" : "secondary"} 
+											label={editMode ? "Save" : "Edit Profile"} 
+											onPress={() => {
+												if (!editMode) {
+													executeSecureAction(() => {
+														Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+														setEditMode(true);
+													});
+												} else {
+													Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+													handleSaveChanges();
+												}
+											}}
+											loading={saving}
+											enabled={!saving}
+										 />
+									</View>
+								</View>
+
+								{editMode && isSubProfile &&
+									<View style={{ flex: 1 }}>
+										<Button variant="warn" label={`Nuke ${userName}`} onPress={handleDeleteProfile} enabled={!saving} />
 									</View>
 								}
-								<View style={{ flex: 1 }}>
-									<Button variant={editMode ? "primary" : "secondary"} label={editMode ? "Save" : "Edit Profile"} onPress={() => {
-										if (!editMode) {
-											executeSecureAction(() => {
-												Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-												setEditMode(true);
-											});
-										} else {
-											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-											handleSaveChanges();
-										}
-									}} />
-								</View>
 							</View>
 						</View>
 

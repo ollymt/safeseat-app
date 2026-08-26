@@ -284,7 +284,6 @@ export default function Everyone() {
 								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
 								setSelectedIndex(index);
 							}}
-							style={{ paddingBottom: spacing.one }}
 						/>
 					</View>
 
@@ -384,7 +383,7 @@ export default function Everyone() {
 											name={item.name}
 											img={
 												item.img ||
-												"https://josephwojowski.wordpress.com/wp-content/uploads/2016/02/orange-twitter-egg.png"
+												"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNyV3QnQOwXP124try4wkWE0xXqxT6KZitbq4TerzfLkMDDY-v1CXzTGw&s=10"
 											}
 											isLast={index === section.data.length - 1}
 											onPress={() => {

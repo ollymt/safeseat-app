@@ -117,6 +117,7 @@ const setitem = StyleSheet.create({
     settingName: {
         fontSize: 18,
         fontFamily: "Body-Medium",
+        flex: 1
     },
     settingValue: {
         fontSize: 18,

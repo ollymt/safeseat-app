@@ -261,7 +261,7 @@ export default function Assign() {
 								<AssignCard
 									seatNo={1}
 									assignedProfile={getDisplayProfile(assignments[1])}
-									pfp={assignments[1]?.icon || assignments[1]?.pfp || assignments[1]?.photoURL}
+									pfp={assignments[1]?.icon || assignments[1]?.pfp || assignments[1]?.photoURL || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNyV3QnQOwXP124try4wkWE0xXqxT6KZitbq4TerzfLkMDDY-v1CXzTGw&s=10"}
 									onPress={() => handleCardPress(1)}
 									state={getCardState(1)}
 									seatCode="driver"
@@ -270,7 +270,7 @@ export default function Assign() {
 								<AssignCard
 									seatNo={2}
 									assignedProfile={getDisplayProfile(assignments[2])}
-									pfp={assignments[2]?.icon || assignments[2]?.pfp || assignments[2]?.photoURL}
+									pfp={assignments[2]?.icon || assignments[2]?.pfp || assignments[2]?.photoURL || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNyV3QnQOwXP124try4wkWE0xXqxT6KZitbq4TerzfLkMDDY-v1CXzTGw&s=10"}
 									onPress={() => handleCardPress(2)}
 									state={getCardState(2)}
 									seatCode="passenger"
@@ -283,7 +283,7 @@ export default function Assign() {
 								<AssignCard
 									seatNo={3}
 									assignedProfile={getDisplayProfile(assignments[3])}
-									pfp={assignments[3]?.icon || assignments[3]?.pfp || assignments[3]?.photoURL}
+									pfp={assignments[3]?.icon || assignments[3]?.pfp || assignments[3]?.photoURL || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNyV3QnQOwXP124try4wkWE0xXqxT6KZitbq4TerzfLkMDDY-v1CXzTGw&s=10"}
 									onPress={() => handleCardPress(3)}
 									state={getCardState(3)}
 									seatCode="l backseat"
@@ -292,7 +292,7 @@ export default function Assign() {
 								<AssignCard
 									seatNo={4}
 									assignedProfile={getDisplayProfile(assignments[4])}
-									pfp={assignments[4]?.icon || assignments[4]?.pfp || assignments[4]?.photoURL}
+									pfp={assignments[4]?.icon || assignments[4]?.pfp || assignments[4]?.photoURL || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNyV3QnQOwXP124try4wkWE0xXqxT6KZitbq4TerzfLkMDDY-v1CXzTGw&s=10"}
 									onPress={() => handleCardPress(4)}
 									state={getCardState(4)}
 									seatCode="c backseat"
@@ -301,7 +301,7 @@ export default function Assign() {
 								<AssignCard
 									seatNo={5}
 									assignedProfile={getDisplayProfile(assignments[5])}
-									pfp={assignments[5]?.icon || assignments[5]?.pfp || assignments[5]?.photoURL}
+									pfp={assignments[5]?.icon || assignments[5]?.pfp || assignments[5]?.photoURL || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNyV3QnQOwXP124try4wkWE0xXqxT6KZitbq4TerzfLkMDDY-v1CXzTGw&s=10"}
 									onPress={() => handleCardPress(5)}
 									state={getCardState(5)}
 									seatCode="r backseat"

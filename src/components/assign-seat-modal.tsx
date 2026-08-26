@@ -269,7 +269,7 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
                                     renderItem={({ item, index }) => (
                                         <ProfileList
                                             name={item.name}
-                                            pfp={item.icon}
+                                            pfp={item.icon || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNyV3QnQOwXP124try4wkWE0xXqxT6KZitbq4TerzfLkMDDY-v1CXzTGw&s=10"}
                                             checked={item.id === selectedProfileId}
                                             onPress={() => handleSelectProfile(item.id)}
                                             isLast={!(index === profiles.length - 1)}
