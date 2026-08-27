@@ -1,3 +1,4 @@
+import SafeSeatLiveMonitor from "@/components/safeseat-live-monitor";
 import { Themes } from "@/constants/theme";
 import { DarkTheme, DefaultTheme, ThemeProvider } from "expo-router";
 import { NativeTabs } from "expo-router/unstable-native-tabs";
@@ -11,6 +12,7 @@ export default function TabLayout() {
   return (
     // ThemeProvider is required to prevent visual flashes during tab switching
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+      <SafeSeatLiveMonitor />
       <NativeTabs
           // Tints the active tab icons
           tintColor={activeScheme == "dark" ? "#BBFFB3" : "#25601D"}

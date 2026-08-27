@@ -1,118 +1,106 @@
-// components/assign-card.tsx
 import { Themes } from "@/constants/theme";
+import type { SafeSeatAssignment } from "@/types/safeseat-session";
 import { Host, Icon } from "@expo/ui";
-import { opacity } from "@expo/ui/swift-ui/modifiers";
 import {
+  Image,
   Pressable,
   StyleSheet,
   Text,
   useColorScheme,
   View,
-  Image,
 } from "react-native";
 
-type Profile = {
-  id: string;
-  name: string;
-  icon?: string;
-  isAccountOwner?: boolean;
-};
+export type AssignCardState =
+  | "empty"
+  | "assigned"
+  | "monitored"
+  | "unmonitored";
 
 type AssignCardProps = {
   seatNo: number;
   seatCode: string;
-  assignedProfile?: Profile | null;
-  name?: string;
-  pfp?: string;
-  locked?: boolean
-  state: string
+  assignedProfile?: SafeSeatAssignment | null;
+  state?: AssignCardState;
   onPress: () => void;
 };
 
+const STATE_LABELS: Record<AssignCardState, string> = {
+  empty: "EMPTY",
+  assigned: "ASSIGNED",
+  monitored: "PROTOTYPE",
+  unmonitored: "NOT MONITORED",
+};
 
 export default function AssignCard({
-  seatNo,
   seatCode,
   assignedProfile,
-  name,
-  pfp,
   state = "empty",
-  locked = true,
   onPress,
 }: AssignCardProps) {
   const colorScheme = useColorScheme();
-  const activeScheme = colorScheme === "dark" ? "dark" : "light";
-  const currentTheme = Themes[activeScheme];
+  const currentTheme = Themes[colorScheme === "dark" ? "dark" : "light"];
 
-  const displayName = assignedProfile?.name ?? name;
-  const displayIcon = assignedProfile?.icon ?? pfp;
-
-  // Green outline when a seat is assigned; subtle gray dashed outline when unassigned
-  const borderColor = displayName ? currentTheme.primaryBttn : currentTheme.textSecondary;
+  const displayName = assignedProfile?.name;
+  const displayIcon = assignedProfile?.photoURL ?? assignedProfile?.icon ?? undefined;
+  const statusColor =
+    state === "monitored"
+      ? currentTheme.primaryBttn
+      : state === "unmonitored"
+        ? currentTheme.textSecondary
+        : state === "assigned"
+          ? currentTheme.blue
+          : currentTheme.textSecondary;
 
   return (
     <Pressable
       onPress={onPress}
       style={[
-        assigncard.baseCard,
+        styles.baseCard,
         {
           backgroundColor: currentTheme.element,
-          borderColor: state == "safe"
-            ? currentTheme.primaryBttn
-            : state == "warning"
-              ? currentTheme.yellow
-              : state == "emergency"
-                ? currentTheme.warnBttn
-                : currentTheme.text,
-          opacity: state == "empty" ? 0.5 : 1,
+          borderColor: statusColor,
+          opacity: state === "empty" ? 0.55 : 1,
           borderStyle: displayName ? "solid" : "dashed",
         },
       ]}
     >
       {displayName ? (
-        <View style={assigncard.profileContainer}>
+        <View style={styles.profileContainer}>
           {displayIcon ? (
             <Image
               source={{ uri: displayIcon }}
-              style={[
-                assigncard.avatar,
-                {
-                  borderColor: state == "safe"
-                    ? currentTheme.primaryBttn
-                    : state == "warning"
-                      ? currentTheme.yellow
-                      : state == "emergency"
-                        ? currentTheme.warnBttn
-                        : currentTheme.text,
-
-                  borderWidth: 2
-                },
-              ]}
+              style={[styles.avatar, { borderColor: statusColor }]}
             />
           ) : (
             <View
               style={[
-                assigncard.avatarFallback,
+                styles.avatarFallback,
                 { backgroundColor: currentTheme.primaryBttn },
               ]}
             >
-              <Text style={[assigncard.monogram, { color: currentTheme.primaryBttnText }]}>
+              <Text
+                style={[
+                  styles.monogram,
+                  { color: currentTheme.primaryBttnText },
+                ]}
+              >
                 {displayName.charAt(0).toUpperCase()}
               </Text>
             </View>
           )}
+
           <Text
             numberOfLines={1}
-            style={[assigncard.profileName, { color: currentTheme.text }]}
+            style={[styles.profileName, { color: currentTheme.text }]}
           >
             {displayName}
           </Text>
-          <Text style={[assigncard.seatCode, { color: currentTheme.textSecondary }]}>
+          <Text style={[styles.seatCode, { color: currentTheme.textSecondary }]}>
             {seatCode.toUpperCase()}
           </Text>
         </View>
       ) : (
-        <View style={assigncard.iconContainer}>
+        <View style={styles.iconContainer}>
           <Host matchContents>
             <Icon
               name={Icon.select({
@@ -122,29 +110,20 @@ export default function AssignCard({
               color={currentTheme.textSecondary}
             />
           </Host>
-          <Text style={[assigncard.seatCode, { color: currentTheme.textSecondary }]}>
+          <Text style={[styles.seatCode, { color: currentTheme.textSecondary }]}>
             {seatCode.toUpperCase()}
           </Text>
         </View>
       )}
-      <Text style={{
-        color: state == "safe"
-          ? currentTheme.primaryBttn
-          : state == "warning"
-            ? currentTheme.yellow
-            : state == "emergency"
-              ? currentTheme.warnBttn
-              : currentTheme.text,
 
-        fontFamily: "Body-Bold",
-        fontSize: 16,
-        marginTop: 4
-      }}>{state.toUpperCase()}</Text>
+      <Text style={[styles.stateText, { color: statusColor }]}>
+        {STATE_LABELS[state]}
+      </Text>
     </Pressable>
   );
 }
 
-const assigncard = StyleSheet.create({
+const styles = StyleSheet.create({
   baseCard: {
     flex: 1,
     borderRadius: 12,
@@ -165,6 +144,7 @@ const assigncard = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     resizeMode: "cover",
+    borderWidth: 2,
   },
   avatarFallback: {
     width: 60,
@@ -190,5 +170,12 @@ const assigncard = StyleSheet.create({
   },
   seatCode: {
     fontSize: 12,
+    textAlign: "center",
+  },
+  stateText: {
+    fontFamily: "Body-Bold",
+    fontSize: 12,
+    marginTop: 5,
+    textAlign: "center",
   },
 });

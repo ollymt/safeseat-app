@@ -9,7 +9,13 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.ollymt.safeseatapp"
+      "bundleIdentifier": "com.ollymt.safeseatapp",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "SafeSeat connects to the Main Hub on the local SafeSeat Wi-Fi network to receive live occupant-monitoring status.",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -41,7 +47,8 @@
       "expo-image",
       "expo-secure-store",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      "./plugins/with-safeseat-local-network"
     ],
     "experiments": {
       "typedRoutes": true,

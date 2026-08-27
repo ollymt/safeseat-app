@@ -1,19 +1,38 @@
 import { Themes } from "@/constants/theme";
 import { Host, Icon } from "@expo/ui";
 import {
-    Pressable,
-    StyleSheet,
-    Text,
-    useColorScheme,
-    View,
+  Pressable,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View,
 } from "react-native";
+
+export type SafeSeatCardState =
+  | "safe"
+  | "warning"
+  | "monitoring"
+  | "emergency"
+  | "empty"
+  | "unmonitored"
+  | "unavailable";
 
 type SeatCardProps = {
   seatNo: number;
   name?: string;
-  state?: "safe" | "warning" | "emergency" | "empty" ;
+  state?: SafeSeatCardState;
   role?: string;
-  onPress: () => void;
+  onPress?: () => void;
+};
+
+const LABELS: Record<SafeSeatCardState, string> = {
+  safe: "SAFE",
+  warning: "WARNING",
+  monitoring: "MONITORING",
+  emergency: "EMERGENCY",
+  empty: "EMPTY",
+  unmonitored: "NOT MONITORED",
+  unavailable: "UNAVAILABLE",
 };
 
 export default function SeatCard({
@@ -24,183 +43,138 @@ export default function SeatCard({
   onPress,
 }: SeatCardProps) {
   const colorScheme = useColorScheme();
-  const activeScheme = colorScheme === "dark" ? "dark" : "light";
-  const currentTheme = Themes[activeScheme];
+  const currentTheme = Themes[colorScheme === "dark" ? "dark" : "light"];
+
+  const statusColor =
+    state === "safe"
+      ? currentTheme.primaryBttn
+      : state === "warning"
+        ? currentTheme.yellow
+        : state === "monitoring"
+          ? currentTheme.secondaryBttn
+          : state === "emergency"
+          ? currentTheme.warnBttn
+          : state === "unavailable"
+            ? currentTheme.warnBttn
+            : currentTheme.textSecondary;
+
+  const iconName =
+    state === "safe"
+      ? Icon.select({
+          ios: "checkmark.circle.fill",
+          android: import("@expo/material-symbols/check.xml"),
+        })
+      : state === "warning"
+        ? Icon.select({
+            ios: "exclamationmark.triangle.fill",
+            android: import("@expo/material-symbols/warning.xml"),
+          })
+        : state === "monitoring"
+          ? null
+          : state === "emergency"
+          ? Icon.select({
+              ios: "light.beacon.max.fill",
+              android: import("@expo/material-symbols/siren.xml"),
+            })
+          : state === "unavailable"
+            ? Icon.select({
+                ios: "wifi.slash",
+                android: import("@expo/material-symbols/wifi_off.xml"),
+              })
+            : null;
 
   return (
     <Pressable
+      onPress={onPress}
+      disabled={!onPress}
       style={[
-        seatcard.baseCard,
-        state == "empty" && seatcard.emptySeat,
+        styles.baseCard,
+        state === "empty" && styles.emptySeat,
         { backgroundColor: currentTheme.element },
       ]}
     >
-      <View
-        style={[
-          seatcard.seatNoCont,
-          {
-            backgroundColor:
-              state == "safe"
-                ? currentTheme.primaryBttn
-                : state == "warning"
-                  ? currentTheme.yellow
-                  : state == "emergency"
-                    ? currentTheme.warnBttn
-                    : currentTheme.text,
-          },
-        ]}
-      >
-        <Text style={[seatcard.seatNo, {color: currentTheme.background }]}>{seatNo}</Text>
-      </View>
-      <View
-        style={{
-          paddingVertical: 20,
-          flex: 1,
-          borderWidth: 0,
-          borderColor: "#fff",
-        }}
-      >
-        {role &&
-        <Text
-          style={[seatcard.stateName, { color: currentTheme.textSecondary }]}
-        >
-          {role.toUpperCase()}
+      <View style={[styles.seatNoCont, { backgroundColor: statusColor }]}>
+        <Text style={[styles.seatNo, { color: currentTheme.background }]}>
+          {seatNo}
         </Text>
-        }
-        
-        <Text style={[seatcard.name, { color: currentTheme.text, textTransform: "capitalize" }]}>
+      </View>
+
+      <View style={styles.mainInfo}>
+        {role ? (
+          <Text style={[styles.role, { color: currentTheme.textSecondary }]}>
+            {role.toUpperCase()}
+          </Text>
+        ) : null}
+        <Text
+          numberOfLines={1}
+          style={[styles.name, { color: currentTheme.text }]}
+        >
           {name}
         </Text>
       </View>
-      {state == "safe" ? (
-        <View
-          style={{
-            flexDirection: "row",
-            gap: 4,
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 0,
-            paddingRight: 16,
-            borderColor: "#fff",
-          }}
-        >
+
+      <View style={styles.statusContainer}>
+        {iconName ? (
           <Host matchContents>
-            <Icon
-              name={Icon.select({
-                ios: "checkmark.circle.fill",
-                android: import("@expo/material-symbols/check.xml"),
-              })}
-              color={currentTheme.primaryBttn}
-            />
+            <Icon name={iconName} color={statusColor} />
           </Host>
-          <Text
-            style={[seatcard.stateName, { color: currentTheme.primaryBttn }]}
-          >
-            {state.toUpperCase()}
-          </Text>
-        </View>
-      ) : state == "warning" ? (
-        <View
-          style={{
-            flexDirection: "row",
-            gap: 4,
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 0,
-            paddingRight: 16,
-            borderColor: "#fff",
-          }}
-        >
-          <Host matchContents>
-            <Icon
-              name={Icon.select({
-                ios: "exclamationmark.triangle.fill",
-                android: import("@expo/material-symbols/warning.xml"),
-              })}
-              color={currentTheme.yellow}
-            />
-          </Host>
-          <Text style={[seatcard.stateName, { color: currentTheme.yellow }]}>
-            {state.toUpperCase()}
-          </Text>
-        </View>
-      ) : state == "emergency" ? (
-        <View
-          style={{
-            flexDirection: "row",
-            gap: 4,
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 0,
-            paddingRight: 16,
-            borderColor: "#fff",
-          }}
-        >
-          <Host matchContents>
-            <Icon
-              name={Icon.select({
-                ios: "light.beacon.max.fill",
-                android: import("@expo/material-symbols/siren.xml"),
-              })}
-              color={currentTheme.warnBttn}
-            />
-          </Host>
-          <Text style={[seatcard.stateName, { color: currentTheme.warnBttn }]}>
-            {state.toUpperCase()}
-          </Text>
-        </View>
-      ) : (
-        <View
-          style={[{
-            flexDirection: "row",
-            gap: 4,
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 0,
-            paddingRight: 16,
-            borderColor: "#fff",
-          }]}
-        >
-          <Text style={[seatcard.stateName, { color: currentTheme.text }]}>
-            {state.toUpperCase()}
-          </Text>
-        </View>
-      )}
+        ) : null}
+        <Text style={[styles.stateName, { color: statusColor }]}>
+          {LABELS[state]}
+        </Text>
+      </View>
     </Pressable>
   );
 }
 
-const seatcard = StyleSheet.create({
+const styles = StyleSheet.create({
   baseCard: {
     width: "100%",
-    borderWidth: 0,
-    borderColor: "#fff",
     flexDirection: "row",
     gap: 10,
     borderRadius: 12,
+    alignItems: "center",
     overflow: "hidden",
+    minHeight: 86,
+  },
+  emptySeat: {
+    opacity: 0.5,
   },
   seatNoCont: {
-    width: "15%",
+    width: 56,
+    alignSelf: "stretch",
     alignItems: "center",
     justifyContent: "center",
   },
   seatNo: {
-    fontSize: 48,
+    fontSize: 24,
     fontFamily: "Logo-Font",
-    textAlign: "center",
-    alignItems: "center",
-    justifyContent: "center",
+  },
+  mainInfo: {
+    paddingVertical: 16,
+    flex: 1,
+  },
+  role: {
+    fontFamily: "Condensed-Bold",
+    fontSize: 12,
+    marginBottom: 2,
   },
   name: {
-    fontSize: 24,
+    fontSize: 17,
     fontFamily: "Body-Bold",
+    textTransform: "capitalize",
+  },
+  statusContainer: {
+    flexDirection: "row",
+    gap: 5,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    paddingRight: 14,
+    maxWidth: 145,
   },
   stateName: {
-    fontSize: 16,
     fontFamily: "Condensed-Bold",
-  },
-  emptySeat: {
-    opacity: 0.5,
+    fontSize: 12,
+    textAlign: "right",
   },
 });

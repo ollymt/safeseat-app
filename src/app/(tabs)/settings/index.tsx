@@ -1,5 +1,5 @@
 import { Themes } from "@/constants/theme";
-import { useFocusEffect, useRouter } from "expo-router";
+import { type Href, useFocusEffect, useRouter } from "expo-router";
 import {
 	Alert,
 	Dimensions,
@@ -23,6 +23,7 @@ import SettingSwitch from "@/components/setting-switch";
 
 import PasswordVerifyModal from "@/components/PasswordVerifyModal";
 import { isSessionValid } from "@/utils/securitySession";
+import { clearSafeSeatSession } from "@/services/safeseat-session-store";
 
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../../../firebase";
@@ -266,9 +267,33 @@ export default function Settings() {
 									</View>
 									<View style={{ paddingHorizontal: 10 }}>
 										<Text style={[styles.caption, { color: currentTheme.textSecondary }]}>
-											Automatic alert routing to nearest response center if unresponsive.
+											For a confirmed DRIVER emergency, SafeSeat can queue an automated SMS to the primary emergency contact. Passenger alerts remain driver-first.
 										</Text>
 									</View>
+								</View>
+							</View>
+						</View>
+
+						{/* SAFESEAT SECTION */}
+						<View>
+							<Text style={[styles.infoLabel, { color: currentTheme.textSecondary }]}>SAFESEAT</Text>
+							<View style={{ gap: 6 }}>
+								<View style={{ borderRadius: 12, overflow: "hidden" }}>
+									<SettingPageItem
+										name="System Self-Diagnostic"
+										iconName={Icon.select({ ios: "waveform.path.ecg", android: import("@expo/material-symbols/settings.xml") })}
+										showChevron={true}
+										isLast={true}
+										onPress={() => {
+											Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+											router.push("/(tabs)/settings/diagnostics" as Href);
+										}}
+									/>
+								</View>
+								<View style={{ paddingHorizontal: 10 }}>
+									<Text style={[styles.caption, { color: currentTheme.textSecondary }]}>
+										Check module readiness without exposing raw participant sensor values.
+									</Text>
 								</View>
 							</View>
 						</View>
@@ -324,6 +349,7 @@ export default function Settings() {
 																	// 2. 🧼 CLEAR CACHED USER DATA ON LOGOUT
 																	await SecureStore.deleteItemAsync("user_health_profile");
 																	await SecureStore.deleteItemAsync("user_privacy_prefs");
+																		await clearSafeSeatSession();
 
 																	// 3. Optional: Trigger Firebase sign out if you want to completely destroy the active session
 																	// await auth.signOut();

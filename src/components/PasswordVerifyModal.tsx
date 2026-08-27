@@ -1,7 +1,7 @@
 // components/PasswordVerifyModal.tsx
 import { Themes } from "@/constants/theme";
 import { extendSession } from "@/utils/securitySession";
-import { BottomSheet, Button, Column, FieldGroup, Host, Icon, Row, Spacer, Text, TextInput } from "@expo/ui";
+import { BottomSheet, Button, Column, FieldGroup, Host, Icon, Row, Spacer, Text, TextInput, useNativeState } from "@expo/ui";
 import { buttonBorderShape, buttonStyle, controlSize, scrollDisabled, submitLabel } from "@expo/ui/swift-ui/modifiers";
 import * as Haptics from "expo-haptics";
 import { useEffect, useRef, useState } from "react";
@@ -19,6 +19,12 @@ type Props = {
 
 export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Props) {
     const [passwordInput, setPasswordInput] = useState("");
+    const passwordInputState = useNativeState("");
+
+    const updatePasswordInput = (nextValue: string) => {
+        passwordInputState.value = nextValue;
+        setPasswordInput(nextValue);
+    };
     const [isLoading, setIsLoading] = useState(false);
     const passwordInputRef = useRef<any>(null);
 
@@ -47,7 +53,7 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
             await reauthenticateWithCredential(currentUser, credential);
 
             await extendSession();
-            setPasswordInput(""); // Reset field
+            updatePasswordInput(""); // Reset field
             onSuccess();
         } catch (error: any) {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -128,8 +134,8 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
                                 secureTextEntry={true}
                                 editable={!isLoading}
                                 ref={passwordInputRef}
-                                onChangeText={setPasswordInput}
-                                value={passwordInput}
+                                onChangeText={updatePasswordInput}
+                                value={passwordInputState}
                                 modifiers={[submitLabel("done")]}
                                 textAlign="center"
                                 onSubmitEditing={handleVerify}
