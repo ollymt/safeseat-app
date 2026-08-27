@@ -195,26 +195,6 @@ export default function EmergencyModal({
 
                 {/* Emergency Action Buttons */}
                 <View style={{ flexDirection: "column", gap: 10, width: "100%" }}>
-                    <Button variant="warn" onPress={() => { }} fullWidth={true}>
-                        <View style={styles.buttonContent}>
-                            <View style={styles.iconContainer}>
-                                <Ionicons
-                                    name="warning"
-                                    color={currentTheme.primaryBttnText}
-                                    size={30}
-                                />
-                            </View>
-                            <Text
-                                style={[
-                                    styles.buttonText,
-                                    { color: currentTheme.primaryBttnText },
-                                ]}
-                            >
-                                Notify Emergency Services
-                            </Text>
-                        </View>
-                    </Button>
-
                     <Button
                         variant="primary"
                         onPress={handleOpenContactMenu}

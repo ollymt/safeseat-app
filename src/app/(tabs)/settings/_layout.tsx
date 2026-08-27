@@ -14,6 +14,7 @@ export default function TabsLayout() {
     >
       {/* Points to the index folder */}
       <Stack.Screen name="index" options={{ title: "Settings" }} />
+      <Stack.Screen name="diagnostics" options={{ title: "System Diagnostic" }} />
     </Stack>
   );
 }

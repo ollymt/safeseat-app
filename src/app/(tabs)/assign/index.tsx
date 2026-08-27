@@ -1,547 +1,482 @@
-import { Themes } from "@/constants/theme";
-import { useRouter } from "expo-router";
-import { Alert, StyleSheet, Text, useColorScheme, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-
 import AssignCard from "@/components/assign-card";
 import AssignSeatModal from "@/components/assign-seat-modal";
-import * as Haptics from "expo-haptics";
-import { useEffect, useState } from "react";
-
 import Button from "@/components/button";
-import EmergencytModal from "@/components/emergency-modal";
-
+import { Themes } from "@/constants/theme";
+import { useSafeSeatSession } from "@/hooks/use-safeseat-session";
+import {
+  clearSafeSeatSession,
+  updateSafeSeatSession,
+} from "@/services/safeseat-session-store";
+import {
+  SAFESEAT_SEATS,
+  getSafeSeatLabel,
+  type SafeSeatActiveSession,
+  type SafeSeatAssignment,
+  type SafeSeatSeatNo,
+} from "@/types/safeseat-session";
+import * as Haptics from "expo-haptics";
 import {
   addDoc,
-  arrayUnion,
   collection,
-  deleteField,
+  deleteDoc,
   doc,
-  onSnapshot,
   setDoc,
-  updateDoc,
 } from "firebase/firestore";
+import { useState } from "react";
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
 import { auth, db } from "../../../firebase";
 
-type Profile = {
-  id: string;
-  name: string;
-  photoURL?: string;
-  icon?: string;
-  isAccountOwner?: boolean;
-};
+function cloudSafeAssignment(profile: SafeSeatAssignment) {
+  return {
+    id: profile.id,
+    name: profile.isGuest ? "Guest Occupant" : profile.name,
+    photoURL: profile.isGuest ? null : profile.photoURL ?? null,
+    icon: profile.isGuest ? null : profile.icon ?? null,
+    isAccountOwner: profile.isGuest ? false : profile.isAccountOwner ?? false,
+    isGuest: Boolean(profile.isGuest),
+    sessionOnly: Boolean(profile.sessionOnly),
+  };
+}
 
-export type SeatState = "empty" | "assigned" | "safe" | "warning" | "emergency";
+function mirrorSessionToFirestore(session: SafeSeatActiveSession) {
+  const currentUser = auth.currentUser;
+  if (!currentUser) return;
 
-type EmergencyEvent = {
-  seatNo: number;
-  occurredAt: string;
-};
+  // Temporary Guest occupants remain local to the active phone session.
+  // Do not write Guest identity/session data to Firestore, even transiently.
+  const assignments = Object.fromEntries(
+    Object.entries(session.assignments)
+      .filter(([, profile]) => !profile.isGuest && !profile.sessionOnly)
+      .map(([seatNo, profile]) => [seatNo, cloudSafeAssignment(profile)]),
+  );
 
-const SEATS = [
-  { seatNo: 1, seatCode: "driver" },
-  { seatNo: 2, seatCode: "passenger" },
-  { seatNo: 3, seatCode: "l backseat" },
-  { seatNo: 4, seatCode: "c backseat" },
-  { seatNo: 5, seatCode: "r backseat" },
-];
+  const tripDocRef = doc(
+    db,
+    "users",
+    currentUser.uid,
+    "activeTrip",
+    "current",
+  );
+
+  void setDoc(
+    tripDocRef,
+    {
+      prototypeMode: "single_seat_uat",
+      monitoredSeatNo: session.monitoredSeatNo,
+      assignments,
+      isLockedIn: session.isLockedIn,
+      lockedInAt: session.lockedInAt,
+      seatStatuses: session.seatStatuses,
+      emergencyEvents: session.emergencyEvents,
+      appSessionUpdatedAt: new Date().toISOString(),
+    },
+    { merge: true },
+  ).catch((error) => {
+    // The SafeSeat AP is local-only. Cloud mirroring is intentionally best
+    // effort and must never block assignment/monitoring on the phone.
+    console.warn("SafeSeat cloud session mirror deferred:", error);
+  });
+}
+
+async function archiveAndDeleteCloudSession(session: SafeSeatActiveSession) {
+  const currentUser = auth.currentUser;
+  if (!currentUser) return;
+
+  try {
+    const registeredAssignments = Object.fromEntries(
+      Object.entries(session.assignments)
+        .filter(([, profile]) => !profile.isGuest && !profile.sessionOnly)
+        .map(([seatNo, profile]) => [seatNo, cloudSafeAssignment(profile)]),
+    );
+
+    if (session.lockedInAt) {
+      await addDoc(collection(db, "users", currentUser.uid, "tripHistory"), {
+        startedAt: session.lockedInAt,
+        endedAt: new Date().toISOString(),
+        monitoredSeatNo: session.monitoredSeatNo,
+        assignments: registeredAssignments,
+        finalSeatStatuses: session.seatStatuses,
+        emergencyEvents: session.emergencyEvents,
+        hadEmergency: session.emergencyEvents.length > 0,
+        prototypeMode: "single_seat_uat",
+      });
+    }
+
+    await deleteDoc(
+      doc(db, "users", currentUser.uid, "activeTrip", "current"),
+    );
+  } catch (error) {
+    console.warn(
+      "SafeSeat cloud archive is pending/unavailable; local session was still ended safely:",
+      error,
+    );
+  }
+}
 
 export default function Assign() {
   const colorScheme = useColorScheme();
-  const activeScheme = colorScheme === "dark" ? "dark" : "light";
-  const currentTheme = Themes[activeScheme];
-
-  const router = useRouter();
+  const currentTheme = Themes[colorScheme === "dark" ? "dark" : "light"];
+  const { ready, session } = useSafeSeatSession();
 
   const [assignModalVisible, setAssignModalVisible] = useState(false);
-  const [selectedSeat, setSelectedSeat] = useState(1);
+  const [selectedSeat, setSelectedSeat] = useState<SafeSeatSeatNo>(1);
 
-  // Map seat numbers (1-5) to assigned Profiles — now sourced live from Firestore
-  const [assignments, setAssignments] = useState<Record<number, Profile>>({});
+  const {
+    monitoredSeatNo,
+    assignments,
+    isLockedIn,
+    lockedInAt,
+  } = session;
 
-  // Lock-in state & status mapping (seatNo -> "safe" | "warning" | "emergency") — live from Firestore
-  const [isLockedIn, setIsLockedIn] = useState<boolean>(false);
-  const [seatStatuses, setSeatStatuses] = useState<Record<number, SeatState>>(
-    {},
-  );
+  const hasAssignedSeats = Object.values(assignments).some(Boolean);
+  const monitoredSeatAssigned = Boolean(assignments[monitoredSeatNo]);
+  const sessionHasStarted = Boolean(lockedInAt);
 
-  // 🕒 Trip history bookkeeping — when the current trip started, and every
-  // emergency moment logged during it, so we can archive both on Unlock.
-  const [lockedInAt, setLockedInAt] = useState<string | null>(null);
-  const [emergencyEvents, setEmergencyEvents] = useState<EmergencyEvent[]>([]);
-
-  // Check if at least one seat has an assigned profile
-  const hasAssignedSeats = Object.values(assignments).some((profile) =>
-    Boolean(profile),
-  );
-
-  // 📡 Real-time listener on users/{uid}/activeTrip/current — replaces the old
-  // AsyncStorage read. This fires instantly whenever the doc changes, whether
-  // the change came from this device, another device, or (later) a sensor.
-  useEffect(() => {
-    const currentUser = auth.currentUser;
-    if (!currentUser) return;
-
-    const tripDocRef = doc(
-      db,
-      "users",
-      currentUser.uid,
-      "activeTrip",
-      "current",
-    );
-
-    const unsubscribe = onSnapshot(
-      tripDocRef,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data();
-          setAssignments(data.assignments ?? {});
-          setIsLockedIn(Boolean(data.isLockedIn));
-          setSeatStatuses(data.seatStatuses ?? {});
-          setLockedInAt(data.lockedInAt ?? null);
-          setEmergencyEvents(data.emergencyEvents ?? []);
-        } else {
-          setAssignments({});
-          setIsLockedIn(false);
-          setSeatStatuses({});
-          setLockedInAt(null);
-          setEmergencyEvents([]);
-        }
-      },
-      (error) => {
-        console.error("Failed to listen to active trip data:", error);
-      },
-    );
-
-    return () => unsubscribe();
-  }, []);
-
-  // 🛠️ Derive the current state for any given seat number
-  const getCardState = (seatNo: number): SeatState => {
-    const hasProfile = Boolean(assignments[seatNo]);
-
-    if (!hasProfile) return "empty";
-    if (!isLockedIn) return "assigned";
-
-    // When locked in, return its live status (defaulting to "safe")
-    return seatStatuses[seatNo] ?? "safe";
+  const getCardState = (seatNo: SafeSeatSeatNo) => {
+    if (!assignments[seatNo]) return "empty" as const;
+    if (!isLockedIn) return "assigned" as const;
+    return seatNo === monitoredSeatNo ? "monitored" as const : "unmonitored" as const;
   };
 
-  // 🔒 Lock In Handler
-  const handleLockIn = async () => {
-    if (!hasAssignedSeats) return;
+  const choosePrototypePosition = (seatNo: SafeSeatSeatNo) => {
+    Haptics.selectionAsync();
 
-    const currentUser = auth.currentUser;
-    if (!currentUser) return;
+    if (sessionHasStarted) {
+      Alert.alert(
+        "Prototype position is fixed",
+        "End Session before physically moving the SafeSeat prototype to another seat.",
+      );
+      return;
+    }
 
+    const next = updateSafeSeatSession({ monitoredSeatNo: seatNo });
+    mirrorSessionToFirestore(next);
+  };
+
+  const handleLockIn = () => {
+    if (!monitoredSeatAssigned) {
+      Alert.alert(
+        "Assign the monitored seat",
+        `Assign an occupant to ${getSafeSeatLabel(monitoredSeatNo)} before Lock Deployment.`,
+      );
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const next = updateSafeSeatSession((current) => ({
+      ...current,
+      isLockedIn: true,
+      lockedInAt: current.lockedInAt ?? now,
+      // Do not manufacture SAFE at lock time. Main Hub Fusion must provide the
+      // first authoritative SAFE/WARNING/EMERGENCY state. WATCH remains a
+      // participant-facing MONITORING state and is intentionally not persisted
+      // as a safety verdict.
+      seatStatuses: { ...current.seatStatuses },
+    }));
+
+    mirrorSessionToFirestore(next);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-    // Default all currently assigned seats to "safe" status upon lock-in
-    const initialStatuses: Record<number, SeatState> = {};
-    Object.keys(assignments).forEach((seatStr) => {
-      const seatNum = parseInt(seatStr, 10);
-      initialStatuses[seatNum] = seatStatuses[seatNum] ?? "safe";
-    });
-
-    try {
-      const tripDocRef = doc(
-        db,
-        "users",
-        currentUser.uid,
-        "activeTrip",
-        "current",
-      );
-      await setDoc(
-        tripDocRef,
-        {
-          isLockedIn: true,
-          seatStatuses: initialStatuses,
-          lockedInAt: new Date().toISOString(),
-          emergencyEvents: [], // fresh log for this new trip
-        },
-        { merge: true },
-      );
-      // No local setState needed — the onSnapshot listener above will
-      // pick up this write and update the UI automatically.
-    } catch (error) {
-      console.error("Failed to lock in assignments:", error);
-      Alert.alert("Error", "Could not save locked-in state.");
-    }
   };
 
-  // 📦 Archive the trip that's about to end into tripHistory, then clear
-  // the current trip's bookkeeping fields (assignments/seatStatuses are
-  // intentionally left alone, matching the existing "stay assigned after
-  // unlock" behavior).
-  const archiveCurrentTrip = async (currentUserUid: string) => {
-    try {
-      const historyRef = collection(db, "users", currentUserUid, "tripHistory");
-      await addDoc(historyRef, {
-        startedAt: lockedInAt ?? null,
-        endedAt: new Date().toISOString(),
-        assignments: assignments,
-        finalSeatStatuses: seatStatuses,
-        emergencyEvents: emergencyEvents,
-        hadEmergency: emergencyEvents.length > 0,
-      });
-
-      const tripDocRef = doc(
-        db,
-        "users",
-        currentUserUid,
-        "activeTrip",
-        "current",
-      );
-      await setDoc(
-        tripDocRef,
-        {
-          isLockedIn: false,
-          lockedInAt: deleteField(),
-          emergencyEvents: [],
-        },
-        { merge: true },
-      );
-    } catch (error) {
-      console.error("Failed to archive trip history:", error);
-    }
-  };
-
-  // 🔓 Unlock Handler
   const handleUnlock = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert("Seats are locked in.", "Are you sure you want to unlock?", [
-      {
-        text: "No",
-        style: "cancel",
-      },
-      {
-        text: "Yes",
-        style: "destructive",
-        onPress: async () => {
-          const currentUser = auth.currentUser;
-          if (!currentUser) return;
-
-          try {
-            await archiveCurrentTrip(currentUser.uid);
+    Alert.alert(
+      "Pause monitoring?",
+      "Unlock Deployment pauses monitoring and allows occupant reassignment. It does not end this session or allow the prototype to be moved.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Unlock",
+          style: "destructive",
+          onPress: () => {
+            const next = updateSafeSeatSession({ isLockedIn: false });
+            mirrorSessionToFirestore(next);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          } catch (error) {
-            console.error("Failed to unlock assignments:", error);
-          }
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
-  // ⚡ Mutator: Update status for a specific locked seat ("safe" | "warning" | "emergency")
-  const updateSeatStatus = async (
-    seatNo: number,
-    status: "safe" | "warning" | "emergency",
-  ) => {
-    const currentUser = auth.currentUser;
-    if (!currentUser) return;
-
-    // Clear dismissal so a new emergency on this seat shows the modal again
-    if (status === "emergency") {
-      setDismissedSeats((prev) => {
-        const next = new Set(prev);
-        next.delete(seatNo);
-        return next;
-      });
-    }
-
-    try {
-      const tripDocRef = doc(
-        db,
-        "users",
-        currentUser.uid,
-        "activeTrip",
-        "current",
-      );
-      await setDoc(
-        tripDocRef,
+  const handleEndSession = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      "End SafeSeat session?",
+      "This ends monitoring, clears temporary Guest assignments, and allows the physical prototype to be moved to another seat.",
+      [
+        { text: "Cancel", style: "cancel" },
         {
-          seatStatuses: { [String(seatNo)]: status },
-          // Log the exact moment an emergency was triggered, so it
-          // survives even if the seat is later cycled back to "safe"
-          // before Unlock is pressed.
-          ...(status === "emergency"
-            ? {
-                emergencyEvents: arrayUnion({
-                  seatNo,
-                  occurredAt: new Date().toISOString(),
-                }),
-              }
-            : {}),
+          text: "End Session",
+          style: "destructive",
+          onPress: async () => {
+            const endedSession = session;
+            await clearSafeSeatSession();
+            void archiveAndDeleteCloudSession(endedSession);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          },
         },
-        { merge: true },
-      );
-    } catch (error) {
-      console.error(`Failed to update status for seat ${seatNo}:`, error);
-    }
+      ],
+    );
   };
 
-  // ⚡ Mutator: Update status for ALL assigned seats at once
-  const setAllSeatsStatus = async (
-    status: "safe" | "warning" | "emergency",
+  const handleSeatAssigned = (
+    seatNumber: SafeSeatSeatNo,
+    profile: SafeSeatAssignment | null,
   ) => {
-    const currentUser = auth.currentUser;
-    if (!currentUser) return;
-
-    const updatedStatuses: Record<number, SeatState> = {};
-    const newEmergencyEvents: EmergencyEvent[] = [];
-    Object.keys(assignments).forEach((seatStr) => {
-      const seatNum = parseInt(seatStr, 10);
-      updatedStatuses[seatNum] = status;
-      if (status === "emergency") {
-        newEmergencyEvents.push({
-          seatNo: seatNum,
-          occurredAt: new Date().toISOString(),
-        });
-      }
-    });
-
-    try {
-      const tripDocRef = doc(
-        db,
-        "users",
-        currentUser.uid,
-        "activeTrip",
-        "current",
-      );
-      await setDoc(
-        tripDocRef,
-        {
-          seatStatuses: updatedStatuses,
-          ...(newEmergencyEvents.length > 0
-            ? {
-                emergencyEvents: arrayUnion(...newEmergencyEvents),
-              }
-            : {}),
-        },
-        { merge: true },
-      );
-    } catch (error) {
-      console.error("Failed to update status for all seats:", error);
-    }
-  };
-
-  // Callback when modal updates or unassigns a seat
-  const handleSeatAssigned = async (
-    seatNumber: number,
-    profile: Profile | null,
-  ) => {
-    const currentUser = auth.currentUser;
-    if (!currentUser) return;
-
-    try {
-      const tripDocRef = doc(
-        db,
-        "users",
-        currentUser.uid,
-        "activeTrip",
-        "current",
-      );
+    const next = updateSafeSeatSession((current) => {
+      const nextAssignments = { ...current.assignments };
+      const nextStatuses = { ...current.seatStatuses };
 
       if (profile) {
-        // 🛠️ Firestore rejects `undefined` field values outright (unlike
-        // `null`, which is fine). Since Profile.photoURL/icon/isAccountOwner
-        // are optional and may genuinely be undefined on some profiles,
-        // sanitize them to null/false before writing, or setDoc throws.
-        const sanitizedProfile = {
-          id: profile.id,
-          name: profile.name,
-          photoURL: profile.photoURL ?? null,
-          icon: profile.icon ?? null,
-          isAccountOwner: profile.isAccountOwner ?? false,
-        };
-
-        await setDoc(
-          tripDocRef,
-          {
-            assignments: { [String(seatNumber)]: sanitizedProfile },
-          },
-          { merge: true },
-        );
+        nextAssignments[seatNumber] = profile;
       } else {
-        // deleteField() fully removes the key, unlike setting it to null
-        await updateDoc(tripDocRef, {
-          [`assignments.${seatNumber}`]: deleteField(),
-        });
+        delete nextAssignments[seatNumber];
+        delete nextStatuses[seatNumber];
       }
-    } catch (error) {
-      console.error("Failed to update seat assignment:", error);
-      Alert.alert("Error", "Could not save seat assignment.");
-    }
+
+      return {
+        ...current,
+        assignments: nextAssignments,
+        seatStatuses: nextStatuses,
+      };
+    });
+
+    mirrorSessionToFirestore(next);
   };
 
-  // Card tap interaction
-  const handleCardPress = (seatNo: number) => {
+  const handleCardPress = (seatNo: SafeSeatSeatNo) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     if (isLockedIn) {
-      // Options or quick-status toggle when locked in
-      const currentStatus = getCardState(seatNo);
-      if (currentStatus === "empty") return;
-
-      // Example cycle when tapped while locked in: safe -> warning -> emergency -> safe
-      const nextStatus: Record<string, "safe" | "warning" | "emergency"> = {
-        safe: "warning",
-        warning: "emergency",
-        emergency: "safe",
-      };
-      updateSeatStatus(seatNo, nextStatus[currentStatus] ?? "safe");
-    } else {
-      // Open assignment modal when unlocked
-      setSelectedSeat(seatNo);
-      setAssignModalVisible(true);
+      Alert.alert(
+        "Deployment locked",
+        "Use Unlock Deployment before changing occupant assignments.",
+      );
+      return;
     }
+
+    setSelectedSeat(seatNo);
+    setAssignModalVisible(true);
   };
 
-  const [dismissedSeats, setDismissedSeats] = useState<Set<number>>(new Set());
-
-  const emergencySeat = isLockedIn
-    ? SEATS.find(
-        ({ seatNo }) =>
-          seatStatuses[seatNo] === "emergency" &&
-          assignments[seatNo] &&
-          !dismissedSeats.has(seatNo),
-      )
-    : undefined;
-
-  const emergencyProfile = emergencySeat
-    ? assignments[emergencySeat.seatNo]
-    : undefined;
+  if (!ready) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: currentTheme.background }}>
+        <View style={styles.loadingContainer}>
+          <Text style={{ color: currentTheme.textSecondary }}>Loading SafeSeat session…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView
-      style={{
-        flex: 1,
-        backgroundColor: currentTheme.background,
-      }}
+      style={{ flex: 1, backgroundColor: currentTheme.background }}
       edges={["left", "right"]}
     >
-      <View style={[styles.container, { marginTop: 40 }]}>
-        <Text style={[styles.pageHeader, { color: currentTheme.text }]}>
-          Assign
-        </Text>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <Text style={[styles.pageHeader, { color: currentTheme.text }]}>Assign</Text>
 
-        <View
-          style={{
-            gap: 10,
-            marginTop: 10,
-            width: "100%",
-            borderWidth: 0,
-            borderColor: currentTheme.secondaryBttn,
-            borderRadius: 10,
-          }}
-        >
-          {/* Front Row */}
-          <View style={{ gap: 10, flexDirection: "row", height: 230 }}>
-            <AssignCard
-              seatNo={1}
-              assignedProfile={assignments[1]}
-              onPress={() => handleCardPress(1)}
-              state={getCardState(1)}
-              seatCode="driver"
-            />
-            <AssignCard
-              seatNo={2}
-              assignedProfile={assignments[2]}
-              onPress={() => handleCardPress(2)}
-              state={getCardState(2)}
-              seatCode="passenger"
-            />
+        <View style={[styles.prototypeCard, { backgroundColor: currentTheme.element }]}>
+          <Text style={[styles.prototypeTitle, { color: currentTheme.text }]}>Prototype Position</Text>
+          <Text style={[styles.prototypeHint, { color: currentTheme.textSecondary }]}>
+            Select the seat where the one physical SafeSeat prototype is installed.
+          </Text>
+
+          <View style={styles.positionWrap}>
+            {SAFESEAT_SEATS.map((seat) => {
+              const selected = seat.seatNo === monitoredSeatNo;
+              return (
+                <Pressable
+                  key={seat.seatNo}
+                  onPress={() => choosePrototypePosition(seat.seatNo)}
+                  style={[
+                    styles.positionChip,
+                    {
+                      backgroundColor: selected
+                        ? currentTheme.primaryBttn
+                        : currentTheme.backgroundElement,
+                      opacity: sessionHasStarted && !selected ? 0.5 : 1,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.positionChipText,
+                      {
+                        color: selected
+                          ? currentTheme.primaryBttnText
+                          : currentTheme.text,
+                      },
+                    ]}
+                  >
+                    {seat.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
 
-          {/* Back Row */}
-          <View style={{ gap: 10, flexDirection: "row", height: 230 }}>
-            <AssignCard
-              seatNo={3}
-              assignedProfile={assignments[3]}
-              onPress={() => handleCardPress(3)}
-              state={getCardState(3)}
-              seatCode="l backseat"
-            />
-            <AssignCard
-              seatNo={4}
-              assignedProfile={assignments[4]}
-              onPress={() => handleCardPress(4)}
-              state={getCardState(4)}
-              seatCode="c backseat"
-            />
-            <AssignCard
-              seatNo={5}
-              assignedProfile={assignments[5]}
-              onPress={() => handleCardPress(5)}
-              state={getCardState(5)}
-              seatCode="r backseat"
-            />
+          {sessionHasStarted ? (
+            <Text style={[styles.fixedHint, { color: currentTheme.textSecondary }]}>
+              Position fixed for this session. End Session before moving the prototype.
+            </Text>
+          ) : null}
+        </View>
+
+        <View style={{ gap: 10, width: "100%" }}>
+          <View style={styles.frontRow}>
+            {SAFESEAT_SEATS.slice(0, 2).map((seat) => (
+              <AssignCard
+                key={seat.seatNo}
+                seatNo={seat.seatNo}
+                assignedProfile={assignments[seat.seatNo]}
+                onPress={() => handleCardPress(seat.seatNo)}
+                state={getCardState(seat.seatNo)}
+                seatCode={`${seat.seatCode}${seat.seatNo === monitoredSeatNo ? " • prototype" : ""}`}
+              />
+            ))}
+          </View>
+
+          <View style={styles.backRow}>
+            {SAFESEAT_SEATS.slice(2).map((seat) => (
+              <AssignCard
+                key={seat.seatNo}
+                seatNo={seat.seatNo}
+                assignedProfile={assignments[seat.seatNo]}
+                onPress={() => handleCardPress(seat.seatNo)}
+                state={getCardState(seat.seatNo)}
+                seatCode={`${seat.seatCode}${seat.seatNo === monitoredSeatNo ? " • prototype" : ""}`}
+              />
+            ))}
           </View>
         </View>
 
-        {/* Lock In / Unlock Action Controls */}
-        <View style={{ paddingVertical: 20 }}>
+        {!monitoredSeatAssigned ? (
+          <Text style={[styles.lockHint, { color: currentTheme.warnBttn }]}>
+            Assign an occupant to {getSafeSeatLabel(monitoredSeatNo)} before Lock Deployment.
+          </Text>
+        ) : null}
+
+        <View style={styles.actions}>
           {isLockedIn ? (
             <Button
-              label="Unlock"
+              label="Unlock Deployment"
               onPress={handleUnlock}
-              fullWidth={true}
+              fullWidth
               variant="warn"
               glass={false}
             />
           ) : (
-            <Button
-              label="Lock In"
-              onPress={handleLockIn}
-              fullWidth={true}
-              variant="primary"
-              enabled={hasAssignedSeats}
-              glass={false}
-            />
+            <>
+              <Button
+                label={sessionHasStarted ? "Resume / Lock Deployment" : "Lock Deployment"}
+                onPress={handleLockIn}
+                fullWidth
+                variant="primary"
+                enabled={hasAssignedSeats && monitoredSeatAssigned}
+                glass={false}
+              />
+              {hasAssignedSeats || sessionHasStarted ? (
+                <Button
+                  label="End Session"
+                  onPress={handleEndSession}
+                  fullWidth
+                  variant="secondary"
+                  glass={false}
+                />
+              ) : null}
+            </>
           )}
         </View>
 
         <AssignSeatModal
           seat={selectedSeat}
           visible={assignModalVisible}
-          onClose={() => {
-            setAssignModalVisible(false);
-          }}
-          onSuccess={(seatNum, profile) => {
-            handleSeatAssigned(seatNum, profile);
-          }}
+          assignments={assignments}
+          onClose={() => setAssignModalVisible(false)}
+          onSuccess={handleSeatAssigned}
         />
-
-        {emergencySeat && emergencyProfile && (
-          <EmergencytModal
-            seat={emergencySeat.seatNo}
-            visible={true}
-            onClose={() =>
-              setDismissedSeats((prev) =>
-                new Set(prev).add(emergencySeat.seatNo),
-              )
-            }
-            id={emergencyProfile.id}
-            name={emergencyProfile.name}
-            icon={emergencyProfile.photoURL ?? emergencyProfile.icon}
-            isAccountOwner={emergencyProfile.isAccountOwner}
-          />
-        )}
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    width: "100%",
+  scrollContent: {
     padding: 20,
-    borderWidth: 0,
-    borderColor: "#fff",
+    paddingTop: 40,
+    paddingBottom: 70,
+    gap: 14,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   pageHeader: {
     fontSize: 40,
     fontFamily: "Logo-Font",
+  },
+  prototypeCard: {
+    borderRadius: 14,
+    padding: 14,
+    gap: 8,
+  },
+  prototypeTitle: {
+    fontSize: 18,
+    fontFamily: "Body-Bold",
+  },
+  prototypeHint: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  positionWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+  },
+  positionChip: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  positionChipText: {
+    fontSize: 12,
+    fontFamily: "Body-Bold",
+  },
+  fixedHint: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  frontRow: {
+    gap: 10,
+    flexDirection: "row",
+    height: 205,
+  },
+  backRow: {
+    gap: 10,
+    flexDirection: "row",
+    height: 205,
+  },
+  lockHint: {
+    fontFamily: "Body-Medium",
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: "center",
+  },
+  actions: {
+    gap: 10,
+    paddingTop: 4,
   },
 });

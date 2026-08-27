@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Column, FieldGroup, Host, TextInput } from "@expo/ui";
+import { Column, FieldGroup, Host, TextInput, useNativeState } from "@expo/ui";
 import { frame } from "@expo/ui/swift-ui/modifiers";
 import { useCallback, useState } from "react";
 
@@ -40,6 +40,12 @@ export default function EditProfile() {
 
     // 1. Core Account States
     const [userName, setUserName] = useState<string>("Guest");
+    const userNameInput = useNativeState("Guest");
+
+    const updateUserName = useCallback((nextName: string) => {
+        userNameInput.value = nextName;
+        setUserName(nextName);
+    }, [userNameInput]);
     const [userEmail, setUserEmail] = useState<string>("Not Set");
     const [userPhone, setUserPhone] = useState<string>("Not Set");
 
@@ -69,7 +75,7 @@ export default function EditProfile() {
             const savedHealthDataString = await SecureStore.getItemAsync(healthCacheKey);
             if (savedHealthDataString) {
                 const savedHealth = JSON.parse(savedHealthDataString);
-                if (savedHealth.name) setUserName(savedHealth.name);
+                if (savedHealth.name) updateUserName(savedHealth.name);
                 if (savedHealth.email) setUserEmail(savedHealth.email);
                 if (savedHealth.phone) setUserPhone(savedHealth.phone);
                 if (savedHealth.birthday) setBirthday(savedHealth.birthday);
@@ -105,7 +111,7 @@ export default function EditProfile() {
                 let cloudData: any = {};
                 if (profileDocSnap.exists()) {
                     cloudData = profileDocSnap.data();
-                    if (cloudData.name) setUserName(cloudData.name);
+                    if (cloudData.name) updateUserName(cloudData.name);
                     if (cloudData.email) setUserEmail(cloudData.email);
                     if (cloudData.phone) setUserPhone(cloudData.phone);
                     if (cloudData.birthday) setBirthday(cloudData.birthday);
@@ -144,7 +150,7 @@ export default function EditProfile() {
         } catch (error) {
             console.error("Failed to load user profile data:", error);
         }
-    }, [healthCacheKey, isSubProfile, profileId]);
+    }, [healthCacheKey, isSubProfile, profileId, updateUserName]);
 
     useFocusEffect(
         useCallback(() => {
@@ -250,8 +256,8 @@ export default function EditProfile() {
                             >
                                 <TextInput
                                     placeholder="Name"
-                                    value={userName}
-                                    onChangeText={setUserName}
+                                    value={userNameInput}
+                                    onChangeText={updateUserName}
                                     modifiers={[submitLabel("next")]}
                                     textAlign="left"
                                 />
@@ -259,8 +265,8 @@ export default function EditProfile() {
                                     <FieldGroup.Section title="Basic Information">
                                         <TextInput
                                             placeholder="Name"
-                                            value={userName}
-                                            onChangeText={setUserName}
+                                            value={userNameInput}
+                                            onChangeText={updateUserName}
                                             modifiers={[submitLabel("next")]}
                                             textAlign="left"
                                         />
