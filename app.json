@@ -26,7 +26,12 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.ollymt.safeseatapp",
-      "softwareKeyboardLayoutMode": "pan"
+      "softwareKeyboardLayoutMode": "pan",
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.ACCESS_WIFI_STATE"
+      ]
     },
     "web": {
       "output": "static",
@@ -53,6 +58,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a76f9721-7bac-4e27-81bd-8e2d86093a52"
+      }
     }
   }
 }
