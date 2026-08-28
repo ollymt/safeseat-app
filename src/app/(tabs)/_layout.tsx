@@ -8,6 +8,7 @@ import { Icon, Host } from '@expo/ui';
 import * as Haptics from "expo-haptics";
 import Banner from "@/components/banner";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { UserPreferencesProvider } from "@/hooks/user-preferences-context";
 
 const { Navigator } = createMaterialTopTabNavigator();
 const Tabs = withLayoutContext<any, any, any, any>(Navigator);
@@ -78,105 +79,107 @@ export default function TabLayout() {
 	const isNestedScreen = pathname.split('/').filter(Boolean).length > 1;
 
 	return (
-		<SafeAreaView style={{ flex: 1 }} edges={["left", "right", "top"]}>
-			<View style={{ flex: 1 }}>
-				<View style={{ paddingHorizontal: spacing.two, paddingBottom: spacing.two }}>
-					<Banner />
-				</View>
-				<Tabs
-					tabBarPosition="bottom"
-					// @ts-ignore
-					tabBar={(props) => <MyCustomTabBar {...props} />}
-					screenOptions={{
-						// Disable tab swipe only when pushed deeper into a stack
-						swipeEnabled: !isNestedScreen,
-						headerShown: false,
-						// Forces the tab view container frame to be dark
-						sceneContainerStyle: {
-							backgroundColor: themes.background,
-						},
-						tabBarStyle: {
-							backgroundColor: themes.backgroundElement,
-							borderTopColor: "transparent",
-						},
+		<UserPreferencesProvider>
+			<SafeAreaView style={{ flex: 1 }} edges={["left", "right", "top"]}>
+				<View style={{ flex: 1 }}>
+					<View style={{ paddingHorizontal: spacing.two, paddingBottom: spacing.two }}>
+						<Banner />
+					</View>
+					<Tabs
+						tabBarPosition="bottom"
+						// @ts-ignore
+						tabBar={(props) => <MyCustomTabBar {...props} />}
+						screenOptions={{
+							// Disable tab swipe only when pushed deeper into a stack
+							swipeEnabled: !isNestedScreen,
+							headerShown: false,
+							// Forces the tab view container frame to be dark
+							sceneContainerStyle: {
+								backgroundColor: themes.background,
+							},
+							tabBarStyle: {
+								backgroundColor: themes.backgroundElement,
+								borderTopColor: "transparent",
+							},
 
-					}}
-				>
-					<Tabs.Screen
-						name="home"
-						options={{
-							title: 'Home',
-							tabBarIcon: ({ focused }: { focused: boolean }) => (
-								<Host matchContents>
-									<Icon
-										name={Icon.select({
-											ios: focused ? "house.fill" : "house",
-											android: import("@expo/material-symbols/home.xml")
-										})}
-										size={spacing.three}
-										color={focused ? themes.primaryBttn : themes.primaryBttnText}
-									/>
-								</Host>
-							),
 						}}
-					/>
-					<Tabs.Screen
-						name="assign"
-						options={{
-							title: 'Assign',
-							tabBarIcon: ({ focused }: { focused: boolean }) => (
-								<Host matchContents>
-									<Icon
-										name={Icon.select({
-											ios: focused ? "carseat.right.fill" : "carseat.right",
-											android: import("@expo/material-symbols/airline_seat_recline_extra.xml")
-										})}
-										size={spacing.three}
-										color={focused ? themes.primaryBttn : themes.primaryBttnText}
-									/>
-								</Host>
-							),
-						}}
-					/>
-					<Tabs.Screen
-						name="everyone"
-						options={{
-							title: 'Everyone',
-							tabBarIcon: ({ focused }: { focused: boolean }) => (
-								<Host matchContents>
-									<Icon
-										name={Icon.select({
-											ios: focused ? "person.3.fill" : "person.3",
-											android: import("@expo/material-symbols/groups.xml")
-										})}
-										size={spacing.three}
-										color={focused ? themes.primaryBttn : themes.primaryBttnText}
-									/>
-								</Host>
-							),
-						}}
-					/>
-					<Tabs.Screen
-						name="settings"
-						options={{
-							title: 'Settings',
-							tabBarIcon: ({ focused }: { focused: boolean }) => (
-								<Host matchContents>
-									<Icon
-										name={Icon.select({
-											ios: focused ? "gearshape.fill" : "gearshape",
-											android: import("@expo/material-symbols/settings.xml")
-										})}
-										size={spacing.three}
-										color={focused ? themes.primaryBttn : themes.primaryBttnText}
-									/>
-								</Host>
-							),
-						}}
-					/>
-				</Tabs>
-			</View>
-		</SafeAreaView>
+					>
+						<Tabs.Screen
+							name="home"
+							options={{
+								title: 'Home',
+								tabBarIcon: ({ focused }: { focused: boolean }) => (
+									<Host matchContents>
+										<Icon
+											name={Icon.select({
+												ios: focused ? "house.fill" : "house",
+												android: import("@expo/material-symbols/home.xml")
+											})}
+											size={spacing.three}
+											color={focused ? themes.primaryBttn : themes.primaryBttnText}
+										/>
+									</Host>
+								),
+							}}
+						/>
+						<Tabs.Screen
+							name="assign"
+							options={{
+								title: 'Assign',
+								tabBarIcon: ({ focused }: { focused: boolean }) => (
+									<Host matchContents>
+										<Icon
+											name={Icon.select({
+												ios: focused ? "carseat.right.fill" : "carseat.right",
+												android: import("@expo/material-symbols/airline_seat_recline_extra.xml")
+											})}
+											size={spacing.three}
+											color={focused ? themes.primaryBttn : themes.primaryBttnText}
+										/>
+									</Host>
+								),
+							}}
+						/>
+						<Tabs.Screen
+							name="everyone"
+							options={{
+								title: 'Everyone',
+								tabBarIcon: ({ focused }: { focused: boolean }) => (
+									<Host matchContents>
+										<Icon
+											name={Icon.select({
+												ios: focused ? "person.3.fill" : "person.3",
+												android: import("@expo/material-symbols/groups.xml")
+											})}
+											size={spacing.three}
+											color={focused ? themes.primaryBttn : themes.primaryBttnText}
+										/>
+									</Host>
+								),
+							}}
+						/>
+						<Tabs.Screen
+							name="settings"
+							options={{
+								title: 'Settings',
+								tabBarIcon: ({ focused }: { focused: boolean }) => (
+									<Host matchContents>
+										<Icon
+											name={Icon.select({
+												ios: focused ? "gearshape.fill" : "gearshape",
+												android: import("@expo/material-symbols/settings.xml")
+											})}
+											size={spacing.three}
+											color={focused ? themes.primaryBttn : themes.primaryBttnText}
+										/>
+									</Host>
+								),
+							}}
+						/>
+					</Tabs>
+				</View>
+			</SafeAreaView>
+		</UserPreferencesProvider>
 	);
 }
 

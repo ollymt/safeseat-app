@@ -16,12 +16,21 @@ import Button from "./button";
 // Firebase Imports
 import { auth, db } from "../firebase"; // Adjust path to your firebase config
 import { collection, getDocs, query, where } from "firebase/firestore";
+import { useEffect } from "react";
+
+import * as Haptics from "expo-haptics"
 
 export default function Banner() {
     const { visible, message, hideBanner } = useBanner();
     const insets = useSafeAreaInsets();
 
     if (!visible) return null;
+
+    useEffect((() => {
+        if (visible) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+        }
+    }), [message])
 
     // 1. Call Contact Handler (Firebase fetch)
     const handleCallContact = async () => {

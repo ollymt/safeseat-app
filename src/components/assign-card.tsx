@@ -151,6 +151,17 @@ export default function AssignCard({
 									size={spacing.two}
 								/>
 							</Host>
+						) : state === "unknown" ? (
+							<Host matchContents style={{ width: spacing.two, height: spacing.two, justifyContent: 'center', alignItems: 'center' }}>
+								<Icon
+									name={Icon.select({
+										ios: "questionmark",
+										android: import("@expo/material-symbols/question_mark.xml"),
+									})}
+									color={themes.text}
+									size={spacing.two}
+								/>
+							</Host>
 						) : null}
 						<Text
 							numberOfLines={1}

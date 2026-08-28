@@ -5,6 +5,7 @@ import * as SecureStore from "expo-secure-store";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useUserPreferences } from "@/hooks/user-preferences-context";
 import {
 	ScrollView,
 	StyleSheet,
@@ -21,6 +22,11 @@ import SeatCard from "@/components/seat-card";
 import { Host, Icon } from "@expo/ui";
 import InfoCard from "@/components/info-card";
 
+// 👇 Static icon imports — import(...) called inline in JSX returns a
+// Promise, not the icon data, and breaks the Android icons below.
+import weightXml from "@expo/material-symbols/weight.xml";
+import lockOpenXml from "@expo/material-symbols/lock_open.xml";
+
 type Profile = {
 	id: string;
 	name: string;
@@ -31,7 +37,9 @@ type Profile = {
 	isAccountOwner?: boolean;
 };
 
-export type SeatState = "empty" | "assigned" | "safe" | "warning" | "emergency";
+// 👇 Added "unknown" — used for non-driver seats when data sharing
+// consent is turned off, so their real state is hidden.
+export type SeatState = "empty" | "assigned" | "safe" | "warning" | "emergency" | "unknown";
 
 const SEAT_ASSIGNMENTS_KEY = "seatAssignments";
 const IS_LOCKED_IN_KEY = "isLockedIn";
@@ -45,12 +53,17 @@ const SEAT_ROLES: Record<number, string> = {
 	5: "r backseat",
 };
 
+// The driver's seat is always visible regardless of consent — consent only
+// hides the states of everyone *else* in the car.
+const DRIVER_SEAT_NO = 1;
+
 export default function Home() {
 	const router = useRouter();
 	const insets = useSafeAreaInsets();
 
 	const bottomPad = 104 + (insets.bottom / 2); // extra breathing room
 
+	const { consent, loading } = useUserPreferences();
 
 	const [isLockedIn, setIsLockedIn] = useState<boolean>(false);
 	const [assignments, setAssignments] = useState<Record<number, Profile>>({});
@@ -70,7 +83,7 @@ export default function Home() {
 				AsyncStorage.getItem(SEAT_STATUSES_KEY),
 			]);
 
-			const savedPrivacyString = await SecureStore.getItemAsync("user_privacy_prefs");
+			const savedPrivacyString = await SecureStore.getItemAsync("user_local_app_prefs");
 			if (savedPrivacyString) {
 				const savedPrivacy = JSON.parse(savedPrivacyString);
 				if (savedPrivacy.useMetric !== undefined) {
@@ -107,6 +120,14 @@ export default function Home() {
 	const getSeatState = (seatNo: number): SeatState => {
 		const profile = assignments[seatNo];
 		if (!profile) return "empty";
+
+		// 👇 If data sharing consent is off, hide the real state for every
+		// seat except the driver's — the driver can always see their own
+		// state regardless of this setting.
+		if (!consent && seatNo !== DRIVER_SEAT_NO) {
+			return "unknown";
+		}
+
 		return seatStatuses[seatNo] ?? "safe";
 	};
 
@@ -137,10 +158,13 @@ export default function Home() {
 
 	// 🚨 Find the first assigned, locked-in seat currently in "emergency"
 	// that the user hasn't already dismissed.
+	// 👇 getSeatState already returns "unknown" for non-driver seats when
+	// consent is off, so this naturally won't trigger the emergency modal
+	// for a seat whose real state is hidden.
 	const emergencySeatNo = isLockedIn
 		? [1, 2, 3, 4, 5].find(
 			(seatNo) =>
-				seatStatuses[seatNo] === "emergency" &&
+				getSeatState(seatNo) === "emergency" &&
 				assignments[seatNo] &&
 				!dismissedSeats.has(seatNo)
 		)
@@ -170,7 +194,7 @@ export default function Home() {
 			>
 				<ScrollView contentContainerStyle={[{ flexGrow: 1 }, { marginTop: spacing.one, paddingBottom: bottomPad }]} showsVerticalScrollIndicator={true} bounces={true}>
 					<View style={[styles.container]}>
-						
+
 						{isLockedIn ? (
 							<View>
 								<Text style={[styles.pageHeader]}>
@@ -208,7 +232,7 @@ export default function Home() {
 											<Host>
 												<Icon name={Icon.select({
 													ios: "scalemass.fill",
-													android: import("@expo/material-symbols/weight.xml")
+													android: weightXml
 												})} size={spacing.five} />
 											</Host>
 										} />
@@ -220,8 +244,8 @@ export default function Home() {
 								<View style={{ marginVertical: spacing.two }}>
 									<Host matchContents>
 										<Icon name={Icon.select({
-											ios: "lock.slash.fill",
-											android: import("@expo/material-symbols/lock_open.xml")
+											ios: "figure.seated.seatbelt",
+											android: lockOpenXml
 										})} size={180} color={themes.secondaryBttn}
 										/>
 									</Host>
@@ -232,7 +256,7 @@ export default function Home() {
 										{ color: themes.text },
 									]}
 								>
-									Trip Not Locked In
+									Trip Not Buckled
 								</Text>
 								<Text
 									style={[
@@ -240,7 +264,7 @@ export default function Home() {
 										{ color: themes.textSecondary },
 									]}
 								>
-									Assign passengers to seats and tap "Lock In" on the Assign page to start monitoring.
+									Assign passengers to seats and tap "Buckle" on the Assign page to start monitoring.
 								</Text>
 								<View style={{ width: "100%", marginTop: spacing.three }}>
 									<Button
@@ -250,7 +274,6 @@ export default function Home() {
 											router.push("/assign");
 										}}
 										fullWidth={true}
-										glass={false}
 									/>
 								</View>
 							</View>

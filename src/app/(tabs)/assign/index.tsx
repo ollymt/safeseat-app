@@ -2,6 +2,7 @@ import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/co
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useBanner } from "@/hooks/banner-context";
+import { useUserPreferences } from "@/hooks/user-preferences-context";
 import {
 	Alert,
 	ImageBackground,
@@ -37,7 +38,7 @@ type Profile = {
 	isAccountOwner?: boolean;
 };
 
-export type SeatState = "empty" | "assigned" | "safe" | "warning" | "emergency";
+export type SeatState = "empty" | "assigned" | "safe" | "warning" | "emergency" | "unknown";
 
 const SEAT_ASSIGNMENTS_KEY = "seatAssignments";
 const IS_LOCKED_IN_KEY = "isLockedIn";
@@ -58,6 +59,8 @@ export default function Assign() {
 	const bottomPad = 104 + (insets.bottom / 2); // extra breathing room
 
 	const { showBanner, hideBanner } = useBanner();
+
+	const { consent, setConsent, loading } = useUserPreferences();
 
 	const [assignModalVisible, setAssignModalVisible] = useState(false);
 	const [selectedSeat, setSelectedSeat] = useState(1);
@@ -172,12 +175,13 @@ export default function Assign() {
 
 		if (!hasProfile) return "empty";
 		if (!isLockedIn) return "assigned";
+		if (!consent && seatNo != 1) return "unknown";
 
 		// When locked in, return its live status (defaulting to "safe")
 		return seatStatuses[seatNo] ?? "safe";
 	};
 
-	// 🔒 Lock In Handler
+	// 🔒 Buckle Handler
 	const handleLockIn = async () => {
 		if (!hasAssignedSeats) return;
 
@@ -199,21 +203,21 @@ export default function Assign() {
 			setIsLockedIn(true);
 			setSeatStatuses(initialStatuses);
 		} catch (error) {
-			console.error("Failed to lock in assignments:", error);
-			Alert.alert("Error", "Could not save locked-in state.");
+			console.error("Failed to buckle assignments:", error);
+			Alert.alert("Error", "Could not save buckled state.");
 		}
 	};
 
-	// 🔓 Unlock Handler
+	// 🔓 Unbuckle Handler
 	const handleUnlock = () => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-		Alert.alert("Unlock?", "Are you sure you want to unlock current seat assignment?", [
+		Alert.alert("Unbuckle?", "Are you sure you want to unbuckle?", [
 			{
 				text: "Cancel",
 				style: "cancel"
 			},
 			{
-				text: "Unlock",
+				text: "Unbuckle",
 				style: "default",
 				onPress: async () => {
 					try {
@@ -221,7 +225,7 @@ export default function Assign() {
 						setIsLockedIn(false);
 						Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 					} catch (error) {
-						console.error("Failed to unlock assignments:", error);
+						console.error("Failed to unbuckle:", error);
 					}
 				}
 			}
@@ -241,7 +245,7 @@ export default function Assign() {
 				: `Seat ${seatNo}`;
 
 			// Trigger global banner
-			showBanner(`${passengerName} is having an emergency!`);
+			showBanner(passengerName == "Me" ? "You are having an emergency!" : `${passengerName} is having an emergency!`);
 
 			setDismissedSeats((prev) => {
 				const next = new Set(prev);
@@ -387,18 +391,18 @@ export default function Assign() {
 						</View>
 					</ImageBackground>
 
-					{/* Lock In / Unlock Action Controls */}
+					{/* Buckle / Unbuckle Action Controls */}
 					<View style={{ paddingVertical: spacing.none, marginTop: -spacing.one }}>
 						{isLockedIn ? (
 							<Button
-								label="Unlock"
+								label="Unbuckle"
 								onPress={handleUnlock}
 								fullWidth={true}
 								variant="secondary"
 							/>
 						) : (
 							<Button
-								label="Lock In"
+								label="Buckle"
 								onPress={handleLockIn}
 								fullWidth={true}
 								variant="primary"

@@ -1,15 +1,13 @@
 import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
-import { useFocusEffect, useNavigation, useRouter, } from "expo-router";
+import { useUserPreferences } from "@/hooks/user-preferences-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Linking } from 'react-native';
+import { useFocusEffect, useRouter } from "expo-router";
 import {
-	Alert,
-	Dimensions,
-	ScrollView,
+	Dimensions, Linking, ScrollView,
 	StyleSheet,
 	Text,
 	View
-} from "react-native";
+} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Icon } from "@expo/ui";
@@ -23,16 +21,34 @@ import SettingSwitch from "@/components/setting-switch";
 
 import { isSessionValid } from "@/utils/securitySession";
 
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../../../firebase";
 
 const { width: screenWidth } = Dimensions.get("window");
 
 import ChangeEmailModal from "@/components/change-email-modal";
+import ChangePasswordModal from "@/components/change-password-modal";
 import ChangePhoneModal from "@/components/change-phone-modal";
 import MiniTab from "@/components/mini-tab";
 
+// 👇 Static icon imports — import(...) called inline inside JSX returns a
+// Promise, not the icon data, and breaks every Android icon on this screen.
+// These need to be normal top-of-file imports instead.
+import alternateEmailXml from "@expo/material-symbols/alternate_email.xml";
+import asteriskXml from "@expo/material-symbols/asterisk.xml";
+import bombXml from "@expo/material-symbols/bomb.xml";
+import callXml from "@expo/material-symbols/call.xml";
+import frontHandXml from "@expo/material-symbols/favorite.xml";
+import powerSettingsNewXml from "@expo/material-symbols/power_settings_new.xml";
+import rulerXml from "@expo/material-symbols/straighten.xml"; // ⚠️ see note below
+import warningXml from "@expo/material-symbols/warning.xml";
+
 const IS_LOCKED_IN_KEY = "isLockedIn";
+// Local-only settings that the UserPreferencesContext does NOT manage
+// (currently just isMetric). consent/emergencyEscalation used to live here
+// too, but that caused them to get overwritten on every screen focus —
+// see chat for why. Don't add consent/emergencyEscalation back to this key.
+const LOCAL_APP_PREFS_KEY = "user_local_app_prefs";
 
 export default function Settings() {
 	const router = useRouter();
@@ -47,16 +63,6 @@ export default function Settings() {
 	const [userEmail, setUserEmail] = useState<string>("Not Set");
 	const [userPhone, setUserPhone] = useState<string>("Not Set");
 
-	// 2. Health Metrics States
-	const [birthday, setBirthday] = useState<string>("Jan 01, 2000");
-	const [height, setHeight] = useState<string>("Not Set");
-	const [weight, setWeight] = useState<string>("Not Set");
-	const [bloodType, setBloodType] = useState<string>("Not Set");
-	const [allergies, setAllergies] = useState<string>("None Stored");
-
-	// 3. Privacy Preferences States
-	const [consent, setConsent] = useState<boolean>(true);
-	const [emergencyEscalation, setEmergencyEscalation] = useState<boolean>(true);
 	const [isMetric, setIsMetric] = useState(false);
 
 	const [authModalVisible, setAuthModalVisible] = useState(false);
@@ -67,28 +73,30 @@ export default function Settings() {
 	const handleMetricToggle = async (newVal: boolean) => {
 		setIsMetric(newVal);
 		try {
-			console.log("set is metric to ", newVal); // 👈 Use newVal instead of stale isMetric
-			const currentObjRaw = await SecureStore.getItemAsync("user_privacy_prefs");
+			const currentObjRaw = await SecureStore.getItemAsync(LOCAL_APP_PREFS_KEY);
 			const currentObj = currentObjRaw ? JSON.parse(currentObjRaw) : {};
-			currentObj.useMetric = newVal; // 👈 Correctly saves newVal
-			await SecureStore.setItemAsync("user_privacy_prefs", JSON.stringify(currentObj));
+			currentObj.useMetric = newVal;
+			await SecureStore.setItemAsync(LOCAL_APP_PREFS_KEY, JSON.stringify(currentObj));
 		} catch (error) {
 			console.error("Failed to save metric preference locally:", error);
 		}
 	};
 
+	// 👇 consent/emergencyEscalation are no longer loaded or cached here.
+	// UserPreferencesContext already loads them (from AsyncStorage, then
+	// Firestore) once when the app starts, and keeps them in sync whenever
+	// setConsent/setEmergencyEscalation are called. Re-reading and re-setting
+	// them here on every focus was overwriting real changes with stale data.
 	const loadAllUserData = useCallback(async () => {
 		try {
-			// 1. Load local settings
-			const savedPrivacyString = await SecureStore.getItemAsync("user_privacy_prefs");
-			if (savedPrivacyString) {
-				const savedPrivacy = JSON.parse(savedPrivacyString);
-				if (savedPrivacy.consent !== undefined) setConsent(savedPrivacy.consent);
-				if (savedPrivacy.emergencyEscalation !== undefined) setEmergencyEscalation(savedPrivacy.emergencyEscalation);
-				if (savedPrivacy.useMetric !== undefined) setIsMetric(savedPrivacy.useMetric);
+			// 1. Load local-only app settings (currently just isMetric)
+			const savedLocalPrefsString = await SecureStore.getItemAsync(LOCAL_APP_PREFS_KEY);
+			if (savedLocalPrefsString) {
+				const savedLocalPrefs = JSON.parse(savedLocalPrefsString);
+				if (savedLocalPrefs.useMetric !== undefined) setIsMetric(savedLocalPrefs.useMetric);
 			}
 
-			// 👇 NEW: sync lock state with the Assign screen
+			// Sync lock state with the Assign screen
 			const rawLockedIn = await AsyncStorage.getItem(IS_LOCKED_IN_KEY);
 			setIsLockedIn(rawLockedIn ? JSON.parse(rawLockedIn) : false);
 
@@ -109,27 +117,6 @@ export default function Settings() {
 					// Read email and phone fields saved in Firestore
 					if (userData.email) setUserEmail(userData.email);
 					if (userData.phone) setUserPhone(userData.phone);
-				}
-
-				// 3. Fetch Privacy Settings
-				const settingsDocRef = doc(db, "users", currentUser.uid, "settings", "preferences");
-				const settingsDocSnap = await getDoc(settingsDocRef);
-
-				if (settingsDocSnap.exists()) {
-					const settingsData = settingsDocSnap.data();
-
-					if (settingsData.consent !== undefined) setConsent(settingsData.consent);
-					if (settingsData.emergencyEscalation !== undefined) setEmergencyEscalation(settingsData.emergencyEscalation);
-
-					const currentLocalPrivacyRaw = await SecureStore.getItemAsync("user_privacy_prefs");
-					const currentLocalPrivacy = currentLocalPrivacyRaw ? JSON.parse(currentLocalPrivacyRaw) : {};
-
-					const combinedPrivacy = {
-						...currentLocalPrivacy,
-						consent: settingsData.consent ?? true,
-						emergencyEscalation: settingsData.emergencyEscalation ?? true,
-					};
-					await SecureStore.setItemAsync("user_privacy_prefs", JSON.stringify(combinedPrivacy));
 				}
 			}
 		} catch (error) {
@@ -154,54 +141,6 @@ export default function Settings() {
 		}
 	};
 
-	const savePrivacyField = async (key: string, val: boolean) => {
-		try {
-			const currentObjRaw = await SecureStore.getItemAsync("user_privacy_prefs");
-			const currentObj = currentObjRaw ? JSON.parse(currentObjRaw) : {};
-			currentObj[key] = val;
-			await SecureStore.setItemAsync("user_privacy_prefs", JSON.stringify(currentObj));
-
-			const currentUser = auth.currentUser;
-			if (currentUser) {
-				// 🌟 Point directly to users/{uid}/settings/preferences
-				const settingsDocRef = doc(db, "users", currentUser.uid, "settings", "preferences");
-
-				// setDoc with merge: true creates the document if missing, or updates it if present
-				await setDoc(settingsDocRef, { [key]: val }, { merge: true });
-			}
-		} catch (error) {
-			console.error("Failed to save privacy preference:", error);
-		}
-	};
-
-	const getDisplayHeight = () => {
-		if (height === undefined || height === null || height === "Not Set") return "Not Set";
-		const cmValue = parseFloat(String(height).replace(/[^0-9.]/g, ""));
-		if (isNaN(cmValue)) return String(height);
-
-		if (isMetric) {
-			return `${cmValue} cm`;
-		} else {
-			const totalInches = cmValue / 2.54;
-			const feet = Math.floor(totalInches / 12);
-			const inches = Math.round(totalInches % 12);
-			return `${feet}' ${inches}"`;
-		}
-	};
-
-	const getDisplayWeight = () => {
-		if (weight === undefined || weight === null || weight === "Not Set") return "Not Set";
-		const kgValue = parseFloat(String(weight).replace(/[^0-9.]/g, ""));
-		if (isNaN(kgValue)) return String(weight);
-
-		if (isMetric) {
-			return `${kgValue} kg`;
-		} else {
-			const lbsValue = Math.round(kgValue * 2.20462);
-			return `${lbsValue} lbs`;
-		}
-	};
-
 	const executeSecureAction = async (action: () => void) => {
 		const authenticated = await isSessionValid();
 		if (authenticated) {
@@ -215,6 +154,9 @@ export default function Settings() {
 
 	const [changeEmailVisible, setChangeEmailVisible] = useState(false)
 	const [changePhoneVisible, setChangePhoneVisible] = useState(false)
+	const [changePassVisible, setChangePassVisible] = useState(false);
+
+	const { consent, setConsent, emergencyEscalation, setEmergencyEscalation, loading } = useUserPreferences();
 
 	useFocusEffect(
 		useCallback(() => {
@@ -250,7 +192,7 @@ export default function Settings() {
 											name="Email"
 											iconName={Icon.select({
 												ios: "at",
-												android: import("@expo/material-symbols/alternate_email.xml")
+												android: alternateEmailXml
 											})}
 											isLast={false}
 											value={userEmail}
@@ -264,7 +206,7 @@ export default function Settings() {
 											name="Phone"
 											iconName={Icon.select({
 												ios: "phone.fill",
-												android: import("@expo/material-symbols/call.xml")
+												android: callXml
 											})}
 											isLast={false}
 											value={userPhone}
@@ -278,10 +220,13 @@ export default function Settings() {
 											name="Password"
 											iconName={Icon.select({
 												ios: "asterisk",
-												android: import("@expo/material-symbols/asterisk.xml")
+												android: asteriskXml
 											})}
 											isLast={true}
-											onPress={() => { }}
+											onPress={() => {
+												Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+												setChangePassVisible(true)
+											}}
 											showChevron={true}
 										/>
 									</View>
@@ -296,16 +241,17 @@ export default function Settings() {
 										<View style={{ gap: spacing.one }}>
 											<View style={{ borderRadius: spacing.edge, overflow: "hidden" }}>
 												<SettingSwitch
-													name="Data Sharing Consent"
+													name="Share Health State"
 													iconName={Icon.select({
-														ios: "hand.raised.fill",
-														android: import("@expo/material-symbols/front_hand.xml")
+														ios: "heart.fill",
+														android: frontHandXml
 													})}
 													isLast={true}
-													value={true}
+													value={consent}
+													onValueChange={() => { setConsent(!consent) }}
 												/>
 											</View>
-											<Text style={styles.caption}>Authorize real-time synchrinization with secure cloud nodes.</Text>
+											<Text style={styles.caption}>When disabled, health states for everyone but the driver won't be shared with the app.</Text>
 										</View>
 
 										<View style={{ gap: spacing.one }}>
@@ -314,13 +260,14 @@ export default function Settings() {
 													name="Emergency Escalation"
 													iconName={Icon.select({
 														ios: "exclamationmark.triangle.fill",
-														android: import("@expo/material-symbols/warning.xml")
+														android: warningXml
 													})}
 													isLast={true}
-													value={true}
+													value={emergencyEscalation}
+													onValueChange={() => { setEmergencyEscalation(!emergencyEscalation) }}
 												/>
 											</View>
-											<Text style={styles.caption}>Automatic alert routing to nearest response center if unresponsive.</Text>
+											<Text style={styles.caption}>Automatically notify emergency contacts when an emergency occurs. Works when only the driver is buckled.</Text>
 										</View>
 
 									</View>
@@ -337,7 +284,7 @@ export default function Settings() {
 													name="Use Metric Units"
 													iconName={Icon.select({
 														ios: "ruler.fill",
-														android: import("@expo/material-symbols/front_hand.xml")
+														android: rulerXml
 													})}
 													isLast={true}
 													value={isMetric}
@@ -352,7 +299,7 @@ export default function Settings() {
 													name="Log out"
 													iconName={Icon.select({
 														ios: "power",
-														android: import("@expo/material-symbols/power_settings_new.xml")
+														android: powerSettingsNewXml
 													})}
 													isLast={false}
 													enabled={!isLockedIn}
@@ -365,7 +312,7 @@ export default function Settings() {
 													name="Nuke account"
 													iconName={Icon.select({
 														ios: "trash.fill",
-														android: import("@expo/material-symbols/bomb.xml")
+														android: bombXml
 													})}
 													isLast={true}
 													destructive={true}
@@ -378,7 +325,7 @@ export default function Settings() {
 											</View>
 											{isLockedIn &&
 												<Text style={styles.caption}>
-													Seat assignment must be unlocked before you can log out or nuke your account.
+													Must be unbuckled before you can log out or nuke your account.
 												</Text>
 											}
 										</View>
@@ -396,7 +343,7 @@ export default function Settings() {
 							<Text style={[styles.caption, { color: themes.primaryBttn, textAlign: "center", textDecorationLine: "underline", marginBottom: spacing.two }]} onPress={() => {
 								Linking.openURL("https://github.com/ollymt/safeseat-app")
 							}}>
-								v.26w35d6r01
+								v.26w35d6r02
 							</Text>
 
 							<Text style={[styles.caption, { color: themes.textSecondary, textAlign: "center" }]}>
@@ -481,6 +428,16 @@ export default function Settings() {
 						onSuccess={() => {
 							Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
 							setChangePhoneVisible(false)
+							loadAllUserData(); // Refresh displayed values
+						}}
+					/>
+
+					<ChangePasswordModal
+						visible={changePassVisible}
+						onClose={() => { setChangePassVisible(false) }}
+						onSuccess={() => {
+							Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+							setChangePassVisible(false)
 							loadAllUserData(); // Refresh displayed values
 						}}
 					/>

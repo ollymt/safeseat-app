@@ -11,7 +11,7 @@ import {
 type SeatCardProps = {
 	seatNo: number;
 	name?: string;
-	state?: "safe" | "warning" | "emergency" | "empty";
+	state?: "safe" | "warning" | "emergency" | "empty" | "unknown";
 	role?: string;
 	onPress: () => void;
 };
@@ -40,7 +40,9 @@ export default function SeatCard({
 								? themes.lightOrange
 								: state == "emergency"
 									? themes.warnBttn
-									: themes.secondaryBttn,
+									: state == "unknown"
+										? themes.text
+										: themes.secondaryBttn,
 				},
 			]}
 		>
@@ -55,7 +57,9 @@ export default function SeatCard({
 									? themes.lightOrange
 									: state == "emergency"
 										? themes.warnBttn
-										: themes.secondaryBttn,
+										: state == "unknown"
+											? themes.text
+											: themes.secondaryBttn,
 					},
 				]}
 			/>
@@ -150,6 +154,30 @@ export default function SeatCard({
 						/>
 					</Host>
 					<Text style={[seatcard.stateName, { color: themes.warnBttn }]}>
+						{state.toUpperCase()}
+					</Text>
+				</View>
+			) : state == "unknown" ? (
+				<View
+					style={{
+						flexDirection: "row",
+						gap: spacing.half,
+						alignItems: "center",
+						justifyContent: "center",
+						borderWidth: spacing.none,
+						paddingRight: spacing.two,
+					}}
+				>
+					<Host matchContents>
+						<Icon
+							name={Icon.select({
+								ios: "questionmark",
+								android: import("@expo/material-symbols/question_mark.xml"),
+							})}
+							color={themes.text}
+						/>
+					</Host>
+					<Text style={[seatcard.stateName, { color: themes.text }]}>
 						{state.toUpperCase()}
 					</Text>
 				</View>
