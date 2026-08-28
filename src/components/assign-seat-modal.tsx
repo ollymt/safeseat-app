@@ -18,6 +18,8 @@ export type Profile = {
     name: string;
     icon?: string;
     isAccountOwner?: boolean;
+    weight?: string;
+    weightKg?: number;
 };
 
 type Props = {
@@ -90,14 +92,18 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
                 }
 
                 const userDocRef = doc(db, "users", currentUser.uid);
+                let primaryWeight: string | undefined;
+                let primaryWeightKg: number | undefined;
+
                 const userDocSnap = await getDoc(userDocRef);
                 if (userDocSnap.exists()) {
                     const userData = userDocSnap.data();
                     if (userData.name) primaryName = userData.name;
-                    // Read 'icon' field first, fallback to 'photoURL'
                     if (userData.icon || userData.photoURL) {
                         primaryIcon = userData.icon ?? userData.photoURL;
                     }
+                    if (userData.weightKg !== undefined) primaryWeightKg = userData.weightKg;
+                    if (userData.weight !== undefined) primaryWeight = userData.weight;
                 }
 
                 const accountOwnerProfile: Profile = {
@@ -105,6 +111,8 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
                     name: `${primaryName ?? "Me"} (Me)`,
                     icon: primaryIcon,
                     isAccountOwner: true,
+                    weight: primaryWeight,
+                    weightKg: primaryWeightKg,
                 };
                 combinedList.push(accountOwnerProfile);
 
@@ -116,7 +124,9 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
                     return {
                         id: docSnap.id,
                         name: data.name ?? "Unnamed Profile",
-                        icon: data.icon ?? data.photoURL, // 👈 Reads 'icon' from Firestore
+                        icon: data.icon ?? data.photoURL,
+                        weight: data.weight,
+                        weightKg: data.weightKg,
                     };
                 });
 

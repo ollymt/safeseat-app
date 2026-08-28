@@ -24,6 +24,7 @@ import { db } from "../firebase";
 SplashScreen.preventAutoHideAsync();
 
 import * as SystemUI from 'expo-system-ui';
+import { BannerProvider } from "@/hooks/banner-context";
 
 // Force the underlying native iOS frame window to change colors
 SystemUI.setBackgroundColorAsync("#101322")
@@ -106,17 +107,19 @@ export default function RootLayout() {
 	return (
 		<>
 			{/* The View wrapper guarantees that the React Native layer remains your theme color */}
-			<View style={{ backgroundColor: themes.background || "#101322", flex: 1 }}>
-				<Stack screenOptions={{ 
-					headerShown: false,
-					contentStyle: {
-						backgroundColor: themes.background,
-					},
-				}}>
-					<Stack.Screen name="(auth)" />
-					<Stack.Screen name="(tabs)" />
-				</Stack>
-			</View>
+			<BannerProvider>
+				<View style={{ backgroundColor: themes.background || "#101322", flex: 1 }}>
+					<Stack screenOptions={{
+						headerShown: false,
+						contentStyle: {
+							backgroundColor: themes.background,
+						},
+					}}>
+						<Stack.Screen name="(auth)" />
+						<Stack.Screen name="(tabs)" />
+					</Stack>
+				</View>
+			</BannerProvider>
 		</>
 	);
 }

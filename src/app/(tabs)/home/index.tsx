@@ -1,6 +1,7 @@
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
+import * as SecureStore from "expo-secure-store";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -25,6 +26,8 @@ type Profile = {
 	name: string;
 	photoURL?: string;
 	icon?: string;
+	weight?: string | number;
+	weightKg?: number;
 	isAccountOwner?: boolean;
 };
 
@@ -52,6 +55,7 @@ export default function Home() {
 	const [isLockedIn, setIsLockedIn] = useState<boolean>(false);
 	const [assignments, setAssignments] = useState<Record<number, Profile>>({});
 	const [seatStatuses, setSeatStatuses] = useState<Record<number, SeatState>>({});
+	const [useMetric, setUseMetric] = useState<boolean>(false);
 
 	// Tracks which emergency seats the user has dismissed, so the modal
 	// doesn't keep popping back up until a *new* emergency is triggered.
@@ -65,6 +69,14 @@ export default function Home() {
 				AsyncStorage.getItem(SEAT_ASSIGNMENTS_KEY),
 				AsyncStorage.getItem(SEAT_STATUSES_KEY),
 			]);
+
+			const savedPrivacyString = await SecureStore.getItemAsync("user_privacy_prefs");
+			if (savedPrivacyString) {
+				const savedPrivacy = JSON.parse(savedPrivacyString);
+				if (savedPrivacy.useMetric !== undefined) {
+					setUseMetric(savedPrivacy.useMetric);
+				}
+			}
 
 			const locked = rawLockedIn ? JSON.parse(rawLockedIn) : false;
 			setIsLockedIn(locked);
@@ -98,6 +110,31 @@ export default function Home() {
 		return seatStatuses[seatNo] ?? "safe";
 	};
 
+	const getProfileWeightKg = (profile?: Profile): number => {
+		if (!profile) return 0;
+		if (profile.weightKg !== undefined && typeof profile.weightKg === "number") {
+			return profile.weightKg;
+		}
+		if (profile.weight && profile.weight !== "Not Set") {
+			const parsed = parseFloat(String(profile.weight).replace(/[^0-9.]/g, ""));
+			return isNaN(parsed) ? 0 : parsed;
+		}
+		return 0;
+	};
+
+	const totalWeightInfo = (() => {
+		const totalKg = [1, 2, 3, 4, 5].reduce(
+			(sum, seatNo) => sum + getProfileWeightKg(assignments[seatNo]),
+			0
+		);
+
+		if (useMetric) {
+			return `${totalKg.toFixed(1)} kg`;
+		} else {
+			return `${(totalKg * 2.20462).toFixed(1)} lbs`;
+		}
+	})();
+
 	// 🚨 Find the first assigned, locked-in seat currently in "emergency"
 	// that the user hasn't already dismissed.
 	const emergencySeatNo = isLockedIn
@@ -129,10 +166,11 @@ export default function Home() {
 					flex: 1,
 					backgroundColor: themes.background
 				}}
-				edges={["left", "right", "top"]}
+				edges={["left", "right", "bottom"]}
 			>
 				<ScrollView contentContainerStyle={[{ flexGrow: 1 }, { marginTop: spacing.one, paddingBottom: bottomPad }]} showsVerticalScrollIndicator={true} bounces={true}>
 					<View style={[styles.container]}>
+						
 						{isLockedIn ? (
 							<View>
 								<Text style={[styles.pageHeader]}>
@@ -165,7 +203,7 @@ export default function Home() {
 									<Text style={styles.sectionHeader}>Extra Info</Text>
 									<InfoCard
 										smolTopText="TOTAL PASSENGER WEIGHT*"
-										bigText="443 lbs"
+										bigText={totalWeightInfo}
 										icon={
 											<Host>
 												<Icon name={Icon.select({

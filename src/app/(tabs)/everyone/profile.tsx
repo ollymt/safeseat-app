@@ -748,7 +748,7 @@ export default function Profile() {
 	return (
 		<SafeAreaView
 			style={{ flex: 1, backgroundColor: themes.background }}
-			edges={['left', 'right', "top"]}
+			edges={["left", "right", "bottom"]}
 		>
 			<TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
 				<KeyboardAwareScrollView contentContainerStyle={[{ flexGrow: 1 }, { marginTop: spacing.one, paddingBottom: bottomPad }]} showsVerticalScrollIndicator={true} bounces={true} extraScrollHeight={spacing.ten}>

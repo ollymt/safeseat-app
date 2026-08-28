@@ -225,7 +225,7 @@ export default function Settings() {
 	return (
 		<SafeAreaView
 			style={{ flex: 1, backgroundColor: themes.background }}
-			edges={["left", "right", "top"]}
+			edges={["left", "right", "bottom"]}
 		>
 			<ScrollView contentContainerStyle={[{ flexGrow: 1 }, { marginTop: spacing.one, paddingBottom: bottomPad }]} showsVerticalScrollIndicator={true} bounces={true}>
 				<View style={[styles.container, { borderWidth: spacing.none, borderColor: themes.text }]}>
@@ -396,7 +396,7 @@ export default function Settings() {
 							<Text style={[styles.caption, { color: themes.primaryBttn, textAlign: "center", textDecorationLine: "underline", marginBottom: spacing.two }]} onPress={() => {
 								Linking.openURL("https://github.com/ollymt/safeseat-app")
 							}}>
-								v.26w35d4r02
+								v.26w35d6r01
 							</Text>
 
 							<Text style={[styles.caption, { color: themes.textSecondary, textAlign: "center" }]}>

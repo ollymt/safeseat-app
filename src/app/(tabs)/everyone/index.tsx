@@ -261,7 +261,7 @@ export default function Everyone() {
 
 	return (
 		<View style={{ flex: 1, backgroundColor: themes.background }}>
-			<SafeAreaView style={[styles.safeArea, { backgroundColor: themes.background }]} edges={["left", "right", "top", "bottom"]}>
+			<SafeAreaView style={[styles.safeArea, { backgroundColor: themes.background }]} edges={["left", "right", "bottom"]}>
 				<View style={styles.container}>
 					<View
 						style={{

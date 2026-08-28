@@ -17,12 +17,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import PasswordVerifyModal from "@/components/PasswordVerifyModal";
-import { isSessionValid } from "@/utils/securitySession";
 import * as SecureStore from "expo-secure-store";
-
 import * as Haptics from "expo-haptics";
-
 import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
 
 import Button from "@/components/button";
@@ -87,9 +83,7 @@ const isUnder18Parts = (year: number, month: number, day: number): boolean => {
 };
 
 // Birthday is stored as three separate int64 fields in Firestore: birthYear,
-// birthMonth, birthDate. This pulls those out of whatever object we loaded
-// (cache or cloud), also tolerating an old combined "birthday" value for
-// backward compatibility with any pre-existing records.
+// birthMonth, birthDate.
 const extractBirthdayParts = (data: any): { year: number; month: number; day: number } | null => {
 	if (!data) return null;
 
@@ -106,8 +100,6 @@ const extractBirthdayParts = (data: any): { year: number; month: number; day: nu
 		return isValidDateParts(y, m, d) ? { year: y, month: m, day: d } : null;
 	}
 
-	// Legacy fallback for older cached/cloud records that stored a single
-	// combined "birthday" value instead of separate fields.
 	const legacy = data.birthday;
 	if (legacy && legacy !== "Not Set") {
 		if (typeof legacy === "object") {
@@ -155,9 +147,6 @@ export default function Profile() {
 	const [bloodType, setBloodType] = useState<string>("Not Set");
 	const [allergies, setAllergies] = useState<string>("None Stored");
 
-	// Birthday kept as three fully separate fields — mirrors Firestore's
-	// birthYear / birthMonth / birthDate int64 schema. Never combined into a
-	// Date object or a single date string.
 	const [birthYear, setBirthYear] = useState<string>("");
 	const [birthMonth, setBirthMonth] = useState<string>("");
 	const [birthDate, setBirthDate] = useState<string>("");
@@ -171,15 +160,12 @@ export default function Profile() {
 	const [isMetric, setIsMetric] = useState<boolean>(true);
 
 	// 4. UI Interaction State
-	const [refreshing, setRefreshing] = useState(false);
 	const [editMode, setEditMode] = useState(false);
-	const [authModalVisible, setAuthModalVisible] = useState(false);
-	const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
-
-	const [saving, setSaving] = useState(false)
+	const [saving, setSaving] = useState(false);
 
 	const navigation = useNavigation();
 	const unsavedRef = useRef(false);
+
 	useEffect(() => {
 		unsavedRef.current = editMode && hasUnsavedChanges();
 	});
@@ -187,10 +173,9 @@ export default function Profile() {
 	useEffect(() => {
 		const unsubscribe = navigation.addListener("beforeRemove", (e) => {
 			if (!unsavedRef.current) {
-				return; // nothing unsaved — let it navigate away normally
+				return;
 			}
 
-			// stop the navigation from happening immediately
 			e.preventDefault();
 
 			Alert.alert(
@@ -201,7 +186,6 @@ export default function Profile() {
 					{
 						text: "Discard",
 						style: "destructive",
-						// re-fire the exact navigation action that was blocked
 						onPress: () => navigation.dispatch(e.data.action),
 					},
 				]
@@ -255,7 +239,6 @@ export default function Profile() {
 				setBloodType(loadedData.bloodType);
 				setAllergies(loadedData.allergies);
 
-				// Parse Height into separate inputs if imperial
 				const cmVal = parseFloat(loadedData.height.replace(/[^0-9.]/g, ""));
 				if (!isNaN(cmVal)) {
 					const totalInches = cmVal / 2.54;
@@ -363,11 +346,10 @@ export default function Profile() {
 		}, [loadAllUserData]),
 	);
 
-	// Reactively translate separate Imperial Feet/Inches inputs back to Metric (cm) for standard DB compatibility
 	useEffect(() => {
 		if (editMode && !skipNextConversion.current) {
 			skipNextConversion.current = true;
-			return; // don't run on the render where we just entered edit mode
+			return;
 		}
 		if (!editMode) {
 			skipNextConversion.current = false;
@@ -375,35 +357,30 @@ export default function Profile() {
 		}
 
 		if (!isMetric) {
-			// --- 1. Height Sync (Imperial -> Metric) ---
 			const feetNum = parseFloat(tempFeet);
 			const inchesNum = parseFloat(tempInches || "0");
 
 			if (!isNaN(feetNum) && feetNum >= 0) {
 				const totalInches = (feetNum * 12) + (isNaN(inchesNum) ? 0 : inchesNum);
 				const computedCm = totalInches * 2.54;
-				setHeight(String(Math.round(computedCm * 10) / 10)); // Maintain 1 decimal place accuracy
+				setHeight(String(Math.round(computedCm * 10) / 10));
 			} else if (tempFeet === "" && tempInches === "") {
 				setHeight("Not Set");
 			}
 
-			// --- 2. Weight Sync (Imperial -> Metric) ---
 			const lbsNum = parseFloat(tempLbs);
 
 			if (!isNaN(lbsNum) && lbsNum >= 0) {
 				const computedKg = lbsNum / 2.20462;
-				setWeight(String(Math.round(computedKg * 10) / 10)); // Maintain 1 decimal place accuracy
+				setWeight(String(Math.round(computedKg * 10) / 10));
 			} else if (tempLbs === "") {
 				setWeight("Not Set");
 			}
 		}
 	}, [tempFeet, tempInches, tempLbs, isMetric, editMode]);
 
-	// Validation engine: Controls state of the Save button
 	const validateForm = () => {
-		// 0. Required fields — everything except allergies must be filled in
 		if (userName.trim() === "") return false;
-
 		if (birthYear.trim() === "" || birthMonth.trim() === "" || birthDate.trim() === "") return false;
 
 		if (isMetric) {
@@ -414,7 +391,6 @@ export default function Profile() {
 			if (weight.trim() === "" || weight === "Not Set") return false;
 		}
 
-		// 2. Birthday validation
 		const yVal = birthYear.trim();
 		const mVal = birthMonth.trim();
 		const dVal = birthDate.trim();
@@ -429,11 +405,9 @@ export default function Profile() {
 			const currentYear = new Date().getFullYear();
 			if (y < 1900 || y > currentYear) return false;
 
-			// 🌟 Reject under-18 birthdays
 			if (isUnder18Parts(y, m, d)) return false;
 		}
 
-		// 3. Imperial Height Inputs Validation
 		if (!isMetric) {
 			const fVal = tempFeet.trim();
 			const iVal = tempInches.trim();
@@ -458,7 +432,7 @@ export default function Profile() {
 		const origMonth = orig.birthMonth !== null && orig.birthMonth !== undefined ? String(orig.birthMonth) : "";
 		const origDay = orig.birthDate !== null && orig.birthDate !== undefined ? String(orig.birthDate) : "";
 
-		const origHeightCm = parseFloat(orig.height.replace(/[^0-9.]/g, ""));
+		const origHeightCm = parseFloat(orig.height ? orig.height.replace(/[^0-9.]/g, "") : "");
 		let origFeet = "";
 		let origInches = "";
 		if (!isNaN(origHeightCm)) {
@@ -469,7 +443,7 @@ export default function Profile() {
 
 		return (
 			userName !== orig.name ||
-			userIcon !== orig.icon || // <-- ADD THIS LINE
+			userIcon !== orig.icon ||
 			height !== orig.height ||
 			weight !== orig.weight ||
 			bloodType !== orig.bloodType ||
@@ -483,7 +457,7 @@ export default function Profile() {
 
 	const handleCancelEdit = () => {
 		if (hasUnsavedChanges()) {
-			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
 			Alert.alert(
 				"Discard?",
 				"You have unsaved changes. Discard?",
@@ -519,7 +493,7 @@ export default function Profile() {
 
 			const updatedProfile = {
 				name: userName,
-				icon: userIcon, // Already present in your local cache object
+				icon: userIcon,
 				email: userEmail,
 				phone: userPhone,
 				birthYear: validBday ? y : null,
@@ -538,7 +512,7 @@ export default function Profile() {
 
 			const firestorePayload: any = {
 				name: userName,
-				icon: userIcon, // <-- ADD THIS LINE to save the Base64 image to Firestore
+				icon: userIcon,
 				email: userEmail,
 				phone: userPhone,
 				bloodType: bloodType,
@@ -563,7 +537,7 @@ export default function Profile() {
 
 			await updateDoc(profileDocRef, firestorePayload);
 			setEditMode(false);
-			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 		} catch (error) {
 			Alert.alert("Failed to save changes");
 			console.error("Failed to save changes: ", error);
@@ -614,8 +588,6 @@ export default function Profile() {
 		const d = parseInt(birthDate, 10);
 		if (!isValidDateParts(y, m, d)) return "Not Set";
 
-		// Only reads today's y/m/d off the system clock — never constructs a
-		// Date for the birthday itself, so there's no timezone round-trip.
 		const now = new Date();
 		const todayYear = now.getFullYear();
 		const todayMonth = now.getMonth() + 1;
@@ -652,17 +624,6 @@ export default function Profile() {
 		return "Not Set";
 	};
 
-	const executeSecureAction = async (action: () => void) => {
-		const authenticated = await isSessionValid();
-		if (authenticated) {
-			action();
-		} else {
-			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-			setPendingAction(() => () => action());
-			setAuthModalVisible(true);
-		}
-	};
-
 	const [keyboardHeight, setKeyboardHeight] = useState(0);
 
 	useEffect(() => {
@@ -683,9 +644,8 @@ export default function Profile() {
 	}, []);
 
 	const insets = useSafeAreaInsets();
-	const bottomPad = 104 + (insets.bottom / 2); // extra breathing room
+	const bottomPad = 104 + (insets.bottom / 2);
 
-	// Add inside your Profile component:
 	const handlePickImage = async () => {
 		const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
@@ -698,18 +658,16 @@ export default function Profile() {
 			mediaTypes: ["images"],
 			allowsEditing: true,
 			aspect: [1, 1],
-			quality: 0.3, // Compress heavily to keep Base64 string well under 1MB
-			base64: true, // Requests Base64 output from Expo
+			quality: 0.3,
+			base64: true,
 		});
 
 		if (!result.canceled && result.assets[0].base64) {
-			// Construct standard Data URI string
 			const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
 			setUserIcon(base64Image);
 		}
 	};
 
-	// Wipes stale data immediately when switching profiles so old profile data never renders
 	useEffect(() => {
 		setUserName("");
 		setUserIcon("");
@@ -732,8 +690,6 @@ export default function Profile() {
 	useFocusEffect(
 		useCallback(() => {
 			let isMounted = true;
-
-			// Temporarily flag as loading while async SecureStore reads
 			setIsLoaded(false);
 
 			loadAllUserData().then(() => {
@@ -751,7 +707,7 @@ export default function Profile() {
 			<View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: themes.background }}>
 				<ActivityIndicator color={themes.text} size="large" />
 			</View>
-		)
+		);
 	}
 
 	const handleDeleteProfile = () => {
@@ -777,7 +733,7 @@ export default function Profile() {
 							Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 							router.back();
 						} catch (error) {
-							Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+							Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
 							Alert.alert("Failed to nuke profile");
 							console.error("Failed to nuke profile: ", error);
 						} finally {
@@ -792,7 +748,7 @@ export default function Profile() {
 	return (
 		<SafeAreaView
 			style={{ flex: 1, backgroundColor: themes.background }}
-			edges={['left', 'right', "top"]}
+			edges={["left", "right", "bottom"]}
 		>
 			<TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
 				<KeyboardAwareScrollView contentContainerStyle={[{ flexGrow: 1 }, { marginTop: spacing.one, paddingBottom: bottomPad }]} showsVerticalScrollIndicator={true} bounces={true} extraScrollHeight={spacing.ten}>
@@ -818,7 +774,7 @@ export default function Profile() {
 									source={
 										!userIcon || userIcon === "Not Set" || userIcon === ""
 											? { uri: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNyV3QnQOwXP124try4wkWE0xXqxT6KZitbq4TerzfLkMDDY-v1CXzTGw&s=10" }
-											: { uri: userIcon } // React Native Image natively supports base64 Data URIs
+											: { uri: userIcon }
 									}
 									style={{
 										width: 120,
@@ -1117,26 +1073,22 @@ export default function Profile() {
 								<View style={{ flexDirection: "row", gap: spacing.one }}>
 									{editMode &&
 										<View style={{}}>
-
-											<Button 
-												variant="secondary" 
-												label={hasUnsavedChanges() ? "Discard" : "Cancel"} 
-												onPress={() => { handleCancelEdit() }} 
+											<Button
+												variant="secondary"
+												label={hasUnsavedChanges() ? "Discard" : "Cancel"}
+												onPress={() => { handleCancelEdit(); }}
 												enabled={!saving}
 											/>
-
 										</View>
 									}
 									<View style={{ flex: 1 }}>
-										<Button 
-											variant={editMode ? "primary" : "secondary"} 
-											label={editMode ? "Save" : "Edit Profile"} 
+										<Button
+											variant={editMode ? "primary" : "secondary"}
+											label={editMode ? "Save" : "Edit Profile"}
 											onPress={() => {
 												if (!editMode) {
-													executeSecureAction(() => {
-														Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-														setEditMode(true);
-													});
+													Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+													setEditMode(true);
 												} else {
 													Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 													handleSaveChanges();
@@ -1144,7 +1096,7 @@ export default function Profile() {
 											}}
 											loading={saving}
 											enabled={!saving}
-										 />
+										/>
 									</View>
 								</View>
 
@@ -1155,21 +1107,6 @@ export default function Profile() {
 								}
 							</View>
 						</View>
-
-						<PasswordVerifyModal
-							visible={authModalVisible}
-							onClose={() => {
-								setAuthModalVisible(false);
-								setPendingAction(null);
-							}}
-							onSuccess={() => {
-								setAuthModalVisible(false);
-								if (pendingAction) {
-									pendingAction();
-									setPendingAction(null);
-								}
-							}}
-						/>
 
 					</View>
 				</KeyboardAwareScrollView>

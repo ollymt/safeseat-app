@@ -244,7 +244,7 @@ export default function Contact() {
     return (
         <SafeAreaView
             style={{ flex: 1, backgroundColor: themes.background }}
-            edges={['left', 'right', "top"]}
+            edges={["left", "right", "bottom"]}
         >
             <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
                 <KeyboardAwareScrollView

@@ -17,11 +17,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import AssignCard from "@/components/assign-card";
 import AssignSeatModal from "@/components/assign-seat-modal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as SecureStore from "expo-secure-store";
 import * as Haptics from "expo-haptics";
-import { useCallback, useMemo, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "../../../firebase";
+import { useCallback, useState } from "react";
 
 import Button from "@/components/button";
 import InfoCard from "@/components/info-card";
@@ -32,8 +29,6 @@ type Profile = {
 	photoURL?: string;
 	icon?: string;
 	pfp?: string; // Added pfp key support
-	weight?: string | number;
-	weightKg?: number;
 	isAccountOwner?: boolean;
 };
 
@@ -62,9 +57,6 @@ export default function Assign() {
 	const [assignModalVisible, setAssignModalVisible] = useState(false);
 	const [selectedSeat, setSelectedSeat] = useState(1);
 
-	// Unit preference state
-	const [useMetric, setUseMetric] = useState<boolean>(false);
-
 	// Map seat numbers (1-5) to assigned Profiles
 	const [assignments, setAssignments] = useState<Record<number, Profile>>({});
 
@@ -75,32 +67,9 @@ export default function Assign() {
 	// Check if at least one seat has an assigned profile
 	const hasAssignedSeats = Object.values(assignments).some((profile) => Boolean(profile));
 
-	// 📥 Load saved state and metric preference on focus
+	// 📥 Load saved state on focus
 	const loadState = useCallback(async () => {
 		try {
-			// Fetch unit preferences
-			const savedPrivacyString = await SecureStore.getItemAsync("user_privacy_prefs");
-			if (savedPrivacyString) {
-				const savedPrivacy = JSON.parse(savedPrivacyString);
-				if (savedPrivacy.useMetric !== undefined) {
-					setUseMetric(savedPrivacy.useMetric);
-				}
-			}
-
-			const currentUser = auth.currentUser;
-			if (currentUser) {
-				const settingsDocRef = doc(db, "users", currentUser.uid, "settings", "preferences");
-				const settingsDocSnap = await getDoc(settingsDocRef);
-				if (settingsDocSnap.exists()) {
-					const settingsData = settingsDocSnap.data();
-					if (settingsData.useMetric !== undefined) {
-						setUseMetric(settingsData.useMetric);
-						await SecureStore.setItemAsync("user_privacy_prefs", JSON.stringify({ useMetric: settingsData.useMetric }));
-					}
-				}
-			}
-
-			// Load assigned seats and status state
 			const [rawAssignments, rawLockedIn, rawStatuses] = await Promise.all([
 				AsyncStorage.getItem(SEAT_ASSIGNMENTS_KEY),
 				AsyncStorage.getItem(IS_LOCKED_IN_KEY),
@@ -130,41 +99,6 @@ export default function Assign() {
 			loadState();
 		}, [loadState])
 	);
-
-	// 🛠️ Calculate Weight Balance (Front vs Rear)
-	const weightBalanceInfo = useMemo(() => {
-		const getProfileWeightKg = (profile?: Profile): number => {
-			if (!profile) return 0;
-			if (profile.weightKg !== undefined && typeof profile.weightKg === "number") {
-				return profile.weightKg;
-			}
-			if (profile.weight && profile.weight !== "Not Set") {
-				const parsed = parseFloat(String(profile.weight).replace(/[^0-9.]/g, ""));
-				return isNaN(parsed) ? 0 : parsed;
-			}
-			return 0;
-		};
-
-		const frontKg = getProfileWeightKg(assignments[1]) + getProfileWeightKg(assignments[2]);
-		const rearKg = getProfileWeightKg(assignments[3]) + getProfileWeightKg(assignments[4]) + getProfileWeightKg(assignments[5]);
-
-		const diffKg = frontKg - rearKg;
-		const isFrontHeavier = diffKg >= 0;
-		const absDiffKg = Math.abs(diffKg);
-
-		if (useMetric) {
-			return {
-				comparisonText: isFrontHeavier ? "heavier" : "lighter",
-				displayValue: `${absDiffKg.toFixed(1)} kg`,
-			};
-		} else {
-			const absDiffLbs = absDiffKg * 2.20462;
-			return {
-				comparisonText: isFrontHeavier ? "heavier" : "lighter",
-				displayValue: `${absDiffLbs.toFixed(1)} lbs`,
-			};
-		}
-	}, [assignments, useMetric]);
 
 	// 🛠️ Derive the current state for any given seat number
 	const getCardState = (seatNo: number): SeatState => {
@@ -249,6 +183,8 @@ export default function Assign() {
 				return next;
 			});
 		}
+		// NOTE: We deliberately DO NOT call hideBanner() here when status changes away from "emergency".
+		// The banner will remain visible until the user manually dismisses it via the banner's close button or unlocks assignments.
 
 		try {
 			await AsyncStorage.setItem(SEAT_STATUSES_KEY, JSON.stringify(updatedStatuses));
@@ -272,6 +208,8 @@ export default function Assign() {
 
 	// Card tap interaction
 	const handleCardPress = (seatNo: number) => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
 		if (isLockedIn) {
 			const currentStatus = getCardState(seatNo);
 			if (currentStatus === "empty") return;
@@ -283,7 +221,6 @@ export default function Assign() {
 			};
 			updateSeatStatus(seatNo, nextStatus[currentStatus] ?? "safe");
 		} else {
-			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 			setSelectedSeat(seatNo);
 			setAssignModalVisible(true);
 		}
@@ -411,8 +348,8 @@ export default function Assign() {
 						<Text style={styles.sectionHeader}>Weight Balance</Text>
 						<InfoCard
 							smolTopText="Front of the vehicle is"
-							smolBottomText={`${weightBalanceInfo.comparisonText} than the rear*`}
-							bigText={weightBalanceInfo.displayValue}
+							smolBottomText="than the rear*"
+							bigText="147.7 lbs"
 							icon={
 								<Host>
 									<Icon name={Icon.select({
