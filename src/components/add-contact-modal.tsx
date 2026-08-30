@@ -137,7 +137,7 @@ export default function AddContactModal({ visible, onClose, onSuccess }: Props) 
                                     labelField="label"
                                     valueField="value"
                                     selectedTextStyle={{ color: themes.text, fontFamily: "Body-Medium" }}
-                                    placeholder="Heirarchy"
+                                    placeholder="Priority (1 = primary)"
                                     placeholderStyle={{ color: themes.textInputPlaceholder, fontFamily: "Body-Medium" }}
                                     value={priority}
                                     style={[

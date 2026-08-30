@@ -1,3 +1,4 @@
+import addXml from "@expo/material-symbols/add.xml";
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { Host, Icon } from "@expo/ui";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -67,7 +68,6 @@ export default function Everyone() {
 	const [userPhone, setUserPhone] = useState<string>("Not Set");
 	const [userImg, setUserImg] = useState<string>("");
 
-	const [useMetric, setUseMetric] = useState<boolean>(true);
 	const [refreshing, setRefreshing] = useState(false);
 
 	const [sections, setSections] = useState<ProfileSection[]>([]);
@@ -88,12 +88,6 @@ export default function Everyone() {
 				if (localData.email) setUserEmail(localData.email);
 				if (localData.phone) setUserPhone(localData.phone);
 				if (localData.img) setUserImg(localData.img);
-			}
-
-			const cachedPrivacy = await SecureStore.getItemAsync("user_privacy_prefs");
-			if (cachedPrivacy) {
-				const privacyData = JSON.parse(cachedPrivacy);
-				if (privacyData.useMetric !== undefined) setUseMetric(privacyData.useMetric);
 			}
 
 			const currentUser = auth.currentUser;
@@ -117,7 +111,6 @@ export default function Everyone() {
 						setUserImg(cloudData.img);
 						freshUserImg = cloudData.img;
 					}
-					if (cloudData.useMetric !== undefined) setUseMetric(cloudData.useMetric);
 
 					const combinedProfile = {
 						name: cloudData.name || "",
@@ -136,18 +129,6 @@ export default function Everyone() {
 						JSON.stringify(combinedProfile),
 					);
 
-					const existingPrivacyRaw = await SecureStore.getItemAsync("user_privacy_prefs");
-					const existingPrivacy = existingPrivacyRaw ? JSON.parse(existingPrivacyRaw) : {};
-
-					const combinedPrivacy = {
-						...existingPrivacy,
-						consent: cloudData.consent ?? true,
-						emergencyEscalation: cloudData.emergencyEscalation ?? true,
-					};
-					await SecureStore.setItemAsync(
-						"user_privacy_prefs",
-						JSON.stringify(combinedPrivacy),
-					);
 				}
 
 				const subcollectionRef = collection(db, "users", currentUser.uid, "profiles");
@@ -272,7 +253,7 @@ export default function Everyone() {
 						}}
 					>
 						<Text style={[styles.pageHeader, { color: themes.text, flex: 1 }]}>
-							Everyone
+							People
 						</Text>
 					</View>
 
@@ -321,7 +302,7 @@ export default function Everyone() {
 										<Icon
 											name={Icon.select({
 												ios: "plus",
-												android: import("@expo/material-symbols/add.xml"),
+												android: addXml,
 											})}
 											size={spacing.three}
 										/>
@@ -342,7 +323,7 @@ export default function Everyone() {
 										<Icon
 											name={Icon.select({
 												ios: "plus",
-												android: import("@expo/material-symbols/add.xml"),
+												android: addXml,
 											})}
 										/>
 									</Host>

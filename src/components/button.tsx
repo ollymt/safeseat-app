@@ -1,126 +1,139 @@
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
-import { GlassView } from "expo-glass-effect";
+import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
 import * as Haptics from "expo-haptics";
-import { Pressable, StyleSheet, Text, View, ActivityIndicator, StyleProp, PressableProps, ViewStyle } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleProp,
+  StyleSheet,
+  Text,
+  ViewStyle,
+} from "react-native";
+import type { ReactNode } from "react";
 
 type ButtonProps = {
-	variant?: "primary" | "secondary" | "warn" | "tertiary";
-	label?: string;
-	enabled?: boolean;
-	fullWidth?: boolean;
-	onPress: () => void;
-	style?: StyleProp<ViewStyle>;
-	children?: any;
-	loading?: boolean;
+  variant?: "primary" | "secondary" | "warn" | "tertiary";
+  label?: string;
+  enabled?: boolean;
+  fullWidth?: boolean;
+  onPress: () => void;
+  style?: StyleProp<ViewStyle>;
+  children?: ReactNode;
+  loading?: boolean;
 };
 
 export default function Button({
-	variant = "primary",
-	label,
-	enabled = true,
-	fullWidth = false,
-	onPress,
-	style,
-	children,
-	loading = false,
+  variant = "primary",
+  label,
+  enabled = true,
+  fullWidth = false,
+  onPress,
+  style,
+  children,
+  loading = false,
 }: ButtonProps) {
-	const handlePress = () => {
-		if (enabled) {
-			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-			onPress();
-		}
-	};
+  const handlePress = () => {
+    if (!enabled || loading) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onPress();
+  };
 
-	const containerStyle = [
-		button.baseButton,
-		variant === "primary" && button.primaryButton,
-		variant === "secondary" && button.secondaryButton,
-		variant === "warn" && button.warnButton,
-		variant === "tertiary" && button.tertiaryButton,
-		fullWidth && button.fullWidth,
-		!enabled && button.disabledButton,
-		style,
-	];
+  const spinnerColor =
+    variant === "primary"
+      ? themes.primaryBttnText
+      : variant === "warn"
+        ? themes.warnBttnText
+        : themes.text;
 
-	const textStyle = [
-		button.baseText,
-		variant === "primary" && button.primaryText,
-		variant === "secondary" && button.secondaryText,
-		variant === "tertiary" && button.tertiaryText,
-		variant === "warn" && button.warnText,
-		!enabled && button.disabledText,
-	];
-
-	const content = (
-		<Pressable
-			style={[style, button.pressableContent]}
-			onPress={handlePress}
-			disabled={!enabled}
-		>
-			{loading ? <ActivityIndicator color={themes.text} /> : (
-				<>
-					{children}
-					{label && <Text style={textStyle}>{label}</Text>}
-				</>
-			)}
-		</Pressable>
-	);
-
-	return <View style={containerStyle}>{content}</View>
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !enabled || loading, busy: loading }}
+      onPress={handlePress}
+      disabled={!enabled || loading}
+      style={({ pressed }) => [
+        styles.baseButton,
+        variant === "primary" && styles.primaryButton,
+        variant === "secondary" && styles.secondaryButton,
+        variant === "warn" && styles.warnButton,
+        variant === "tertiary" && styles.tertiaryButton,
+        fullWidth && styles.fullWidth,
+        (!enabled || loading) && styles.disabledButton,
+        pressed && enabled && !loading && styles.pressedButton,
+        style,
+      ]}
+    >
+      {loading ? (
+        <ActivityIndicator color={spinnerColor} />
+      ) : (
+        <>
+          {children}
+          {label ? (
+            <Text
+              style={[
+                styles.baseText,
+                variant === "primary" && styles.primaryText,
+                variant === "secondary" && styles.secondaryText,
+                variant === "tertiary" && styles.tertiaryText,
+                variant === "warn" && styles.warnText,
+              ]}
+            >
+              {label}
+            </Text>
+          ) : null}
+        </>
+      )}
+    </Pressable>
+  );
 }
 
-const button = StyleSheet.create({
-	baseButton: {
-		paddingTop: spacing.one,
-		paddingBottom: spacing.one,
-		paddingLeft: spacing.two,
-		paddingRight: spacing.two,
-		borderRadius: spacing.edge,
-		height: spacing.six,
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	primaryButton: {
-		backgroundColor: themes.primaryBttn,
-	},
-	secondaryButton: {
-		backgroundColor: themes.secondaryBttn,
-	},
-	warnButton: {
-		backgroundColor: themes.warnBttn,
-	},
-	tertiaryButton: {
-		backgroundColor: "transparent",
-	},
-	fullWidth: {
-		width: "100%",
-	},
-	disabledButton: {
-		opacity: 0.5,
-	},
-	pressableContent: {
-		width: "100%",
-		alignItems: "center",
-	},
-	baseText: {
-		fontSize: fontsize.button,
-		fontWeight: "600",
-	},
-	primaryText: {
-		color: themes.primaryBttnText,
-		fontWeight: "bold",
-	},
-	secondaryText: {
-		color: themes.text,
-	},
-	tertiaryText: {
-		color: themes.primaryBttn,
-		textDecorationLine: "underline",
-	},
-	warnText: {
-		color: themes.warnBttnText
-	},
-	disabledText: {
-		opacity: 0.5,
-	},
+const styles = StyleSheet.create({
+  baseButton: {
+    minHeight: spacing.six,
+    paddingVertical: spacing.one,
+    paddingHorizontal: spacing.two,
+    borderRadius: spacing.edge,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryButton: {
+    backgroundColor: themes.primaryBttn,
+  },
+  secondaryButton: {
+    backgroundColor: themes.secondaryBttn,
+    borderWidth: 1,
+    borderColor: themes.divider,
+  },
+  warnButton: {
+    backgroundColor: themes.warnBttn,
+  },
+  tertiaryButton: {
+    backgroundColor: "transparent",
+  },
+  fullWidth: {
+    width: "100%",
+  },
+  disabledButton: {
+    opacity: 0.45,
+  },
+  pressedButton: {
+    opacity: 0.82,
+    transform: [{ scale: 0.99 }],
+  },
+  baseText: {
+    fontSize: fontsize.button,
+    fontFamily: "Body-Bold",
+    textAlign: "center",
+  },
+  primaryText: {
+    color: themes.primaryBttnText,
+  },
+  secondaryText: {
+    color: themes.text,
+  },
+  tertiaryText: {
+    color: themes.primaryBttn,
+  },
+  warnText: {
+    color: themes.warnBttnText,
+  },
 });

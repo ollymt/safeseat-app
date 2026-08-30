@@ -1,3 +1,4 @@
+import circleXml from "@expo/material-symbols/circle.xml";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { Host, Icon } from "@expo/ui";
@@ -87,7 +88,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
                                 <Host>
                                     <Icon name={Icon.select({
                                         ios: "circle.fill",
-                                        android: import("@expo/material-symbols/circle.xml")
+                                        android: circleXml
                                     })} size={spacing.one} color={themes.primaryBttn} />
                                 </Host>
                             }

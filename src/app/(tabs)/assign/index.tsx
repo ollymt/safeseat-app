@@ -1,31 +1,24 @@
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useBanner } from "@/hooks/banner-context";
 import { useUserPreferences } from "@/hooks/user-preferences-context";
 import {
 	Alert,
 	ImageBackground,
-	Platform,
 	ScrollView,
 	StyleSheet,
 	Text,
 	View
 } from "react-native";
-import { Host, Icon } from "@expo/ui";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import AssignCard from "@/components/assign-card";
 import AssignSeatModal from "@/components/assign-seat-modal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as SecureStore from "expo-secure-store";
 import * as Haptics from "expo-haptics";
-import { useCallback, useMemo, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "../../../firebase";
+import { useCallback, useState } from "react";
 
 import Button from "@/components/button";
-import InfoCard from "@/components/info-card";
 
 type Profile = {
 	id: string;
@@ -46,27 +39,22 @@ const SEAT_STATUSES_KEY = "seatStatuses";
 
 const SEATS = [
 	{ seatNo: 1, seatCode: "driver" },
-	{ seatNo: 2, seatCode: "passenger" },
-	{ seatNo: 3, seatCode: "l backseat" },
-	{ seatNo: 4, seatCode: "c backseat" },
-	{ seatNo: 5, seatCode: "r backseat" },
+	{ seatNo: 2, seatCode: "front passenger" },
+	{ seatNo: 3, seatCode: "left rear" },
+	{ seatNo: 4, seatCode: "center rear" },
+	{ seatNo: 5, seatCode: "right rear" },
 ];
 
 export default function Assign() {
-	const router = useRouter();
 	const insets = useSafeAreaInsets();
 
-	const bottomPad = 104 + (insets.bottom / 2); // extra breathing room
+	const bottomPad = 88 + insets.bottom;
 
-	const { showBanner, hideBanner } = useBanner();
-
-	const { consent, setConsent, loading } = useUserPreferences();
+	const { consent } = useUserPreferences();
 
 	const [assignModalVisible, setAssignModalVisible] = useState(false);
 	const [selectedSeat, setSelectedSeat] = useState(1);
 
-	// Unit preference state
-	const [useMetric, setUseMetric] = useState<boolean>(false);
 
 	// Map seat numbers (1-5) to assigned Profiles
 	const [assignments, setAssignments] = useState<Record<number, Profile>>({});
@@ -78,31 +66,9 @@ export default function Assign() {
 	// Check if at least one seat has an assigned profile
 	const hasAssignedSeats = Object.values(assignments).some((profile) => Boolean(profile));
 
-	// 📥 Load saved state and metric preference on focus
+	// 📥 Load saved seat and trip state on focus.
 	const loadState = useCallback(async () => {
 		try {
-			// Fetch unit preferences
-			const savedPrivacyString = await SecureStore.getItemAsync("user_privacy_prefs");
-			if (savedPrivacyString) {
-				const savedPrivacy = JSON.parse(savedPrivacyString);
-				if (savedPrivacy.useMetric !== undefined) {
-					setUseMetric(savedPrivacy.useMetric);
-				}
-			}
-
-			const currentUser = auth.currentUser;
-			if (currentUser) {
-				const settingsDocRef = doc(db, "users", currentUser.uid, "settings", "preferences");
-				const settingsDocSnap = await getDoc(settingsDocRef);
-				if (settingsDocSnap.exists()) {
-					const settingsData = settingsDocSnap.data();
-					if (settingsData.useMetric !== undefined) {
-						setUseMetric(settingsData.useMetric);
-						await SecureStore.setItemAsync("user_privacy_prefs", JSON.stringify({ useMetric: settingsData.useMetric }));
-					}
-				}
-			}
-
 			// Load assigned seats and status state
 			const [rawAssignments, rawLockedIn, rawStatuses] = await Promise.all([
 				AsyncStorage.getItem(SEAT_ASSIGNMENTS_KEY),
@@ -134,41 +100,6 @@ export default function Assign() {
 		}, [loadState])
 	);
 
-	// 🛠️ Calculate Weight Balance (Front vs Rear)
-	const weightBalanceInfo = useMemo(() => {
-		const getProfileWeightKg = (profile?: Profile): number => {
-			if (!profile) return 0;
-			if (profile.weightKg !== undefined && typeof profile.weightKg === "number") {
-				return profile.weightKg;
-			}
-			if (profile.weight && profile.weight !== "Not Set") {
-				const parsed = parseFloat(String(profile.weight).replace(/[^0-9.]/g, ""));
-				return isNaN(parsed) ? 0 : parsed;
-			}
-			return 0;
-		};
-
-		const frontKg = getProfileWeightKg(assignments[1]) + getProfileWeightKg(assignments[2]);
-		const rearKg = getProfileWeightKg(assignments[3]) + getProfileWeightKg(assignments[4]) + getProfileWeightKg(assignments[5]);
-
-		const diffKg = frontKg - rearKg;
-		const isFrontHeavier = diffKg >= 0;
-		const absDiffKg = Math.abs(diffKg);
-
-		if (useMetric) {
-			return {
-				comparisonText: isFrontHeavier ? "heavier" : "lighter",
-				displayValue: `${absDiffKg.toFixed(1)} kg`,
-			};
-		} else {
-			const absDiffLbs = absDiffKg * 2.20462;
-			return {
-				comparisonText: isFrontHeavier ? "heavier" : "lighter",
-				displayValue: `${absDiffLbs.toFixed(1)} lbs`,
-			};
-		}
-	}, [assignments, useMetric]);
-
 	// 🛠️ Derive the current state for any given seat number
 	const getCardState = (seatNo: number): SeatState => {
 		const hasProfile = Boolean(assignments[seatNo]);
@@ -178,7 +109,7 @@ export default function Assign() {
 		if (!consent && seatNo != 1) return "unknown";
 
 		// When locked in, return its live status (defaulting to "safe")
-		return seatStatuses[seatNo] ?? "safe";
+		return seatStatuses[seatNo] ?? "unknown";
 	};
 
 	// 🔒 Buckle Handler
@@ -187,11 +118,11 @@ export default function Assign() {
 
 		Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-		// Default all currently assigned seats to "safe" status upon lock-in
+		// Until hardware reports a real state, a newly buckled seat stays UNKNOWN rather than falsely claiming SAFE.
 		const initialStatuses: Record<number, SeatState> = {};
 		Object.keys(assignments).forEach((seatStr) => {
 			const seatNum = parseInt(seatStr, 10);
-			initialStatuses[seatNum] = seatStatuses[seatNum] ?? "safe";
+			initialStatuses[seatNum] = seatStatuses[seatNum] ?? "unknown";
 		});
 
 		try {
@@ -232,35 +163,6 @@ export default function Assign() {
 		]);
 	};
 
-	// ⚡ Mutator: Update status for a specific locked seat ("safe" | "warning" | "emergency")
-	const updateSeatStatus = async (seatNo: number, status: "safe" | "warning" | "emergency") => {
-		const updatedStatuses = { ...seatStatuses, [seatNo]: status };
-		setSeatStatuses(updatedStatuses);
-
-		if (status === "emergency") {
-			// Get the name of the person in this seat (or default to "A passenger")
-			const assignedProfile = assignments[seatNo];
-			const passengerName = assignedProfile
-				? (assignedProfile.isAccountOwner ? "Me" : assignedProfile.name)
-				: `Seat ${seatNo}`;
-
-			// Trigger global banner
-			showBanner(passengerName == "Me" ? "You are having an emergency!" : `${passengerName} is having an emergency!`);
-
-			setDismissedSeats((prev) => {
-				const next = new Set(prev);
-				next.delete(seatNo);
-				return next;
-			});
-		}
-
-		try {
-			await AsyncStorage.setItem(SEAT_STATUSES_KEY, JSON.stringify(updatedStatuses));
-		} catch (error) {
-			console.error(`Failed to update status for seat ${seatNo}:`, error);
-		}
-	};
-
 	// Callback when modal updates or unassigns a seat
 	const handleSeatAssigned = (seatNumber: number, profile: Profile | null) => {
 		setAssignments((prev) => {
@@ -274,26 +176,21 @@ export default function Assign() {
 		});
 	};
 
-	// Card tap interaction
+	// Seat assignment can only be changed while the trip is unbuckled.
+	// The previous redesign cycled Safe → Warning → Emergency on ordinary
+	// taps while locked, which was useful as a demo shortcut but unsafe for a
+	// final UI because it could manufacture a false emergency state.
 	const handleCardPress = (seatNo: number) => {
+		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
 		if (isLockedIn) {
-			const currentStatus = getCardState(seatNo);
-			if (currentStatus === "empty") return;
-
-			const nextStatus: Record<string, "safe" | "warning" | "emergency"> = {
-				safe: "warning",
-				warning: "emergency",
-				emergency: "safe",
-			};
-			updateSeatStatus(seatNo, nextStatus[currentStatus] ?? "safe");
-		} else {
-			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-			setSelectedSeat(seatNo);
-			setAssignModalVisible(true);
+			Alert.alert("Trip is buckled", "Unbuckle before changing seat assignments.");
+			return;
 		}
-	};
 
-	const [dismissedSeats, setDismissedSeats] = useState<Set<number>>(new Set());
+		setSelectedSeat(seatNo);
+		setAssignModalVisible(true);
+	};
 
 	// Helper to transform display parameters and guarantee Base64 pfp propagation
 	const getDisplayProfile = (profile?: Profile): Profile | undefined => {
@@ -353,7 +250,7 @@ export default function Assign() {
 									pfp={assignments[2]?.icon || assignments[2]?.pfp || assignments[2]?.photoURL || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNyV3QnQOwXP124try4wkWE0xXqxT6KZitbq4TerzfLkMDDY-v1CXzTGw&s=10"}
 									onPress={() => handleCardPress(2)}
 									state={getCardState(2)}
-									seatCode="passenger"
+									seatCode="front passenger"
 									locked={isLockedIn}
 								/>
 							</View>
@@ -366,7 +263,7 @@ export default function Assign() {
 									pfp={assignments[3]?.icon || assignments[3]?.pfp || assignments[3]?.photoURL || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNyV3QnQOwXP124try4wkWE0xXqxT6KZitbq4TerzfLkMDDY-v1CXzTGw&s=10"}
 									onPress={() => handleCardPress(3)}
 									state={getCardState(3)}
-									seatCode="l backseat"
+									seatCode="left rear"
 									locked={isLockedIn}
 								/>
 								<AssignCard
@@ -375,7 +272,7 @@ export default function Assign() {
 									pfp={assignments[4]?.icon || assignments[4]?.pfp || assignments[4]?.photoURL || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNyV3QnQOwXP124try4wkWE0xXqxT6KZitbq4TerzfLkMDDY-v1CXzTGw&s=10"}
 									onPress={() => handleCardPress(4)}
 									state={getCardState(4)}
-									seatCode="c backseat"
+									seatCode="center rear"
 									locked={isLockedIn}
 								/>
 								<AssignCard
@@ -384,7 +281,7 @@ export default function Assign() {
 									pfp={assignments[5]?.icon || assignments[5]?.pfp || assignments[5]?.photoURL || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNyV3QnQOwXP124try4wkWE0xXqxT6KZitbq4TerzfLkMDDY-v1CXzTGw&s=10"}
 									onPress={() => handleCardPress(5)}
 									state={getCardState(5)}
-									seatCode="r backseat"
+									seatCode="right rear"
 									locked={isLockedIn}
 								/>
 							</View>
@@ -411,22 +308,6 @@ export default function Assign() {
 						)}
 					</View>
 
-					<View style={{ gap: spacing.one, marginTop: spacing.none }}>
-						<Text style={styles.sectionHeader}>Weight Balance</Text>
-						<InfoCard
-							smolTopText="Front of the vehicle is"
-							smolBottomText={`${weightBalanceInfo.comparisonText} than the rear*`}
-							bigText={weightBalanceInfo.displayValue}
-							icon={
-								<Host>
-									<Icon name={Icon.select({
-										ios: "scalemass.fill",
-										android: import("@expo/material-symbols/weight.xml")
-									})} size={spacing.five} />
-								</Host>
-							} />
-						<Text style={styles.caption}>* Weight balance calculation is based on entered weight per profile.</Text>
-					</View>
 
 					<AssignSeatModal
 						seat={selectedSeat}
@@ -460,14 +341,4 @@ const styles = StyleSheet.create({
 		color: themes.text,
 		margin: spacing.none,
 	},
-	sectionHeader: {
-		fontSize: fontsize.header,
-		fontFamily: "Heading-Font",
-		color: themes.text
-	},
-	caption: {
-		fontSize: fontsize.caption,
-		color: themes.textSecondary,
-		fontFamily: "Body-Regular"
-	}
 });

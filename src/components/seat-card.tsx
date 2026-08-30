@@ -1,3 +1,7 @@
+import checkXml from "@expo/material-symbols/check.xml";
+import warningXml from "@expo/material-symbols/warning.xml";
+import sirenXml from "@expo/material-symbols/siren.xml";
+import questionXml from "@expo/material-symbols/question_mark.xml";
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { Host, Icon } from "@expo/ui";
 import {
@@ -25,13 +29,15 @@ export default function SeatCard({
 }: SeatCardProps) {
 	return (
 		<Pressable
-			style={[
+			onPress={onPress}
+			accessibilityRole="button"
+			style={({ pressed }) => [
 				seatcard.baseCard,
 				state == "empty" && seatcard.emptySeat,
+				pressed && seatcard.pressed,
 				{
 					backgroundColor: themes.backgroundElement,
 					borderWidth: spacing.quarter,
-					boxSizing: "border-box",
 					borderStyle: state == "empty" ? "dashed" : "solid",
 					borderColor:
 						state == "safe"
@@ -98,7 +104,7 @@ export default function SeatCard({
 						<Icon
 							name={Icon.select({
 								ios: "checkmark.circle.fill",
-								android: import("@expo/material-symbols/check.xml"),
+								android: checkXml,
 							})}
 							color={themes.green}
 						/>
@@ -124,7 +130,7 @@ export default function SeatCard({
 						<Icon
 							name={Icon.select({
 								ios: "exclamationmark.triangle.fill",
-								android: import("@expo/material-symbols/warning.xml"),
+								android: warningXml,
 							})}
 							color={themes.lightOrange}
 						/>
@@ -148,7 +154,7 @@ export default function SeatCard({
 						<Icon
 							name={Icon.select({
 								ios: "light.beacon.max.fill",
-								android: import("@expo/material-symbols/siren.xml"),
+								android: sirenXml,
 							})}
 							color={themes.warnBttn}
 						/>
@@ -172,7 +178,7 @@ export default function SeatCard({
 						<Icon
 							name={Icon.select({
 								ios: "questionmark",
-								android: import("@expo/material-symbols/question_mark.xml"),
+								android: questionXml,
 							})}
 							color={themes.text}
 						/>
@@ -226,5 +232,9 @@ const seatcard = StyleSheet.create({
 	},
 	emptySeat: {
 		opacity: 1,
+	},
+	pressed: {
+		opacity: 0.78,
+		transform: [{ scale: 0.99 }],
 	},
 });

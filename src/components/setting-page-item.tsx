@@ -1,3 +1,4 @@
+import chevronRightXml from "@expo/material-symbols/chevron_right.xml";
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { Host, Icon } from "@expo/ui";
 import {
@@ -38,8 +39,8 @@ export default function SettingPageItem({
                 {
                     backgroundColor: themes.backgroundElement,
                     borderBottomWidth: isLast ? 0 : 1,
-                    borderBottomColor: themes.secondaryBttn,
-                    opacity: enabled ? 1 : 0.5,
+                    borderBottomColor: themes.divider,
+                    opacity: enabled ? (pressed ? 0.72 : 1) : 0.45,
                 }
             ]}
         >
@@ -48,7 +49,7 @@ export default function SettingPageItem({
                 {iconName && (
                     <View style={[setitem.iconWrapper, { backgroundColor: destructive ? themes.warnBttn : themes.primaryBttn, padding: 6, borderRadius: 8 }]}>
                         <Host style={{ width: 22, height: 22 }}>
-                            <Icon name={iconName} color={themes.primaryBttnText} />
+                            <Icon name={iconName} color={destructive ? themes.warnBttnText : themes.primaryBttnText} />
                         </Host>
                     </View>
                 )}
@@ -76,7 +77,7 @@ export default function SettingPageItem({
                         <Host matchContents>
                             <Icon name={Icon.select({
                                 ios: "chevron.right",
-                                android: import("@expo/material-symbols/chevron_right.xml")
+                                android: chevronRightXml
                             })} color={themes.textSecondary} />
                         </Host>
                     </View>

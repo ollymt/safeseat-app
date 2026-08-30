@@ -1,4 +1,5 @@
 import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
+import { useUserPreferences } from "@/hooks/user-preferences-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -156,8 +157,8 @@ export default function Profile() {
 	const [tempInches, setTempInches] = useState<string>("");
 	const [tempLbs, setTempLbs] = useState<string>("");
 
-	// 3. Unit Preference State
-	const [isMetric, setIsMetric] = useState<boolean>(true);
+	// Unit preference is shared across the entire app.
+	const { useMetric: isMetric } = useUserPreferences();
 
 	// 4. UI Interaction State
 	const [editMode, setEditMode] = useState(false);
@@ -200,12 +201,6 @@ export default function Profile() {
 			const currentUser = auth.currentUser;
 			if (!currentUser) return;
 
-			const savedPrivacyString = await SecureStore.getItemAsync("user_privacy_prefs");
-			if (savedPrivacyString) {
-				const savedPrivacy = JSON.parse(savedPrivacyString);
-				if (savedPrivacy.useMetric !== undefined) setIsMetric(savedPrivacy.useMetric);
-			}
-
 			const cachedHealth = await SecureStore.getItemAsync(cacheKey);
 			if (cachedHealth) {
 				const localData = JSON.parse(cachedHealth);
@@ -247,16 +242,6 @@ export default function Profile() {
 				} else {
 					setTempFeet("");
 					setTempInches("");
-				}
-			}
-
-			const settingsDocRef = doc(db, "users", currentUser.uid, "settings", "preferences");
-			const settingsDocSnap = await getDoc(settingsDocRef);
-			if (settingsDocSnap.exists()) {
-				const settingsData = settingsDocSnap.data();
-				if (settingsData.useMetric !== undefined) {
-					setIsMetric(settingsData.useMetric);
-					await SecureStore.setItemAsync("user_privacy_prefs", JSON.stringify({ useMetric: settingsData.useMetric }));
 				}
 			}
 
@@ -712,12 +697,12 @@ export default function Profile() {
 
 	const handleDeleteProfile = () => {
 		Alert.alert(
-			`Nuke ${userName}?`,
-			`Are you sure you want to nuke ${userName}? This action can't be undone.`,
+			`Delete ${userName}?`,
+			`Are you sure you want to delete ${userName}? This action can't be undone.`,
 			[
 				{ text: "Cancel", style: "cancel" },
 				{
-					text: "Nuke",
+					text: "Delete",
 					style: "destructive",
 					onPress: async () => {
 						try {
@@ -734,8 +719,8 @@ export default function Profile() {
 							router.back();
 						} catch (error) {
 							Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-							Alert.alert("Failed to nuke profile");
-							console.error("Failed to nuke profile: ", error);
+							Alert.alert("Failed to delete profile");
+							console.error("Failed to delete profile: ", error);
 						} finally {
 							setSaving(false);
 						}
@@ -1102,7 +1087,7 @@ export default function Profile() {
 
 								{editMode && isSubProfile &&
 									<View style={{ flex: 1 }}>
-										<Button variant="warn" label={`Nuke ${userName}`} onPress={handleDeleteProfile} enabled={!saving} />
+										<Button variant="warn" label={`Delete ${userName}`} onPress={handleDeleteProfile} enabled={!saving} />
 									</View>
 								}
 							</View>

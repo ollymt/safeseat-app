@@ -1,3 +1,4 @@
+import checkXml from "@expo/material-symbols/check.xml";
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { useEffect, useState } from "react";
 import { View, Pressable, Text, Image, StyleSheet } from "react-native"
@@ -42,7 +43,7 @@ export default function ProfileList({
                 <Host matchContents>
                     <Icon name={Icon.select({
                         ios: "checkmark",
-                        android: import("@expo/material-symbols/check.xml")
+                        android: checkXml
                     })} color={themes.primaryBttn} />
                 </Host>
             )}

@@ -1,3 +1,6 @@
+import closeXml from "@expo/material-symbols/close.xml";
+import chatXml from "@expo/material-symbols/chat.xml";
+import callXml from "@expo/material-symbols/call.xml";
 // components/PasswordVerifyModal.tsx
 import { Themes } from "@/constants/theme";
 import { BottomSheet, Button, Column, Host, Icon, Row, Spacer, Text } from "@expo/ui";
@@ -59,7 +62,7 @@ export default function ContactCardDrawer({ visible, onClose, name, number, orde
                         >
                             <Icon name={Icon.select({
                                 ios: "xmark",
-                                android: import("@expo/material-symbols/close.xml")
+                                android: closeXml
                             })} />
                         </Button>
                     </Row>
@@ -77,7 +80,7 @@ export default function ContactCardDrawer({ visible, onClose, name, number, orde
                             <Column alignment="center" spacing={4}>
                                 <Icon name={Icon.select({
                                     ios: "pencil",
-                                    android: import("@expo/material-symbols/chat.xml")
+                                    android: chatXml
                                 })} size={24} />
                                 <Text textStyle={{ fontSize: 14, fontWeight: "600" }}>Edit</Text>
                             </Column>
@@ -94,7 +97,7 @@ export default function ContactCardDrawer({ visible, onClose, name, number, orde
                             <Column alignment="center" spacing={4}>
                                 <Icon name={Icon.select({
                                     ios: "bubble.left.and.bubble.right.fill",
-                                    android: import("@expo/material-symbols/chat.xml")
+                                    android: chatXml
                                 })} size={24} />
                                 <Text textStyle={{ fontSize: 14, fontWeight: "600" }}>Message</Text>
                             </Column>
@@ -111,7 +114,7 @@ export default function ContactCardDrawer({ visible, onClose, name, number, orde
                             <Column alignment="center" spacing={4}>
                                 <Icon name={Icon.select({
                                     ios: "phone.fill",
-                                    android: import("@expo/material-symbols/call.xml")
+                                    android: callXml
                                 })} size={24} />
                                 <Text textStyle={{ fontSize: 14, fontWeight: "600" }}>Call</Text>
                             </Column>

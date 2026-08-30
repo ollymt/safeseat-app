@@ -12,7 +12,7 @@ import {
 	submitLabel,
 } from "@expo/ui/swift-ui/modifiers";
 import { useRouter } from "expo-router";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { sendPasswordResetEmail, signInWithEmailAndPassword } from "firebase/auth";
 import { useRef, useState } from "react";
 import {
 	Alert,
@@ -87,6 +87,26 @@ export default function Login() {
 			console.error(error);
 		} finally {
 			setIsSubmitting(false);
+		}
+	};
+
+	const handleForgotPassword = async () => {
+		const cleanEmail = email.toLowerCase().trim();
+		if (!cleanEmail) {
+			Alert.alert("Enter your email", "Type your account email first, then tap Forgot Password.");
+			return;
+		}
+
+		try {
+			await sendPasswordResetEmail(auth, cleanEmail);
+			void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+			Alert.alert("Reset email sent", "Check your inbox and follow the password reset link.");
+		} catch (error: any) {
+			void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+			let message = "We couldn't send a password reset email. Please try again.";
+			if (error?.code === "auth/invalid-email") message = "Please enter a valid email address.";
+			if (error?.code === "auth/too-many-requests") message = "Too many requests. Please try again later.";
+			Alert.alert("Password reset unavailable", message);
 		}
 	};
 
@@ -191,7 +211,7 @@ export default function Login() {
 									/>
 									<Button
 										label="Forgot Password"
-										onPress={() => { }}
+										onPress={handleForgotPassword}
 										variant="tertiary"
 										enabled={!isSubmitting}
 									/>

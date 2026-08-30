@@ -1,3 +1,5 @@
+import chatXml from "@expo/material-symbols/chat.xml";
+import callXml from "@expo/material-symbols/call.xml";
 import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { deleteDoc, doc, getDoc, updateDoc } from "firebase/firestore";
@@ -6,7 +8,6 @@ import { auth, db } from "../../../firebase";
 import {
     Alert,
     Dimensions,
-    Image,
     Keyboard,
     Linking,
     Pressable,
@@ -147,12 +148,12 @@ export default function Contact() {
 
     const handleDeleteContact = () => {
         Alert.alert(
-            `Nuke ${userName}?`,
-            `Are you sure you want to nuke ${userName}? This can't be undone.`,
+            `Delete ${userName}?`,
+            `Are you sure you want to delete ${userName}? This can't be undone.`,
             [
                 { text: "Cancel", style: "cancel" },
                 {
-                    text: "Nuke",
+                    text: "Delete",
                     style: "destructive",
                     onPress: async () => {
                         const currentUser = auth.currentUser;
@@ -163,7 +164,7 @@ export default function Contact() {
                             await deleteDoc(doc(db, "users", currentUser.uid, "emergencyContacts", id));
                             router.back();
                         } catch (error) {
-                            Alert.alert("Error", "Something went wrong nuking this contact. Please try again.");
+                            Alert.alert("Error", "Something went wrong deleting this contact. Please try again.");
                             setSaving(false);
                         }
                     },
@@ -260,32 +261,16 @@ export default function Contact() {
                             marginBottom: spacing.none,
                             gap: spacing.two,
                         }}>
-                            <Pressable
-                                disabled={!editMode}
-                                onPress={() => { }}
-                                style={{
-                                    backgroundColor: "transparent",
-                                    borderWidth: spacing.half,
-                                    borderColor: themes.text,
-                                    borderRadius: spacing.eight,
-                                    overflow: "hidden",
-                                }}
-                            >
-                                <Image
-                                    source={
-                                        userHierarchy == 1 ? { uri: "https://pbs.twimg.com/media/C8SFjSYWAAA6452.jpg" }
-                                            : userHierarchy == 2 ? { uri: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNyV3QnQOwXP124try4wkWE0xXqxT6KZitbq4TerzfLkMDDY-v1CXzTGw&s=10" }
-                                                : userHierarchy == 3 ? { uri: "https://pbs.twimg.com/media/C8QqGm4UQAAUiET.jpg" }
-                                                    : { uri: "https://pbs.twimg.com/media/C8SFjSbXgAAKoZx.jpg" }
-                                    }
-                                    style={{
-                                        width: 120,
-                                        height: 120,
-                                        alignItems: "center",
-                                        justifyContent: "center"
-                                    }}
-                                />
-                            </Pressable>
+                            <View style={styles.contactAvatar}>
+                                <Text style={styles.contactInitial}>
+                                    {(userName || "?").charAt(0).toUpperCase()}
+                                </Text>
+                            </View>
+                            <View style={styles.priorityBadge}>
+                                <Text style={styles.priorityBadgeText}>
+                                    {HIERARCHY_OPTIONS.find((item) => item.value === userHierarchy)?.label ?? `Priority ${userHierarchy}`}
+                                </Text>
+                            </View>
                             <Text style={[styles.pageHeader, { color: themes.text, flex: 1 }]}>
                                 {userName.split(" ")[0]}
                             </Text>
@@ -436,7 +421,7 @@ export default function Contact() {
                                         <View style={{ flex: 1 }}>
                                             <Button
                                                 variant="warn"
-                                                label={`Nuke ${userName}`}
+                                                label={`Delete ${userName}`}
                                                 onPress={handleDeleteContact}
                                                 enabled={!saving}
                                             />
@@ -461,7 +446,7 @@ export default function Contact() {
                                                     <Host matchContents>
                                                         <Icon name={Icon.select({
                                                             ios: "message.fill",
-                                                            android: import("@expo/material-symbols/chat.xml")
+                                                            android: chatXml
                                                         })} size={spacing.six} />
                                                     </Host>
                                                 </Button>
@@ -482,7 +467,7 @@ export default function Contact() {
                                                     <Host matchContents>
                                                         <Icon name={Icon.select({
                                                             ios: "phone.fill",
-                                                            android: import("@expo/material-symbols/call.xml")
+                                                            android: callXml
                                                         })} size={spacing.six} />
                                                     </Host>
                                                 </Button>
@@ -582,5 +567,34 @@ const styles = StyleSheet.create({
         backgroundColor: themes.backgroundElement,
         borderColor: themes.textSecondary,
         borderStyle: "dashed"
+    },
+
+    contactAvatar: {
+        width: 112,
+        height: 112,
+        borderRadius: 56,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: themes.primarySoft,
+        borderWidth: 2,
+        borderColor: themes.primaryBttn,
+    },
+    contactInitial: {
+        color: themes.primaryBttn,
+        fontSize: 44,
+        fontFamily: "Body-Bold",
+    },
+    priorityBadge: {
+        paddingHorizontal: spacing.two,
+        paddingVertical: spacing.half,
+        borderRadius: 999,
+        backgroundColor: themes.backgroundElement,
+        borderWidth: 1,
+        borderColor: themes.divider,
+    },
+    priorityBadgeText: {
+        color: themes.textSecondary,
+        fontSize: fontsize.caption,
+        fontFamily: "Body-Bold",
     },
 });

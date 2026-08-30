@@ -1,12 +1,15 @@
+import checkXml from "@expo/material-symbols/check.xml";
+import warningXml from "@expo/material-symbols/warning.xml";
+import sirenXml from "@expo/material-symbols/siren.xml";
+import questionXml from "@expo/material-symbols/question_mark.xml";
+import addXml from "@expo/material-symbols/add.xml";
 // components/assign-card.tsx
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { Host, Icon } from "@expo/ui";
-import { opacity } from "@expo/ui/swift-ui/modifiers";
 import {
 	Pressable,
 	StyleSheet,
 	Text,
-	useColorScheme,
 	View,
 	Image,
 } from "react-native";
@@ -54,7 +57,9 @@ export default function AssignCard({
 	return (
 		<Pressable
 			onPress={onPress}
-			style={[
+			accessibilityRole="button"
+			accessibilityLabel={`${seatCode}: ${displayName ?? "empty"}`}
+			style={({ pressed }) => [
 				assigncard.baseCard,
 				{
 					backgroundColor: themes.backgroundElement,
@@ -65,7 +70,7 @@ export default function AssignCard({
 							: state == "emergency"
 								? themes.warnBttn
 								: themes.text,
-					opacity: 0.8,
+					opacity: pressed ? 0.72 : 0.94,
 					borderStyle: displayName ? "solid" : "dashed",
 				},
 			]}
@@ -123,7 +128,7 @@ export default function AssignCard({
 								<Icon
 									name={Icon.select({
 										ios: "checkmark.circle.fill",
-										android: import("@expo/material-symbols/check.xml"),
+										android: checkXml,
 									})}
 									color={themes.green}
 									size={spacing.two}
@@ -134,7 +139,7 @@ export default function AssignCard({
 								<Icon
 									name={Icon.select({
 										ios: "exclamationmark.triangle.fill",
-										android: import("@expo/material-symbols/warning.xml"),
+										android: warningXml,
 									})}
 									color={themes.lightOrange}
 									size={spacing.two}
@@ -145,7 +150,7 @@ export default function AssignCard({
 								<Icon
 									name={Icon.select({
 										ios: "light.beacon.max.fill",
-										android: import("@expo/material-symbols/siren.xml"),
+										android: sirenXml,
 									})}
 									color={themes.warnBttn}
 									size={spacing.two}
@@ -156,7 +161,7 @@ export default function AssignCard({
 								<Icon
 									name={Icon.select({
 										ios: "questionmark",
-										android: import("@expo/material-symbols/question_mark.xml"),
+										android: questionXml,
 									})}
 									color={themes.text}
 									size={spacing.two}
@@ -186,7 +191,7 @@ export default function AssignCard({
 							<Icon
 								name={Icon.select({
 									ios: "plus",
-									android: import("@expo/material-symbols/add.xml"),
+									android: addXml,
 								})}
 								color={themes.text}
 							/>

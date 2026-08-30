@@ -1,8 +1,8 @@
 // components/AddProfileModal.tsx
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { useUserPreferences } from "@/hooks/user-preferences-context";
 import { Host, Icon } from "@expo/ui";
 import * as Haptics from "expo-haptics";
-import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
 import { Alert, Platform, StyleSheet, useColorScheme, Modal, Text, View, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard } from "react-native";
 
@@ -10,7 +10,7 @@ import Button from "./button";
 import { Dropdown } from "react-native-element-dropdown"
 
 // 🛠️ Firebase Imports
-import { addDoc, collection, doc, getDoc } from "firebase/firestore";
+import { addDoc, collection } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import TextInput from "./text-input";
 
@@ -73,7 +73,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
     const [birthMonth, setBirthMonth] = useState("");
     const [birthDate, setBirthDate] = useState("");
 
-    const [isMetric, setIsMetric] = useState(true);
+    const { useMetric: isMetric } = useUserPreferences();
 
     const [heightCm, setHeightCm] = useState("");
     const [heightFt, setHeightFt] = useState("");
@@ -90,50 +90,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
 
     useEffect(() => {
         if (visible) {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-            const loadUnitPreference = async () => {
-                try {
-                    const savedPrivacyString = await SecureStore.getItemAsync("user_privacy_prefs");
-                    if (savedPrivacyString) {
-                        const savedPrivacy = JSON.parse(savedPrivacyString);
-                        const targetKey = savedPrivacy.useMetric !== undefined ? savedPrivacy.useMetric : savedPrivacy.isMetric;
-
-                        if (targetKey !== undefined) {
-                            const normalizedMetric = targetKey === true || targetKey === "true";
-                            setIsMetric(normalizedMetric);
-                        }
-                    }
-                } catch (error) {
-                    console.error("Failed to read SecureStore in modal:", error);
-                }
-
-                try {
-                    const currentUser = auth.currentUser;
-                    if (currentUser) {
-                        const settingsDocRef = doc(db, "users", currentUser.uid, "settings", "preferences");
-                        const settingsDocSnap = await getDoc(settingsDocRef);
-
-                        if (settingsDocSnap.exists()) {
-                            const settingsData = settingsDocSnap.data();
-                            const cloudMetricVal = settingsData.useMetric !== undefined ? settingsData.useMetric : settingsData.isMetric;
-
-                            // Don't flip units if the user has already started entering values
-                            const userHasEnteredMeasurements =
-                                heightCm !== "" || heightFt !== "" || heightIn !== "" ||
-                                weightKg !== "" || weightLb !== "";
-
-                            if (cloudMetricVal !== undefined && !userHasEnteredMeasurements) {
-                                setIsMetric(cloudMetricVal === true || cloudMetricVal === "true");
-                            }
-                        }
-                    }
-                } catch (cloudError) {
-                    console.error("Failed to clear cloud validation fallback in modal:", cloudError);
-                }
-            };
-
-            loadUnitPreference();
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         }
     }, [visible]);
 

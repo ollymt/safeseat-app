@@ -51,12 +51,13 @@ export default function SettingSwitch({
             <Pressable
                 onPress={enabled ? handleToggle : undefined}
                 disabled={!enabled}
-                style={[
+                style={({ pressed }) => [
                     setitem.setItemBase,
                     {
                         backgroundColor: themes.backgroundElement,
-                        borderBottomWidth: isLast ? spacing.none : spacing.quarter,
-                        borderBottomColor: themes.secondaryBttn,
+                        borderBottomWidth: isLast ? spacing.none : 1,
+                        borderBottomColor: themes.divider,
+                        opacity: enabled ? (pressed ? 0.76 : 1) : 0.45,
                     }
                 ]}
             >
@@ -75,7 +76,7 @@ export default function SettingSwitch({
 
                 {/* RIGHT BLOCK */}
                 {/* Added pointerEvents="none" here so the entire row area responds uniformly without getting swallowed by native switch wrappers */}
-                <View style={setitem.rightContainer}>
+                <View style={setitem.rightContainer} pointerEvents="none">
                         <Switch 
                             value={selectedValue} 
                             onValueChange={handleToggle} 

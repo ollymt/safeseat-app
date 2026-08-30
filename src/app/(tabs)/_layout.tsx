@@ -1,230 +1,261 @@
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
-import { withLayoutContext, router, usePathname } from 'expo-router';
-import { createMaterialTopTabNavigator } from 'expo-router/js-top-tabs';
-import { View, Pressable, Text, StyleSheet } from 'react-native';
-import { useEffect } from "react";
-import { Icon, Host } from '@expo/ui';
+import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
+import { withLayoutContext, router, usePathname } from "expo-router";
+import { createMaterialTopTabNavigator } from "expo-router/js-top-tabs";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Icon, Host } from "@expo/ui";
 
 import * as Haptics from "expo-haptics";
 import Banner from "@/components/banner";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { UserPreferencesProvider } from "@/hooks/user-preferences-context";
 
+import homeXml from "@expo/material-symbols/home.xml";
+import seatXml from "@expo/material-symbols/airline_seat_recline_extra.xml";
+import groupsXml from "@expo/material-symbols/groups.xml";
+import settingsXml from "@expo/material-symbols/settings.xml";
+
 const { Navigator } = createMaterialTopTabNavigator();
 const Tabs = withLayoutContext<any, any, any, any>(Navigator);
 
-function MyCustomTabBar({ state, descriptors, navigation }: any) {
-	useEffect(() => {
-		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft)
-	}, [state.index])
-	return (
-		<View style={styles.tabContainer}>
-			<View style={styles.tabDrawer}>
-				{state.routes.map((route: any, index: number) => {
-					const isFocused = state.index === index;
-					const { options } = descriptors[route.key];
-					const label = options.title ?? route.name;
+const TAB_ROOTS: Record<string, string> = {
+  home: "/home",
+  assign: "/assign",
+  everyone: "/everyone",
+  settings: "/settings",
+};
 
-					const renderIcon = options.tabBarIcon;
+function MyCustomTabBar({ state, descriptors, navigation, pathname }: any) {
+  return (
+    <View style={styles.tabContainer}>
+      <View style={styles.tabDrawer}>
+        {state.routes.map((route: any, index: number) => {
+          const isFocused = state.index === index;
+          const { options } = descriptors[route.key];
+          const label = options.title ?? route.name;
+          const renderIcon = options.tabBarIcon;
 
-					const handlePress = () => {
-						const event = navigation.emit({
-							type: 'tabPress',
-							target: route.key,
-							canPreventDefault: true,
-						});
+          const handlePress = () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
 
-						if (isFocused) {
-							// Option 1: Attempt to dismiss nested stack screens back to tab root
-							try {
-								router.dismissAll();
-							} catch {
-								// Option 2: Fallback to navigating directly to the root screen path
-								// @ts-ignore
-								router.navigate(`/(tabs)/${route.name}`);
-							}
-						} else if (!event.defaultPrevented) {
-							navigation.navigate(route.name);
-						}
-					};
+            // React Navigation's default focused-tab behavior emits a
+            // POP_TO_TOP. At an already-rooted tab there is nothing to pop,
+            // which is the warning SafeSeat was showing. Do not emit tabPress
+            // for that no-op case. If the focused tab is on a nested screen,
+            // explicitly return to that tab's root instead.
+            if (isFocused) {
+              const rootPath = TAB_ROOTS[route.name];
+              if (rootPath && pathname !== rootPath) {
+                router.replace(rootPath as any);
+              }
+              return;
+            }
 
-					return (
-						<Pressable
-							key={route.key}
-							onPress={handlePress}
-							style={[styles.tabButton]}
-						>
-							{renderIcon && renderIcon({
-								focused: isFocused,
-								color: isFocused ? themes.text : themes.primaryBttn,
-								size: spacing.three,
-							})}
-							<Text style={[styles.label, isFocused && styles.activeLabel]}>
-								{label.charAt(0).toUpperCase() + label.slice(1)}
-							</Text>
+            const event = navigation.emit({
+              type: "tabPress",
+              target: route.key,
+              canPreventDefault: true,
+            });
 
-							<View style={{ width: spacing.two, height: spacing.half, backgroundColor: isFocused ? themes.primaryBttn : themes.backgroundElement, borderRadius: spacing.quarter }} />
-						</Pressable>
-					);
-				})}
-			</View>
-		</View>
-	);
+            if (!event.defaultPrevented) {
+              navigation.navigate(route.name);
+            }
+          };
+
+          const handleLongPress = () => {
+            navigation.emit({
+              type: "tabLongPress",
+              target: route.key,
+            });
+          };
+
+          return (
+            <Pressable
+              key={route.key}
+              accessibilityRole="tab"
+              accessibilityState={isFocused ? { selected: true } : {}}
+              accessibilityLabel={options.tabBarAccessibilityLabel ?? label}
+              onPress={handlePress}
+              onLongPress={handleLongPress}
+              style={({ pressed }) => [
+                styles.tabButton,
+                isFocused && styles.activeTabButton,
+                pressed && styles.pressedTabButton,
+              ]}
+            >
+              {renderIcon?.({
+                focused: isFocused,
+                color: isFocused ? themes.primaryBttn : themes.textSecondary,
+                size: spacing.three,
+              })}
+              <Text style={[styles.label, isFocused && styles.activeLabel]}>
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
 }
 
 export default function TabLayout() {
-	const pathname = usePathname();
+  const pathname = usePathname();
+  const isNestedScreen = pathname.split("/").filter(Boolean).length > 1;
 
-	// Check if user is on a nested screen inside a tab (path length > 2 parts)
-	const isNestedScreen = pathname.split('/').filter(Boolean).length > 1;
+  return (
+    <UserPreferencesProvider>
+      <SafeAreaView style={styles.safeArea} edges={["left", "right", "top"]}>
+        <View style={styles.root}>
+          <View style={styles.bannerContainer}>
+            <Banner />
+          </View>
 
-	return (
-		<UserPreferencesProvider>
-			<SafeAreaView style={{ flex: 1 }} edges={["left", "right", "top"]}>
-				<View style={{ flex: 1 }}>
-					<View style={{ paddingHorizontal: spacing.two, paddingBottom: spacing.two }}>
-						<Banner />
-					</View>
-					<Tabs
-						tabBarPosition="bottom"
-						// @ts-ignore
-						tabBar={(props) => <MyCustomTabBar {...props} />}
-						screenOptions={{
-							// Disable tab swipe only when pushed deeper into a stack
-							swipeEnabled: !isNestedScreen,
-							headerShown: false,
-							// Forces the tab view container frame to be dark
-							sceneContainerStyle: {
-								backgroundColor: themes.background,
-							},
-							tabBarStyle: {
-								backgroundColor: themes.backgroundElement,
-								borderTopColor: "transparent",
-							},
+          <Tabs
+            tabBarPosition="bottom"
+            // @ts-ignore material top tabs accepts a custom tab bar renderer
+            tabBar={(props) => <MyCustomTabBar {...props} pathname={pathname} />}
+            screenOptions={{
+              swipeEnabled: !isNestedScreen,
+              headerShown: false,
+              sceneContainerStyle: {
+                backgroundColor: themes.background,
+              },
+            }}
+          >
+            <Tabs.Screen
+              name="home"
+              options={{
+                title: "Home",
+                tabBarIcon: ({ focused }: { focused: boolean }) => (
+                  <Host matchContents>
+                    <Icon
+                      name={Icon.select({
+                        ios: focused ? "house.fill" : "house",
+                        android: homeXml,
+                      })}
+                      size={spacing.three}
+                      color={focused ? themes.primaryBttn : themes.textSecondary}
+                    />
+                  </Host>
+                ),
+              }}
+            />
 
-						}}
-					>
-						<Tabs.Screen
-							name="home"
-							options={{
-								title: 'Home',
-								tabBarIcon: ({ focused }: { focused: boolean }) => (
-									<Host matchContents>
-										<Icon
-											name={Icon.select({
-												ios: focused ? "house.fill" : "house",
-												android: import("@expo/material-symbols/home.xml")
-											})}
-											size={spacing.three}
-											color={focused ? themes.primaryBttn : themes.primaryBttnText}
-										/>
-									</Host>
-								),
-							}}
-						/>
-						<Tabs.Screen
-							name="assign"
-							options={{
-								title: 'Assign',
-								tabBarIcon: ({ focused }: { focused: boolean }) => (
-									<Host matchContents>
-										<Icon
-											name={Icon.select({
-												ios: focused ? "carseat.right.fill" : "carseat.right",
-												android: import("@expo/material-symbols/airline_seat_recline_extra.xml")
-											})}
-											size={spacing.three}
-											color={focused ? themes.primaryBttn : themes.primaryBttnText}
-										/>
-									</Host>
-								),
-							}}
-						/>
-						<Tabs.Screen
-							name="everyone"
-							options={{
-								title: 'Everyone',
-								tabBarIcon: ({ focused }: { focused: boolean }) => (
-									<Host matchContents>
-										<Icon
-											name={Icon.select({
-												ios: focused ? "person.3.fill" : "person.3",
-												android: import("@expo/material-symbols/groups.xml")
-											})}
-											size={spacing.three}
-											color={focused ? themes.primaryBttn : themes.primaryBttnText}
-										/>
-									</Host>
-								),
-							}}
-						/>
-						<Tabs.Screen
-							name="settings"
-							options={{
-								title: 'Settings',
-								tabBarIcon: ({ focused }: { focused: boolean }) => (
-									<Host matchContents>
-										<Icon
-											name={Icon.select({
-												ios: focused ? "gearshape.fill" : "gearshape",
-												android: import("@expo/material-symbols/settings.xml")
-											})}
-											size={spacing.three}
-											color={focused ? themes.primaryBttn : themes.primaryBttnText}
-										/>
-									</Host>
-								),
-							}}
-						/>
-					</Tabs>
-				</View>
-			</SafeAreaView>
-		</UserPreferencesProvider>
-	);
+            <Tabs.Screen
+              name="assign"
+              options={{
+                title: "Assign",
+                tabBarIcon: ({ focused }: { focused: boolean }) => (
+                  <Host matchContents>
+                    <Icon
+                      name={Icon.select({
+                        ios: focused ? "carseat.right.fill" : "carseat.right",
+                        android: seatXml,
+                      })}
+                      size={spacing.three}
+                      color={focused ? themes.primaryBttn : themes.textSecondary}
+                    />
+                  </Host>
+                ),
+              }}
+            />
+
+            <Tabs.Screen
+              name="everyone"
+              options={{
+                title: "People",
+                tabBarIcon: ({ focused }: { focused: boolean }) => (
+                  <Host matchContents>
+                    <Icon
+                      name={Icon.select({
+                        ios: focused ? "person.3.fill" : "person.3",
+                        android: groupsXml,
+                      })}
+                      size={spacing.three}
+                      color={focused ? themes.primaryBttn : themes.textSecondary}
+                    />
+                  </Host>
+                ),
+              }}
+            />
+
+            <Tabs.Screen
+              name="settings"
+              options={{
+                title: "Settings",
+                tabBarIcon: ({ focused }: { focused: boolean }) => (
+                  <Host matchContents>
+                    <Icon
+                      name={Icon.select({
+                        ios: focused ? "gearshape.fill" : "gearshape",
+                        android: settingsXml,
+                      })}
+                      size={spacing.three}
+                      color={focused ? themes.primaryBttn : themes.textSecondary}
+                    />
+                  </Host>
+                ),
+              }}
+            />
+          </Tabs>
+        </View>
+      </SafeAreaView>
+    </UserPreferencesProvider>
+  );
 }
 
 const styles = StyleSheet.create({
-	tabContainer: {
-		flexDirection: "row",
-		backgroundColor: "transparent",
-		paddingVertical: spacing.none,
-		paddingHorizontal: spacing.two,
-		justifyContent: "space-around",
-		alignItems: "center",
-		height: 112,
-		position: "absolute",
-		bottom: -spacing.one,
-	},
-	tabButton: {
-		flex: 1,
-		alignItems: "center",
-		justifyContent: "center",
-		paddingVertical: spacing.one,
-		borderRadius: spacing.half,
-		height: 96,
-		gap: 4,
-	},
-	focusedButton: {
-		backgroundColor: themes.primaryBttn,
-	},
-	label: {
-		color: themes.text,
-		fontSize: fontsize.button,
-	},
-	activeLabel: {
-		color: themes.primaryBttn,
-		fontWeight: "bold",
-	},
-	tabDrawer: {
-		borderWidth: spacing.quarter,
-		borderBottomWidth: spacing.none,
-		borderTopLeftRadius: spacing.edge,
-		borderTopRightRadius: spacing.edge,
-		borderColor: themes.secondaryBttn,
-		padding: spacing.none,
-		width: "100%",
-		height: 112,
-		flexDirection: "row",
-		backgroundColor: themes.backgroundElement
-	},
+  safeArea: {
+    flex: 1,
+    backgroundColor: themes.background,
+  },
+  root: {
+    flex: 1,
+    backgroundColor: themes.background,
+  },
+  bannerContainer: {
+    paddingHorizontal: spacing.two,
+    paddingBottom: spacing.one,
+  },
+  tabContainer: {
+    width: "100%",
+    backgroundColor: themes.background,
+    paddingHorizontal: spacing.two,
+    paddingTop: spacing.one,
+    paddingBottom: spacing.one,
+  },
+  tabDrawer: {
+    minHeight: 72,
+    flexDirection: "row",
+    alignItems: "stretch",
+    backgroundColor: themes.backgroundElement,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: themes.divider,
+    padding: spacing.half,
+  },
+  tabButton: {
+    flex: 1,
+    minHeight: 62,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.half,
+    borderRadius: 18,
+    paddingHorizontal: spacing.half,
+  },
+  activeTabButton: {
+    backgroundColor: themes.primarySoft,
+  },
+  pressedTabButton: {
+    opacity: 0.72,
+  },
+  label: {
+    color: themes.textSecondary,
+    fontSize: fontsize.caption,
+    fontFamily: "Body-Medium",
+  },
+  activeLabel: {
+    color: themes.primaryBttn,
+    fontFamily: "Body-Bold",
+  },
 });

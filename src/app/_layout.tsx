@@ -17,7 +17,6 @@ import {
 } from "@expo-google-fonts/inter";
 
 import * as SplashScreen from "expo-splash-screen";
-import { db } from "../firebase";
 // ⚠️ FIXED: Removed the broken "@expo/ui/swift-ui/modifiers" import
 
 // Keep the splash screen visible while fonts and auth initialize
@@ -49,10 +48,6 @@ export default function RootLayout() {
 	const [authLoading, setAuthLoading] = useState(true);
 	const [hasSession, setHasSession] = useState(false);
 
-	// Test Firebase connection on mount
-	useEffect(() => {
-		console.log("Firebase connected:", db.app.name);
-	}, []);
 
 	// 1. Check local secure storage on boot to see if user has an active session flag
 	useEffect(() => {

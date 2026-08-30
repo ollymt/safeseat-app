@@ -62,7 +62,7 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
                 setRole("R Backseat");
                 break;
             default:
-                setRole("MISSINGNO");
+                setRole(`Seat ${seat}`);
                 break;
         }
     }, [visible, seat]);
@@ -250,7 +250,7 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
                 return "R Backseat"
                 break
             default:
-                return "MISSINGNO"
+                return `Seat ${seat}`
                 break
         }
     }

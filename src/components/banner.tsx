@@ -1,3 +1,5 @@
+import sirenXml from "@expo/material-symbols/siren.xml";
+import closeXml from "@expo/material-symbols/close.xml";
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { useBanner } from "@/hooks/banner-context";
 import { Host, Icon } from "@expo/ui";
@@ -131,7 +133,7 @@ export default function Banner() {
                     <Icon
                         name={Icon.select({
                             ios: "light.beacon.max.fill",
-                            android: import("@expo/material-symbols/siren.xml"),
+                            android: sirenXml,
                         })}
                         color={themes.warnBttnText}
                         size={spacing.three}
@@ -150,7 +152,7 @@ export default function Banner() {
             >
                 <View style={{ flexDirection: "row", gap: spacing.one, alignItems: "center" }}>
                     <Text style={[seatcard.name, { color: themes.text, flex: 1 }]}>
-                        {message || "MISSINGNO"}
+                        {message || "Status update"}
                     </Text>
                     <Pressable
                         style={{
@@ -167,7 +169,7 @@ export default function Banner() {
                             <Icon
                                 name={Icon.select({
                                     ios: "xmark",
-                                    android: import("@expo/material-symbols/close.xml"),
+                                    android: closeXml,
                                 })}
                                 size={spacing.three}
                                 color={themes.textSecondary}

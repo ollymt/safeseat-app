@@ -1,3 +1,4 @@
+import callXml from "@expo/material-symbols/call.xml";
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
 import { Host, Icon } from "@expo/ui";
 import { useState } from "react";
@@ -173,7 +174,7 @@ export default function ContactCard({
                 <Host matchContents>
                     <Icon name={Icon.select({
                         ios: "phone.fill",
-                        android: import("@expo/material-symbols/call.xml")
+                        android: callXml
                     })} color={isUnimportant ? themes.text : themes.background} size={spacing.five}/>
                 </Host>
             </Pressable>

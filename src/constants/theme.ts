@@ -1,6 +1,10 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * SafeSeat visual system.
+ *
+ * The app intentionally keeps the deep navy base from the redesign while
+ * using green + white as the brand palette. Amber and red are reserved for
+ * warning/emergency semantics so safety states are never confused with brand
+ * accents.
  */
 
 import "@/global.css";
@@ -8,30 +12,47 @@ import "@/global.css";
 import { Platform } from "react-native";
 
 export const Themes = {
-    text: "#FAFAFA",
-    textSecondary: "#94A0BC",
-    background: "#101322",
-    backgroundElement: "#1C2037",
-    primaryBttn: "#F78B1F",
-    primaryBttnText: "#FAFAFA",
-    secondaryBttn: "#4D618C",
-    secondaryBttnText: "#FAFAFA",
-    textInputPlaceholder: "#FAFAFA80",
-    warnBttn: "#FF8F8F",
-    warnBttnText: "#452626",
-    lightOrange: "#FDCC9B",
-    green: "#B4F5D1"
+  text: "#F8FBFA",
+  textSecondary: "#A6B4C3",
+  background: "#101322",
+  backgroundElement: "#1A2033",
+  backgroundElevated: "#222A40",
+  backgroundSelected: "#173A2A",
+  divider: "#34405C",
+
+  // SafeSeat brand accent
+  primaryBttn: "#42D889",
+  primaryBttnText: "#071A11",
+  primarySoft: "#173A2A",
+
+  // Neutral secondary action
+  secondaryBttn: "#344563",
+  secondaryBttnText: "#F8FBFA",
+
+  textInputPlaceholder: "#F8FBFA80",
+
+  // Safety state colors: not part of the orange/green brand swap.
+  warnBttn: "#FF7A7A",
+  warnBttnText: "#331313",
+  lightOrange: "#F4C65D",
+  green: "#7BE7AD",
+} as const;
+
+export type ThemeColor = keyof typeof Themes;
+
+// Compatibility for a few retained Expo starter components. SafeSeat itself
+// uses one deliberate dark visual system, so both scheme entries resolve to
+// the same palette instead of silently reintroducing a separate light theme.
+export const Colors = {
+  light: Themes,
+  dark: Themes,
 } as const;
 
 export const Fonts = Platform.select({
   ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
     sans: "system-ui",
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
     serif: "ui-serif",
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
     rounded: "ui-rounded",
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
     mono: "ui-monospace",
   },
   default: {
@@ -73,7 +94,7 @@ export const FontSize = {
   caption: 12,
   button: 16,
   giant: 64,
-}
+} as const;
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;
