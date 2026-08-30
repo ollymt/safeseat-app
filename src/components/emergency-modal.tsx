@@ -1,23 +1,24 @@
 import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
+import { useUserPreferences } from "@/hooks/user-preferences-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useEffect, useState } from "react";
+import { collection, getDocs } from "firebase/firestore";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Image,
   Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import { collection, getDocs } from "firebase/firestore";
 
-import Button from "@/components/button";
 import { auth, db } from "../firebase";
 
 interface EmergencyContact {
@@ -38,6 +39,7 @@ type Props = {
 };
 
 const LOCAL_EMERGENCY_CONTACTS_KEY = "app_emergency_contacts";
+const HOLD_TO_CANCEL_MS = 2000;
 
 const ROLE_LABELS: Record<number, string> = {
   1: "Driver",
@@ -61,15 +63,59 @@ export default function EmergencyModal({
   onClose,
   isAccountOwner = false,
 }: Props) {
+  const {
+    emergencyEscalation,
+    escalationWindowSeconds,
+    gpsSharing,
+  } = useUserPreferences();
+
   const [contactMenuVisible, setContactMenuVisible] = useState(false);
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(escalationWindowSeconds);
+  const [windowElapsed, setWindowElapsed] = useState(false);
+  const [holdingCancel, setHoldingCancel] = useState(false);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearHoldTimer = () => {
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  };
 
   useEffect(() => {
-    if (visible) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    if (!visible) {
+      clearHoldTimer();
+      setHoldingCancel(false);
+      return;
     }
-  }, [visible, seat]);
+
+    setSecondsLeft(escalationWindowSeconds);
+    setWindowElapsed(false);
+    setHoldingCancel(false);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+  }, [visible, seat, escalationWindowSeconds]);
+
+  useEffect(() => {
+    if (!visible || windowElapsed) return;
+
+    const timer = setInterval(() => {
+      setSecondsLeft((previous) => {
+        if (previous <= 1) {
+          clearInterval(timer);
+          setWindowElapsed(true);
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          return 0;
+        }
+        return previous - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [visible, windowElapsed]);
+
+  useEffect(() => () => clearHoldTimer(), []);
 
   const fetchEmergencyContacts = async () => {
     setLoadingContacts(true);
@@ -127,7 +173,7 @@ export default function EmergencyModal({
 
   const handleOpenContactMenu = () => {
     setContactMenuVisible(true);
-    fetchEmergencyContacts();
+    void fetchEmergencyContacts();
   };
 
   const handleCall = async (phoneNumber: string) => {
@@ -138,82 +184,221 @@ export default function EmergencyModal({
     }
 
     try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       const url = `tel:${cleanNumber}`;
       if (await Linking.canOpenURL(url)) {
         await Linking.openURL(url);
       } else {
-        Alert.alert("Calling unavailable", "This device cannot open the phone dialer.");
+        Alert.alert("Dialer unavailable", "This device cannot open the phone dialer.");
       }
     } catch (error) {
       console.error("Failed to open phone dialer:", error);
-      Alert.alert("Calling unavailable", "Could not open the phone dialer.");
+      Alert.alert("Dialer unavailable", "Could not open the phone dialer.");
     }
   };
 
   const handleEmergencyServices = () => {
     Alert.alert(
-      "Call emergency services?",
-      "This will open your phone dialer with 911. SafeSeat will not place the call automatically.",
+      "Open emergency dialer?",
+      "SafeSeat does not place automated voice calls. This only opens your phone dialer with 911 so you can choose whether to call.",
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Open Dialer",
           style: "destructive",
-          onPress: () => handleCall("911"),
+          onPress: () => void handleCall("911"),
         },
       ],
     );
+  };
+
+  const handleNearbyHospitals = async () => {
+    const nativeUrl = Platform.select({
+      ios: "http://maps.apple.com/?q=emergency+hospital",
+      android: "geo:0,0?q=emergency+hospital",
+      default: "https://www.google.com/maps/search/?api=1&query=emergency+hospital",
+    }) as string;
+
+    try {
+      if (await Linking.canOpenURL(nativeUrl)) {
+        await Linking.openURL(nativeUrl);
+      } else {
+        await Linking.openURL(
+          "https://www.google.com/maps/search/?api=1&query=emergency+hospital",
+        );
+      }
+    } catch {
+      Alert.alert("Maps unavailable", "Could not open nearby hospital search on this device.");
+    }
+  };
+
+  const beginCancelHold = () => {
+    if (holdingCancel) return;
+    setHoldingCancel(true);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    clearHoldTimer();
+    holdTimerRef.current = setTimeout(() => {
+      holdTimerRef.current = null;
+      setHoldingCancel(false);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      onClose();
+    }, HOLD_TO_CANCEL_MS);
+  };
+
+  const endCancelHold = () => {
+    if (!holdTimerRef.current) return;
+    clearHoldTimer();
+    setHoldingCancel(false);
   };
 
   if (!visible) return null;
 
   const role = ROLE_LABELS[seat] ?? `Seat ${seat}`;
   const imageUri = formatImageUri(icon);
-  const title = isAccountOwner ? "You may be having an emergency" : `${name} may be having an emergency`;
+  const title = isAccountOwner
+    ? "Safety event detected for you"
+    : `Safety event detected for ${name}`;
+  const countdownPercent = Math.max(
+    0,
+    Math.min(100, (secondsLeft / escalationWindowSeconds) * 100),
+  );
+  const driverOnlySmsEligible = seat === 1 && isAccountOwner;
+
+  const escalationMessage = !emergencyEscalation
+    ? "Automated SMS escalation is disabled in Settings."
+    : driverOnlySmsEligible
+      ? windowElapsed
+        ? "Escalation window elapsed. The later Main Hub/Twilio integration will send the configured automated SMS only after the driver-alone emergency rule is confirmed."
+        : "If the driver-alone emergency remains confirmed when this timer reaches zero, the configured backend may send one automated SMS to the primary emergency contact."
+      : "Passenger emergencies remain driver-first. SafeSeat does not automatically SMS emergency contacts for a passenger alert.";
 
   return (
     <>
-      <View style={styles.overlay} pointerEvents="box-none">
-        <View style={styles.card}>
-          <View style={styles.alertPill}>
-            <Ionicons name="warning" color={themes.warnBttn} size={16} />
-            <Text style={styles.alertPillText}>EMERGENCY</Text>
-          </View>
-
-          <View style={styles.headerRow}>
-            {imageUri ? (
-              <Image source={{ uri: imageUri }} style={styles.avatar} />
-            ) : (
-              <View style={styles.avatarFallback}>
-                <Text style={styles.avatarLetter}>{name.charAt(0).toUpperCase()}</Text>
+      <Modal
+        animationType="fade"
+        transparent
+        visible={visible}
+        statusBarTranslucent
+        onRequestClose={() => undefined}
+      >
+        <View style={styles.backdrop}>
+          <View style={styles.card}>
+            <View style={styles.topRow}>
+              <View style={styles.alertPill}>
+                <Ionicons name="warning" color={themes.warnBttn} size={15} />
+                <Text style={styles.alertPillText}>EMERGENCY</Text>
               </View>
-            )}
-            <View style={styles.headerCopy}>
-              <Text style={styles.titleText}>{title}</Text>
-              <Text style={styles.subtitleText}>{role} · verification requires attention</Text>
+              <Text style={styles.timerValue}>{windowElapsed ? "00" : String(secondsLeft).padStart(2, "0")}s</Text>
             </View>
-          </View>
 
-          <View style={styles.actionStack}>
-            <Button variant="warn" onPress={handleEmergencyServices} fullWidth>
-              <View style={styles.buttonContent}>
-                <Ionicons name="call" color={themes.warnBttnText} size={22} />
-                <Text style={[styles.buttonText, { color: themes.warnBttnText }]}>Emergency Services</Text>
+            <View style={styles.timerTrack}>
+              <View style={[styles.timerFill, { width: `${countdownPercent}%` }]} />
+            </View>
+
+            <View style={styles.headerRow}>
+              {imageUri ? (
+                <Image source={{ uri: imageUri }} style={styles.avatar} />
+              ) : (
+                <View style={styles.avatarFallback}>
+                  <Text style={styles.avatarLetter}>{name.charAt(0).toUpperCase()}</Text>
+                </View>
+              )}
+              <View style={styles.headerCopy}>
+                <Text style={styles.titleText}>{title}</Text>
+                <Text style={styles.subtitleText}>{role} · sustained abnormal pattern</Text>
               </View>
-            </Button>
+            </View>
 
-            <Button variant="primary" onPress={handleOpenContactMenu} fullWidth>
-              <View style={styles.buttonContent}>
-                <Ionicons name="people" color={themes.primaryBttnText} size={22} />
-                <Text style={[styles.buttonText, { color: themes.primaryBttnText }]}>Emergency Contacts</Text>
+            <View style={styles.summaryBox}>
+              <Text style={styles.summaryLabel}>ALERT CATEGORY</Text>
+              <Text style={styles.summaryTitle}>Abnormal multi-sensor pattern</Text>
+              <Text style={styles.summaryText}>
+                SafeSeat is advisory and does not diagnose a medical condition. Verify the occupant and respond to the situation around you.
+              </Text>
+            </View>
+
+            <View style={styles.escalationBox}>
+              <View style={styles.escalationHeader}>
+                <Ionicons
+                  name={driverOnlySmsEligible && emergencyEscalation ? "chatbubble-ellipses" : "information-circle"}
+                  color={themes.primaryBttn}
+                  size={18}
+                />
+                <Text style={styles.escalationTitle}>Automated SMS</Text>
               </View>
-            </Button>
+              <Text style={styles.escalationText}>{escalationMessage}</Text>
+              <Text style={styles.locationText}>
+                GPS sharing: {gpsSharing ? "enabled for emergency context" : "disabled"}
+              </Text>
+            </View>
 
-            <Button label="Dismiss for now" variant="secondary" onPress={onClose} fullWidth />
+            <View style={styles.quickActions}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void handleNearbyHospitals()}
+                style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}
+              >
+                <Ionicons name="map" color={themes.primaryBttn} size={20} />
+                <Text style={styles.quickActionText}>Nearby hospitals</Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={handleOpenContactMenu}
+                style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}
+              >
+                <Ionicons name="people" color={themes.primaryBttn} size={20} />
+                <Text style={styles.quickActionText}>Contacts</Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={handleEmergencyServices}
+                style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}
+              >
+                <Ionicons name="call" color={themes.warnBttn} size={20} />
+                <Text style={styles.quickActionText}>Dialer</Text>
+              </Pressable>
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Hold for two seconds to cancel emergency"
+              onPressIn={beginCancelHold}
+              onPressOut={endCancelHold}
+              style={({ pressed }) => [
+                styles.cancelHold,
+                holdingCancel && styles.cancelHoldActive,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons
+                name={holdingCancel ? "hand-left" : "close-circle-outline"}
+                color={holdingCancel ? themes.primaryBttnText : themes.text}
+                size={21}
+              />
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={[
+                    styles.cancelHoldTitle,
+                    holdingCancel && { color: themes.primaryBttnText },
+                  ]}
+                >
+                  {holdingCancel ? "Keep holding…" : "Hold 2 seconds to cancel"}
+                </Text>
+                <Text
+                  style={[
+                    styles.cancelHoldHint,
+                    holdingCancel && { color: "#12301F" },
+                  ]}
+                >
+                  Use only after verifying the alert is a false alarm or the occupant has recovered.
+                </Text>
+              </View>
+            </Pressable>
           </View>
         </View>
-      </View>
+      </Modal>
 
       <Modal
         animationType="slide"
@@ -224,9 +409,11 @@ export default function EmergencyModal({
         <View style={styles.contactBackdrop}>
           <View style={styles.contactSheet}>
             <View style={styles.contactHeader}>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.contactTitle}>Emergency Contacts</Text>
-                <Text style={styles.contactSubtitle}>Tap a contact to open the phone dialer.</Text>
+                <Text style={styles.contactSubtitle}>
+                  These are manual dialer shortcuts. Automated escalation, when later connected, is SMS only.
+                </Text>
               </View>
               <Pressable
                 accessibilityRole="button"
@@ -242,10 +429,10 @@ export default function EmergencyModal({
               <ActivityIndicator size="large" color={themes.primaryBttn} style={styles.loader} />
             ) : contacts.length > 0 ? (
               <ScrollView style={styles.contactList} contentContainerStyle={styles.contactListContent}>
-                {contacts.map((contact, index) => (
+                {contacts.map((contact) => (
                   <Pressable
                     key={contact.id}
-                    onPress={() => handleCall(contact.phone)}
+                    onPress={() => void handleCall(contact.phone)}
                     style={({ pressed }) => [styles.contactRow, pressed && styles.contactRowPressed]}
                   >
                     <View style={styles.contactIcon}>
@@ -265,7 +452,7 @@ export default function EmergencyModal({
               <View style={styles.emptyContacts}>
                 <Ionicons name="person-add-outline" color={themes.textSecondary} size={34} />
                 <Text style={styles.emptyContactsTitle}>No emergency contacts yet</Text>
-                <Text style={styles.emptyContactsText}>Add contacts from People → Contacts.</Text>
+                <Text style={styles.emptyContactsText}>Add contacts from Profiles → Emergency Contacts.</Text>
               </View>
             )}
           </View>
@@ -276,36 +463,60 @@ export default function EmergencyModal({
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    position: "absolute",
-    left: spacing.two,
-    right: spacing.two,
-    bottom: spacing.two,
-    zIndex: 1000,
+  backdrop: {
+    flex: 1,
+    justifyContent: "center",
+    padding: spacing.two,
+    backgroundColor: "rgba(3, 7, 15, 0.88)",
   },
   card: {
     width: "100%",
+    maxWidth: 520,
+    alignSelf: "center",
     gap: spacing.two,
-    borderRadius: 22,
+    borderRadius: 26,
     padding: spacing.two,
     backgroundColor: themes.backgroundElement,
     borderWidth: 1,
-    borderColor: themes.warnBttn,
+    borderColor: "#5A2C35",
+  },
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   alertPill: {
-    alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.half,
     paddingHorizontal: spacing.one,
     paddingVertical: spacing.half,
     borderRadius: 999,
-    backgroundColor: "#3C2025",
+    backgroundColor: "#341C22",
+    borderWidth: 1,
+    borderColor: "#5A2C35",
   },
   alertPillText: {
     color: themes.warnBttn,
-    fontSize: fontsize.caption,
+    fontSize: 10,
+    letterSpacing: 1.2,
     fontFamily: "Body-Bold",
+  },
+  timerValue: {
+    color: themes.warnBttn,
+    fontSize: 24,
+    fontFamily: "Body-Bold",
+  },
+  timerTrack: {
+    height: 5,
+    overflow: "hidden",
+    borderRadius: 999,
+    backgroundColor: themes.secondaryBttn,
+  },
+  timerFill: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: themes.warnBttn,
   },
   headerRow: {
     flexDirection: "row",
@@ -313,17 +524,17 @@ const styles = StyleSheet.create({
     gap: spacing.two,
   },
   avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 2,
+    width: 60,
+    height: 60,
+    borderRadius: 20,
+    borderWidth: 1,
     borderColor: themes.warnBttn,
   },
   avatarFallback: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 2,
+    width: 60,
+    height: 60,
+    borderRadius: 20,
+    borderWidth: 1,
     borderColor: themes.warnBttn,
     backgroundColor: themes.backgroundElevated,
     alignItems: "center",
@@ -340,7 +551,8 @@ const styles = StyleSheet.create({
   },
   titleText: {
     color: themes.text,
-    fontSize: 20,
+    fontSize: 19,
+    lineHeight: 23,
     fontFamily: "Body-Bold",
   },
   subtitleText: {
@@ -348,25 +560,120 @@ const styles = StyleSheet.create({
     fontSize: fontsize.caption,
     fontFamily: "Body-Regular",
   },
-  actionStack: {
-    width: "100%",
-    gap: spacing.one,
+  summaryBox: {
+    padding: spacing.two,
+    borderRadius: 18,
+    backgroundColor: themes.surfaceSoft,
+    borderWidth: 1,
+    borderColor: themes.divider,
   },
-  buttonContent: {
-    minHeight: 32,
+  summaryLabel: {
+    color: themes.warnBttn,
+    fontSize: 10,
+    letterSpacing: 1.1,
+    fontFamily: "Body-Bold",
+  },
+  summaryTitle: {
+    color: themes.text,
+    fontSize: 15,
+    marginTop: spacing.half,
+    fontFamily: "Body-Bold",
+  },
+  summaryText: {
+    color: themes.textSecondary,
+    fontSize: fontsize.caption,
+    lineHeight: 18,
+    marginTop: spacing.half,
+    fontFamily: "Body-Regular",
+  },
+  escalationBox: {
+    padding: spacing.one + 4,
+    borderRadius: 16,
+    backgroundColor: themes.primarySoft,
+    borderWidth: 1,
+    borderColor: themes.primaryBorder,
+  },
+  escalationHeader: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: spacing.half,
+  },
+  escalationTitle: {
+    color: themes.primaryBttn,
+    fontSize: 13,
+    fontFamily: "Body-Bold",
+  },
+  escalationText: {
+    color: themes.text,
+    fontSize: fontsize.caption,
+    lineHeight: 18,
+    marginTop: spacing.half,
+    fontFamily: "Body-Regular",
+  },
+  locationText: {
+    color: themes.textSecondary,
+    fontSize: 10,
+    marginTop: spacing.half,
+    fontFamily: "Body-Medium",
+  },
+  quickActions: {
+    flexDirection: "row",
     gap: spacing.one,
   },
-  buttonText: {
+  quickAction: {
+    flex: 1,
+    minHeight: 64,
+    paddingHorizontal: spacing.half,
+    paddingVertical: spacing.one,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.half,
+    backgroundColor: themes.backgroundElevated,
+    borderWidth: 1,
+    borderColor: themes.divider,
+  },
+  quickActionText: {
+    color: themes.text,
+    fontSize: 10,
+    textAlign: "center",
     fontFamily: "Body-Bold",
-    fontSize: fontsize.button,
+  },
+  cancelHold: {
+    minHeight: 70,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.one,
+    padding: spacing.one + 4,
+    borderRadius: 18,
+    backgroundColor: themes.secondaryBttn,
+    borderWidth: 1,
+    borderColor: themes.divider,
+  },
+  cancelHoldActive: {
+    backgroundColor: themes.primaryBttn,
+    borderColor: themes.primaryBttn,
+  },
+  cancelHoldTitle: {
+    color: themes.text,
+    fontSize: 14,
+    fontFamily: "Body-Bold",
+  },
+  cancelHoldHint: {
+    color: themes.textSecondary,
+    fontSize: 10,
+    lineHeight: 14,
+    marginTop: 2,
+    fontFamily: "Body-Regular",
+  },
+  pressed: {
+    opacity: 0.76,
+    transform: [{ scale: 0.99 }],
   },
   contactBackdrop: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(4, 8, 18, 0.72)",
+    backgroundColor: "rgba(4, 8, 18, 0.78)",
   },
   contactSheet: {
     maxHeight: "72%",
@@ -393,6 +700,7 @@ const styles = StyleSheet.create({
   contactSubtitle: {
     color: themes.textSecondary,
     fontSize: fontsize.caption,
+    lineHeight: 17,
     fontFamily: "Body-Regular",
     marginTop: spacing.half,
   },
@@ -464,7 +772,7 @@ const styles = StyleSheet.create({
   emptyContactsText: {
     color: themes.textSecondary,
     fontSize: fontsize.caption,
-    fontFamily: "Body-Regular",
     textAlign: "center",
+    fontFamily: "Body-Regular",
   },
 });

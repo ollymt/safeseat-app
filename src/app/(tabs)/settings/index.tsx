@@ -9,7 +9,7 @@ import * as SecureStore from "expo-secure-store";
 import { signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { useCallback, useState } from "react";
-import { Alert, Linking, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import alternateEmailXml from "@expo/material-symbols/alternate_email.xml";
@@ -21,10 +21,14 @@ import favoriteXml from "@expo/material-symbols/favorite.xml";
 import groupsXml from "@expo/material-symbols/groups.xml";
 import powerSettingsNewXml from "@expo/material-symbols/power_settings_new.xml";
 import rulerXml from "@expo/material-symbols/straighten.xml";
+import settingsXml from "@expo/material-symbols/settings.xml";
+import shieldXml from "@expo/material-symbols/shield.xml";
+import visibilityXml from "@expo/material-symbols/visibility.xml";
 
 import ChangeEmailModal from "@/components/change-email-modal";
 import ChangePasswordModal from "@/components/change-password-modal";
 import ChangePhoneModal from "@/components/change-phone-modal";
+import EscalationWindowControl from "@/components/escalation-window-control";
 import MiniTab from "@/components/mini-tab";
 import SettingPageItem from "@/components/setting-page-item";
 import SettingSwitch from "@/components/setting-switch";
@@ -51,8 +55,18 @@ export default function Settings() {
   const {
     consent,
     setConsent,
+    behavioralMonitoring,
+    setBehavioralMonitoring,
+    physiologicalMonitoring,
+    setPhysiologicalMonitoring,
+    eventCameraVerification,
+    setEventCameraVerification,
+    gpsSharing,
+    setGpsSharing,
     emergencyEscalation,
     setEmergencyEscalation,
+    escalationWindowSeconds,
+    setEscalationWindowSeconds,
     useMetric,
     setUseMetric,
   } = useUserPreferences();
@@ -89,7 +103,7 @@ export default function Settings() {
 
     Alert.alert(
       "Clear seat assignments?",
-      "This removes the saved people and seat states for the current trip. Your profiles and emergency contacts will not be deleted.",
+      "This removes saved assignments and seat states for the current session. Saved profiles and emergency contacts stay intact.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -120,7 +134,7 @@ export default function Settings() {
 
     Alert.alert(
       "Log out?",
-      "Local trip data on this device will be cleared before you return to the login screen.",
+      "Local trip data on this device will be cleared before returning to the login screen.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -155,17 +169,20 @@ export default function Settings() {
   };
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: themes.background }}
-      edges={["left", "right", "bottom"]}
-    >
+    <SafeAreaView style={styles.screen} edges={["left", "right", "bottom"]}>
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, marginTop: spacing.one, paddingBottom: bottomPad }}
-        showsVerticalScrollIndicator
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
+        showsVerticalScrollIndicator={false}
         bounces
       >
         <View style={styles.container}>
-          <Text style={styles.pageHeader}>Settings</Text>
+          <View style={styles.headerBlock}>
+            <Text style={styles.eyebrow}>PREFERENCES</Text>
+            <Text style={styles.pageHeader}>Settings</Text>
+            <Text style={styles.pageSubhead}>
+              Control monitoring, privacy, and emergency behavior without exposing raw sensor data.
+            </Text>
+          </View>
 
           <MiniTab
             values={["Account", "Safety", "App"]}
@@ -203,40 +220,95 @@ export default function Settings() {
                 />
               </View>
               <Text style={styles.caption}>
-                Keep these details current so your SafeSeat account can be recovered and contacted correctly.
+                Account details are separate from session-only occupant monitoring.
               </Text>
             </View>
           )}
 
           {currentTab === 1 && (
             <View style={styles.group}>
-              <Text style={styles.sectionTitle}>MONITORING & EMERGENCY</Text>
+              <View style={styles.featureCard}>
+                <View style={styles.featureDot} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.featureTitle}>Privacy-first monitoring</Text>
+                  <Text style={styles.featureCopy}>
+                    The event camera is a verification layer, not continuous surveillance. Alert controls remain advisory and non-diagnostic.
+                  </Text>
+                </View>
+              </View>
 
+              <Text style={styles.sectionTitle}>MONITORING</Text>
+              <View style={styles.settingGroup}>
+                <SettingSwitch
+                  name="Behavioral Monitoring"
+                  iconName={Icon.select({ ios: "shield.fill", android: shieldXml })}
+                  value={behavioralMonitoring}
+                  onValueChange={(value) => void setBehavioralMonitoring(value)}
+                />
+                <SettingSwitch
+                  name="Physiological Monitoring"
+                  iconName={Icon.select({ ios: "waveform.path.ecg", android: favoriteXml })}
+                  value={physiologicalMonitoring}
+                  onValueChange={(value) => void setPhysiologicalMonitoring(value)}
+                />
+                <SettingSwitch
+                  name="Event Camera Verification"
+                  iconName={Icon.select({ ios: "camera.fill", android: visibilityXml })}
+                  value={eventCameraVerification}
+                  onValueChange={(value) => void setEventCameraVerification(value)}
+                  isLast
+                />
+              </View>
+              <Text style={styles.caption}>
+                Camera verification is event-triggered only. Turning it off does not turn off the primary seat sensors.
+              </Text>
+
+              <Text style={styles.sectionTitle}>SHARING & ESCALATION</Text>
               <View style={styles.settingGroup}>
                 <SettingSwitch
                   name="Share Occupant Status"
-                  iconName={Icon.select({ ios: "heart.fill", android: favoriteXml })}
+                  iconName={Icon.select({ ios: "person.2.fill", android: groupsXml })}
                   value={consent}
                   onValueChange={(value) => void setConsent(value)}
                 />
                 <SettingSwitch
-                  name="Emergency Escalation"
-                  iconName={Icon.select({ ios: "cross.case.fill", android: emergencyXml })}
+                  name="GPS Sharing During Emergency"
+                  iconName={Icon.select({ ios: "location.fill", android: shieldXml })}
+                  value={gpsSharing}
+                  onValueChange={(value) => void setGpsSharing(value)}
+                />
+                <SettingSwitch
+                  name="Automated SMS Escalation"
+                  iconName={Icon.select({ ios: "message.fill", android: emergencyXml })}
                   value={emergencyEscalation}
                   onValueChange={(value) => void setEmergencyEscalation(value)}
+                />
+                <SettingPageItem
+                  name="Context-Aware Escalation"
+                  iconName={Icon.select({ ios: "person.2.badge.gearshape.fill", android: shieldXml })}
+                  value="Automatic"
                   isLast
                 />
               </View>
 
-              <Text style={styles.caption}>
-                Occupant Status controls whether non-driver status is shown in the app. Emergency Escalation stores whether configured alert escalation should be used when an emergency is confirmed.
-              </Text>
+              <View style={styles.smsNote}>
+                <Text style={styles.smsTitle}>SMS only</Text>
+                <Text style={styles.smsCopy}>
+                  SafeSeat will not place an automated voice call. The planned automated escalation is an SMS to the driver&apos;s primary emergency contact only for a confirmed driver-alone emergency. Passenger occupancy is evaluated automatically so a passenger alert stays driver-first.
+                </Text>
+              </View>
+
+              <EscalationWindowControl
+                value={escalationWindowSeconds}
+                enabled={emergencyEscalation}
+                onValueChange={(value) => void setEscalationWindowSeconds(value)}
+              />
 
               <View style={styles.settingGroup}>
                 <SettingPageItem
-                  name="Manage People & Contacts"
+                  name="Profiles & Emergency Contacts"
                   iconName={Icon.select({ ios: "person.2.fill", android: groupsXml })}
-                  onPress={() => router.push("/(tabs)/everyone")}
+                  onPress={() => router.push("/(tabs)/everyone" as any)}
                   showChevron
                   isLast
                 />
@@ -246,8 +318,27 @@ export default function Settings() {
 
           {currentTab === 2 && (
             <View style={styles.group}>
-              <Text style={styles.sectionTitle}>APP PREFERENCES</Text>
+              <Text style={styles.sectionTitle}>SYSTEM</Text>
+              <View style={styles.settingGroup}>
+                <SettingPageItem
+                  name="System Self-Diagnostic"
+                  iconName={Icon.select({ ios: "waveform.path.ecg", android: settingsXml })}
+                  value="Ready"
+                  onPress={() => router.push("/(tabs)/settings/diagnostics" as any)}
+                  showChevron
+                />
+                <SettingPageItem
+                  name="System Status"
+                  iconName={Icon.select({ ios: "checkmark.shield.fill", android: shieldXml })}
+                  value="App ready"
+                  isLast
+                />
+              </View>
+              <Text style={styles.caption}>
+                Hardware module checks are prepared but remain marked as awaiting integration until the Main Hub is connected.
+              </Text>
 
+              <Text style={styles.sectionTitle}>APP</Text>
               <View style={styles.settingGroup}>
                 <SettingSwitch
                   name="Use Metric Units"
@@ -258,6 +349,7 @@ export default function Settings() {
                 />
               </View>
 
+              <Text style={styles.sectionTitle}>SESSION</Text>
               <View style={styles.settingGroup}>
                 <SettingPageItem
                   name="Clear Seat Assignments"
@@ -277,7 +369,7 @@ export default function Settings() {
 
               {isLockedIn && (
                 <Text style={styles.caption}>
-                  Unbuckle the current trip before clearing assignments or logging out.
+                  End the active monitoring session before clearing assignments or logging out.
                 </Text>
               )}
             </View>
@@ -285,14 +377,7 @@ export default function Settings() {
 
           <View style={styles.footer}>
             <Text style={styles.footerBrand}>SafeSeat</Text>
-            <Text style={styles.caption}>Final redesign • v1.0.0</Text>
-            <Text
-              style={styles.footerLink}
-              onPress={() => void Linking.openURL("https://github.com/ollymt/safeseat-app")}
-            >
-              Project repository
-            </Text>
-            <Text style={styles.footerHeart}>made with 💚 by the SafeSeat team</Text>
+            <Text style={styles.captionCenter}>Non-diagnostic occupant safety monitoring • v1.1</Text>
           </View>
 
           <ChangeEmailModal
@@ -329,29 +414,54 @@ export default function Settings() {
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: themes.background,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingTop: spacing.one,
+  },
   container: {
     flex: 1,
     width: "100%",
     paddingHorizontal: spacing.two,
     gap: spacing.three,
   },
+  headerBlock: {
+    gap: spacing.half,
+  },
+  eyebrow: {
+    color: themes.primaryBttn,
+    fontSize: 11,
+    letterSpacing: 1.5,
+    fontFamily: "Body-Bold",
+  },
   pageHeader: {
     fontSize: fontsize.pageHeader,
     fontFamily: "Logo-Font",
     color: themes.text,
   },
+  pageSubhead: {
+    color: themes.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: "Body-Regular",
+    maxWidth: 520,
+  },
   group: {
     gap: spacing.one,
   },
   sectionTitle: {
-    color: themes.primaryBttn,
+    color: themes.textMuted,
     fontFamily: "Body-Bold",
-    fontSize: fontsize.caption,
-    letterSpacing: 1.1,
+    fontSize: 11,
+    letterSpacing: 1.25,
     marginLeft: spacing.half,
+    marginTop: spacing.one,
   },
   settingGroup: {
-    borderRadius: spacing.edge,
+    borderRadius: 16,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: themes.divider,
@@ -363,26 +473,71 @@ const styles = StyleSheet.create({
     color: themes.textSecondary,
     paddingHorizontal: spacing.half,
   },
+  captionCenter: {
+    fontFamily: "Body-Regular",
+    fontSize: fontsize.caption,
+    lineHeight: 17,
+    color: themes.textSecondary,
+    textAlign: "center",
+  },
+  featureCard: {
+    flexDirection: "row",
+    gap: spacing.one,
+    padding: spacing.two,
+    borderRadius: 18,
+    backgroundColor: themes.primarySoft,
+    borderWidth: 1,
+    borderColor: themes.primaryBorder,
+  },
+  featureDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: themes.primaryBttn,
+    marginTop: 5,
+  },
+  featureTitle: {
+    color: themes.text,
+    fontSize: fontsize.body,
+    fontFamily: "Body-Bold",
+  },
+  featureCopy: {
+    color: themes.textSecondary,
+    fontSize: fontsize.caption,
+    lineHeight: 18,
+    marginTop: spacing.half,
+    fontFamily: "Body-Regular",
+  },
+  smsNote: {
+    padding: spacing.two,
+    borderRadius: 16,
+    backgroundColor: themes.surfaceSoft,
+    borderWidth: 1,
+    borderColor: themes.divider,
+  },
+  smsTitle: {
+    color: themes.primaryBttn,
+    fontSize: fontsize.caption,
+    fontFamily: "Body-Bold",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  smsCopy: {
+    color: themes.textSecondary,
+    fontSize: fontsize.caption,
+    lineHeight: 18,
+    marginTop: spacing.half,
+    fontFamily: "Body-Regular",
+  },
   footer: {
     alignItems: "center",
     marginTop: spacing.two,
     gap: spacing.half,
-    paddingVertical: spacing.two,
+    paddingVertical: spacing.three,
   },
   footerBrand: {
     color: themes.text,
     fontFamily: "Logo-Font",
     fontSize: fontsize.header,
-  },
-  footerLink: {
-    color: themes.primaryBttn,
-    fontFamily: "Body-Medium",
-    fontSize: fontsize.caption,
-    textDecorationLine: "underline",
-  },
-  footerHeart: {
-    color: themes.textSecondary,
-    fontFamily: "Body-Regular",
-    fontSize: fontsize.caption,
   },
 });

@@ -1,107 +1,135 @@
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
-import { useEffect, useState } from "react";
-import {
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
-    Image,
-} from "react-native";
+import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
 import * as SecureStore from "expo-secure-store";
+import { useEffect, useState } from "react";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 type ProfileCardProps = {
-    name?: string;
-    img?: string;
-    profileId?: string; // Optional: Pass profileId if rendering sub-profiles
-    isLast?: boolean;
-    enabled?: boolean;
-    onPress?: () => void;
+  name?: string;
+  img?: string;
+  profileId?: string;
+  isLast?: boolean;
+  enabled?: boolean;
+  onPress?: () => void;
+};
+
+const normalizeImage = (value?: string) => {
+  if (!value || value === "Not Set" || value.trim() === "") return "";
+  if (value.startsWith("http") || value.startsWith("data:")) return value;
+  return `data:image/jpeg;base64,${value}`;
 };
 
 export default function ProfileCard({
-    name = "empty",
-    img,
-    profileId,
-    isLast = false,
-    enabled = true,
-    onPress,
+  name = "Profile",
+  img,
+  profileId,
+  isLast = false,
+  enabled = true,
+  onPress,
 }: ProfileCardProps) {
-    const [avatarUri, setAvatarUri] = useState<string>("");
+  const [avatarUri, setAvatarUri] = useState(normalizeImage(img));
 
-    useEffect(() => {
-        // 1. If an img prop was explicitly passed down, use it directly
-        if (img && img !== "Not Set" && img !== "") {
-            setAvatarUri(img);
-            return;
-        }
+  useEffect(() => {
+    const provided = normalizeImage(img);
+    if (provided) {
+      setAvatarUri(provided);
+      return;
+    }
 
-        // 2. Fallback to SecureStore cache
-        const loadCachedAvatar = async () => {
-            try {
-                const cacheKey = profileId ? `profile_${profileId}` : "user_health_profile";
-                const cachedHealth = await SecureStore.getItemAsync(cacheKey);
+    let cancelled = false;
 
-                if (cachedHealth) {
-                    const parsed = JSON.parse(cachedHealth);
-                    const iconVal = parsed.icon || parsed.pfp;
-                    if (iconVal && iconVal !== "Not Set" && iconVal !== "") {
-                        setAvatarUri(iconVal);
-                    }
-                }
-            } catch (error) {
-                console.error("Error loading cached avatar:", error);
-            }
-        };
+    void (async () => {
+      try {
+        const cacheKey = profileId ? `profile_${profileId}` : "user_health_profile";
+        const cachedHealth = await SecureStore.getItemAsync(cacheKey);
+        if (!cachedHealth || cancelled) return;
 
-        loadCachedAvatar();
-    }, [img, profileId]);
+        const parsed = JSON.parse(cachedHealth);
+        const cachedImage = normalizeImage(parsed.icon || parsed.pfp || parsed.img);
+        if (cachedImage) setAvatarUri(cachedImage);
+      } catch (error) {
+        console.error("Error loading cached avatar:", error);
+      }
+    })();
 
-    const fallbackUri = "https://pbs.twimg.com/media/C8SFjSYWAAA6452.jpg";
+    return () => {
+      cancelled = true;
+    };
+  }, [img, profileId]);
 
-    // Validate URI to prevent empty strings from breaking Image component
-    const isValidUri = avatarUri && avatarUri.trim().length > 0 && avatarUri !== "Not Set";
-    const imageSource = isValidUri ? { uri: avatarUri } : { uri: fallbackUri };
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${name}`}
+      disabled={!enabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.baseCard,
+        {
+          borderBottomWidth: isLast ? 0 : 1,
+          opacity: enabled ? (pressed ? 0.72 : 1) : 0.45,
+        },
+      ]}
+    >
+      {avatarUri ? (
+        <Image source={{ uri: avatarUri }} style={styles.avatar} />
+      ) : (
+        <View style={styles.avatarFallback}>
+          <Text style={styles.initial}>{name.trim().charAt(0).toUpperCase() || "?"}</Text>
+        </View>
+      )}
 
-    return (
-        <Pressable
-            style={[
-                seatcard.baseCard,
-                {
-                    borderBottomWidth: isLast ? 0 : 1,
-                    borderBottomColor: themes.secondaryBttn,
-                    backgroundColor: themes.backgroundElement,
-                    opacity: enabled ? 1 : 0.5,
-                    flexDirection: "row",
-                    alignItems: "center"
-                }
-            ]}
-            onPress={onPress}
-        >
-            <View style={{ borderRadius: 12, overflow: "hidden" }}>
-                <Image
-                    source={imageSource}
-                    style={{ width: 50, height: 50, borderRadius: 25 }}
-                />
-            </View>
-
-            <View style={{ justifyContent: "center", flex: 1, paddingLeft: 10 }}>
-                <Text style={[seatcard.profileName, { color: themes.text }]}>{name}</Text>
-            </View>
-        </Pressable>
-    );
+      <View style={styles.copy}>
+        <Text style={styles.profileName}>{name}</Text>
+        <Text style={styles.profileMeta}>Saved occupant profile</Text>
+      </View>
+    </Pressable>
+  );
 }
 
-const seatcard = StyleSheet.create({
-    baseCard: {
-        width: "100%",
-        borderWidth: 0,
-        borderColor: "#fff",
-        gap: 6,
-        padding: 10,
-        overflow: "hidden",
-    },
-    profileName: {
-        fontFamily: "Body-Medium",
-        fontSize: 18,
-    }
+const styles = StyleSheet.create({
+  baseCard: {
+    width: "100%",
+    minHeight: 68,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.one,
+    paddingHorizontal: spacing.one + 4,
+    paddingVertical: spacing.one,
+    backgroundColor: themes.backgroundElement,
+    borderBottomColor: themes.divider,
+  },
+  avatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+  },
+  avatarFallback: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: themes.primarySoft,
+    borderWidth: 1,
+    borderColor: themes.primaryBorder,
+  },
+  initial: {
+    color: themes.primaryBttn,
+    fontSize: 17,
+    fontFamily: "Body-Bold",
+  },
+  copy: {
+    flex: 1,
+  },
+  profileName: {
+    color: themes.text,
+    fontFamily: "Body-Bold",
+    fontSize: fontsize.body,
+  },
+  profileMeta: {
+    color: themes.textMuted,
+    fontFamily: "Body-Regular",
+    fontSize: 10,
+    marginTop: 2,
+  },
 });

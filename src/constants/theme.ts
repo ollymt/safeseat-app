@@ -1,10 +1,8 @@
 /**
  * SafeSeat visual system.
  *
- * The app intentionally keeps the deep navy base from the redesign while
- * using green + white as the brand palette. Amber and red are reserved for
- * warning/emergency semantics so safety states are never confused with brand
- * accents.
+ * Dark navy keeps the in-vehicle UI low-glare. Green + white are the brand
+ * palette. Amber/red are reserved strictly for Warning/Emergency semantics.
  */
 
 import "@/global.css";
@@ -12,37 +10,41 @@ import "@/global.css";
 import { Platform } from "react-native";
 
 export const Themes = {
-  text: "#F8FBFA",
-  textSecondary: "#A6B4C3",
-  background: "#101322",
-  backgroundElement: "#1A2033",
-  backgroundElevated: "#222A40",
-  backgroundSelected: "#173A2A",
-  divider: "#34405C",
+  text: "#F8FAFC",
+  textSecondary: "#9EADBF",
+  textMuted: "#6F8197",
+
+  background: "#0B1220",
+  backgroundElement: "#111C2D",
+  backgroundElevated: "#172437",
+  backgroundSelected: "#123827",
+  surfaceSoft: "#0E1828",
+  divider: "#26364C",
 
   // SafeSeat brand accent
-  primaryBttn: "#42D889",
-  primaryBttnText: "#071A11",
-  primarySoft: "#173A2A",
+  primaryBttn: "#34D17F",
+  primaryBttnText: "#05160E",
+  primarySoft: "#123827",
+  primaryBorder: "#2A8F5E",
 
   // Neutral secondary action
-  secondaryBttn: "#344563",
-  secondaryBttnText: "#F8FBFA",
+  secondaryBttn: "#213148",
+  secondaryBttnText: "#F8FAFC",
 
-  textInputPlaceholder: "#F8FBFA80",
+  textInputPlaceholder: "#F8FAFC70",
 
-  // Safety state colors: not part of the orange/green brand swap.
-  warnBttn: "#FF7A7A",
-  warnBttnText: "#331313",
-  lightOrange: "#F4C65D",
-  green: "#7BE7AD",
+  // Safety semantics only.
+  warnBttn: "#FF676F",
+  warnBttnText: "#2A090C",
+  lightOrange: "#F5C451",
+  green: "#66E3A0",
+
+  // Non-safety informational state.
+  info: "#75B8FF",
 } as const;
 
 export type ThemeColor = keyof typeof Themes;
 
-// Compatibility for a few retained Expo starter components. SafeSeat itself
-// uses one deliberate dark visual system, so both scheme entries resolve to
-// the same palette instead of silently reintroducing a separate light theme.
 export const Colors = {
   light: Themes,
   dark: Themes,
@@ -87,13 +89,13 @@ export const Spacing = {
 } as const;
 
 export const FontSize = {
-  title: 32,
-  pageHeader: 40,
-  header: 24,
+  title: 30,
+  pageHeader: 34,
+  header: 22,
   body: 16,
   caption: 12,
-  button: 16,
-  giant: 64,
+  button: 15,
+  giant: 60,
 } as const;
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;

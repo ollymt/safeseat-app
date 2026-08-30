@@ -92,6 +92,7 @@ const setitem = StyleSheet.create({
         width: "100%",
         flexDirection: "row",
         alignItems: "center",
+        minHeight: 54,
         padding: 12,
     },
     leftContainer: {
@@ -116,11 +117,11 @@ const setitem = StyleSheet.create({
         alignItems: "center",
     },
     settingName: {
-        fontSize: 18,
+        fontSize: 16,
         fontFamily: "Body-Medium",
     },
     settingValue: {
-        fontSize: 18,
-        fontFamily: "Condensed-Bold",
+        fontSize: 14,
+        fontFamily: "Body-Medium",
     }
 });

@@ -1,345 +1,457 @@
-// components/AssignSeatModal.tsx
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
-import * as Haptics from "expo-haptics";
-import { useEffect, useState } from "react";
-import { Alert, Modal, StyleSheet, View, Text, ScrollView, FlatList, ActivityIndicator } from "react-native";
+import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store";
-
-import Button from "./button";
-
-// 🛠️ Firebase Imports
-import { auth, db } from "../firebase";
 import { collection, doc, getDoc, getDocs } from "firebase/firestore";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+
+import { auth, db } from "../firebase";
+import Button from "./button";
 import ProfileList from "./profile-list";
 
 export type Profile = {
-    id: string;
-    name: string;
-    icon?: string;
-    isAccountOwner?: boolean;
-    weight?: string;
-    weightKg?: number;
+  id: string;
+  name: string;
+  icon?: string;
+  isAccountOwner?: boolean;
+  isGuest?: boolean;
+  sessionOnly?: boolean;
 };
 
 type Props = {
-    visible: boolean;
-    seat: number;
-    onClose: () => void;
-    onSuccess?: (seat: number, profile: Profile | null) => void;
+  visible: boolean;
+  seat: number;
+  onClose: () => void;
+  onSuccess?: (seat: number, profile: Profile | null) => void;
 };
 
 const SEAT_ASSIGNMENTS_KEY = "seatAssignments";
 
+const ROLE_LABELS: Record<number, string> = {
+  1: "Driver",
+  2: "Front Passenger",
+  3: "Left Rear",
+  4: "Center Rear",
+  5: "Right Rear",
+};
+
 export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: Props) {
-    const [isLoading, setIsLoading] = useState(false);
-    const [isFetchingProfiles, setIsFetchingProfiles] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isFetchingProfiles, setIsFetchingProfiles] = useState(false);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [isCurrentlyAssigned, setIsCurrentlyAssigned] = useState(false);
 
-    const [role, setRole] = useState("");
-    const [profiles, setProfiles] = useState<Profile[]>([]);
-    const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
-    const [isCurrentlyAssigned, setIsCurrentlyAssigned] = useState(false);
+  useEffect(() => {
+    if (!visible) return;
 
-    // Resolve seat number -> role label
-    useEffect(() => {
-        if (!visible) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        switch (seat) {
-            case 1:
-                setRole("Driver");
-                break;
-            case 2:
-                setRole("Passenger");
-                break;
-            case 3:
-                setRole("L Backseat");
-                break;
-            case 4:
-                setRole("C Backseat");
-                break;
-            case 5:
-                setRole("R Backseat");
-                break;
-            default:
-                setRole(`Seat ${seat}`);
-                break;
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      setIsFetchingProfiles(true);
+      try {
+        const combinedList: Profile[] = [];
+        let primaryName = currentUser.displayName;
+        let primaryIcon = currentUser.photoURL ?? undefined;
+
+        const localHealthRaw = await SecureStore.getItemAsync("user_health_profile");
+        if (localHealthRaw) {
+          const localHealth = JSON.parse(localHealthRaw);
+          if (localHealth.name) primaryName = localHealth.name;
+          if (localHealth.icon || localHealth.pfp) {
+            primaryIcon = localHealth.icon ?? localHealth.pfp;
+          }
         }
-    }, [visible, seat]);
 
-    // Fetch user account + profiles + filter already-assigned profiles
-    useEffect(() => {
-        if (!visible) return;
+        const userDocSnap = await getDoc(doc(db, "users", currentUser.uid));
+        if (userDocSnap.exists()) {
+          const userData = userDocSnap.data();
+          if (userData.name) primaryName = userData.name;
+          if (userData.icon || userData.photoURL) {
+            primaryIcon = userData.icon ?? userData.photoURL;
+          }
+        }
 
-        const currentUser = auth.currentUser;
-        if (!currentUser) return;
+        combinedList.push({
+          id: currentUser.uid,
+          name: `${primaryName ?? "Me"} (Me)`,
+          icon: primaryIcon,
+          isAccountOwner: true,
+        });
 
-        let cancelled = false;
+        const profilesRef = collection(db, "users", currentUser.uid, "profiles");
+        const snapshot = await getDocs(profilesRef);
+        combinedList.push(
+          ...snapshot.docs.map((docSnap) => {
+            const data = docSnap.data();
+            return {
+              id: docSnap.id,
+              name: data.name ?? "Unnamed Profile",
+              icon: data.icon ?? data.photoURL,
+            } satisfies Profile;
+          }),
+        );
 
-        (async () => {
-            setIsFetchingProfiles(true);
-            try {
-                const combinedList: Profile[] = [];
+        const raw = await AsyncStorage.getItem(SEAT_ASSIGNMENTS_KEY);
+        const assignments: Record<number, Profile> = raw ? JSON.parse(raw) : {};
+        const assignedSeatProfile = assignments[seat];
 
-                // 1. Resolve Account Owner details
-                let primaryName = currentUser.displayName;
-                let primaryIcon = currentUser.photoURL ?? undefined;
+        setIsCurrentlyAssigned(Boolean(assignedSeatProfile));
+        setSelectedProfileId(
+          assignedSeatProfile && !assignedSeatProfile.sessionOnly
+            ? assignedSeatProfile.id
+            : null,
+        );
 
-                const localHealthRaw = await SecureStore.getItemAsync("user_health_profile");
-                if (localHealthRaw) {
-                    const localHealth = JSON.parse(localHealthRaw);
-                    if (localHealth.name) primaryName = localHealth.name;
-                }
+        const assignedOtherIds = new Set<string>();
+        Object.entries(assignments).forEach(([seatNumStr, profile]) => {
+          if (
+            Number(seatNumStr) !== seat &&
+            profile?.id &&
+            !profile.sessionOnly
+          ) {
+            assignedOtherIds.add(profile.id);
+          }
+        });
 
-                const userDocRef = doc(db, "users", currentUser.uid);
-                let primaryWeight: string | undefined;
-                let primaryWeightKg: number | undefined;
+        if (cancelled) return;
+        setProfiles(combinedList.filter((profile) => !assignedOtherIds.has(profile.id)));
+      } catch (error) {
+        console.error("Error fetching profiles/user:", error);
+        if (!cancelled) {
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          Alert.alert("Load Error", "Failed to load saved profiles. Please try again.");
+        }
+      } finally {
+        if (!cancelled) setIsFetchingProfiles(false);
+      }
+    })();
 
-                const userDocSnap = await getDoc(userDocRef);
-                if (userDocSnap.exists()) {
-                    const userData = userDocSnap.data();
-                    if (userData.name) primaryName = userData.name;
-                    if (userData.icon || userData.photoURL) {
-                        primaryIcon = userData.icon ?? userData.photoURL;
-                    }
-                    if (userData.weightKg !== undefined) primaryWeightKg = userData.weightKg;
-                    if (userData.weight !== undefined) primaryWeight = userData.weight;
-                }
-
-                const accountOwnerProfile: Profile = {
-                    id: currentUser.uid,
-                    name: `${primaryName ?? "Me"} (Me)`,
-                    icon: primaryIcon,
-                    isAccountOwner: true,
-                    weight: primaryWeight,
-                    weightKg: primaryWeightKg,
-                };
-                combinedList.push(accountOwnerProfile);
-
-                // 2. Fetch sub-profiles subcollection
-                const profilesRef = collection(db, "users", currentUser.uid, "profiles");
-                const snapshot = await getDocs(profilesRef);
-                const subProfiles: Profile[] = snapshot.docs.map((docSnap) => {
-                    const data = docSnap.data();
-                    return {
-                        id: docSnap.id,
-                        name: data.name ?? "Unnamed Profile",
-                        icon: data.icon ?? data.photoURL,
-                        weight: data.weight,
-                        weightKg: data.weightKg,
-                    };
-                });
-
-                combinedList.push(...subProfiles);
-
-                // 3. Get existing seat assignments & filter out already-assigned profiles
-                const raw = await AsyncStorage.getItem(SEAT_ASSIGNMENTS_KEY);
-                const assignments: Record<number, Profile> = raw ? JSON.parse(raw) : {};
-
-                const assignedSeatProfile = assignments[seat];
-                const currentlyAssignedProfileId = assignedSeatProfile?.id ?? null;
-
-                setIsCurrentlyAssigned(!!assignedSeatProfile);
-                setSelectedProfileId(currentlyAssignedProfileId);
-
-                // Collect IDs assigned to OTHER seats (so we can hide them)
-                const assignedOtherIds = new Set<string>();
-                Object.entries(assignments).forEach(([seatNumStr, prof]) => {
-                    if (parseInt(seatNumStr, 10) !== seat && prof?.id) {
-                        assignedOtherIds.add(prof.id);
-                    }
-                });
-
-                // Filter out profiles assigned elsewhere
-                const availableProfiles = combinedList.filter(
-                    (p) => !assignedOtherIds.has(p.id)
-                );
-
-                if (cancelled) return;
-                setProfiles(availableProfiles);
-            } catch (error) {
-                console.error("Error fetching profiles/user: ", error);
-                if (!cancelled) {
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                    Alert.alert("Load Error", "Failed to load profiles. Please try again.");
-                }
-            } finally {
-                if (!cancelled) setIsFetchingProfiles(false);
-            }
-        })();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [visible, seat]);
-
-    const handleResetAndClose = () => {
-        setSelectedProfileId(null);
-        onClose();
+    return () => {
+      cancelled = true;
     };
+  }, [visible, seat]);
 
-    const handleSelectProfile = (profileId: string) => {
-        Haptics.selectionAsync();
-        setSelectedProfileId(profileId);
-    };
+  const resetAndClose = () => {
+    setSelectedProfileId(null);
+    onClose();
+  };
 
-    const handleSave = async () => {
-        if (!selectedProfileId) {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-            Alert.alert("No Profile Selected", "Please select a profile to assign to this seat.");
-            return;
-        }
+  const persistAssignment = async (profile: Profile) => {
+    const raw = await AsyncStorage.getItem(SEAT_ASSIGNMENTS_KEY);
+    const assignments: Record<number, Profile> = raw ? JSON.parse(raw) : {};
+    assignments[seat] = profile;
+    await AsyncStorage.setItem(SEAT_ASSIGNMENTS_KEY, JSON.stringify(assignments));
 
-        const selectedProfile = profiles.find((p) => p.id === selectedProfileId);
-        if (!selectedProfile) return;
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    onSuccess?.(seat, profile);
+    resetAndClose();
+  };
 
-        setIsLoading(true);
-        try {
-            const raw = await AsyncStorage.getItem(SEAT_ASSIGNMENTS_KEY);
-            const assignments: Record<number, Profile> = raw ? JSON.parse(raw) : {};
-            assignments[seat] = selectedProfile;
-            await AsyncStorage.setItem(SEAT_ASSIGNMENTS_KEY, JSON.stringify(assignments));
-
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            if (onSuccess) onSuccess(seat, selectedProfile);
-            handleResetAndClose();
-        } catch (error) {
-            console.error("Error saving seat assignment: ", error);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            Alert.alert("Save Error", "Failed to assign this seat. Please try again.");
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleUnassign = async () => {
-        setIsLoading(true);
-        try {
-            const raw = await AsyncStorage.getItem(SEAT_ASSIGNMENTS_KEY);
-            const assignments: Record<number, Profile> = raw ? JSON.parse(raw) : {};
-            delete assignments[seat];
-            await AsyncStorage.setItem(SEAT_ASSIGNMENTS_KEY, JSON.stringify(assignments));
-
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            if (onSuccess) onSuccess(seat, null);
-            handleResetAndClose();
-        } catch (error) {
-            console.error("Error unassigning seat: ", error);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            Alert.alert("Error", "Failed to unassign this seat. Please try again.");
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const numToRole = (role: number) => {
-        switch (role) {
-            case 1:
-                return "Driver"
-                break
-            case 2:
-                return "Passenger"
-                break
-            case 3:
-                return "L Backseat"
-                break
-            case 4:
-                return "C Backseat"
-                break
-            case 5:
-                return "R Backseat"
-                break
-            default:
-                return `Seat ${seat}`
-                break
-        }
+  const handleSave = async () => {
+    if (!selectedProfileId) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert("No profile selected", "Choose a saved profile, or use Guest for a passenger seat.");
+      return;
     }
 
-    return (
-        <Modal
-            animationType="fade"
-            transparent={true}
-            visible={visible}
-            onRequestClose={onClose}
-        >
-            {/* Full-screen backdrop wrapper that centers children */}
-            <View style={styles.backdrop}>
-                <View style={styles.container}>
-                    <Text style={styles.header}>
-                        Assign {numToRole(seat)}
-                    </Text>
-                    <View style={{ width: "100%" }}>
-                        {isFetchingProfiles ? (
-                            <ActivityIndicator size="large" color={themes.text} style={{ padding: spacing.two }} />
-                        ) : (
-                            <View style={{ maxHeight: 320, width: "100%" }}>
-                                <FlatList
-                                    data={profiles}
-                                    keyExtractor={(item) => item.id}
-                                    renderItem={({ item, index }) => (
-                                        <ProfileList
-                                            name={item.name}
-                                            pfp={item.icon || "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNyV3QnQOwXP124try4wkWE0xXqxT6KZitbq4TerzfLkMDDY-v1CXzTGw&s=10"}
-                                            checked={item.id === selectedProfileId}
-                                            onPress={() => handleSelectProfile(item.id)}
-                                            isLast={!(index === profiles.length - 1)}
-                                        />
-                                    )}
-                                    style={{ width: "100%" }}
-                                    ListEmptyComponent={
-                                        <Text style={{ color: themes.text }}>No available profiles found.</Text>
-                                    }
-                                />
-                            </View>
-                        )}
-                    </View>
+    const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId);
+    if (!selectedProfile) return;
 
-                    <View style={styles.actionRow}>
-                        {isCurrentlyAssigned &&
-                            <Button variant="warn" label="Remove" onPress={handleUnassign} enabled={!isFetchingProfiles} style={{ borderRadius: 6 }} />
-                        }
-                        <Button variant="secondary" label="Cancel" onPress={onClose} enabled={!isFetchingProfiles} style={{ borderRadius: 6 }} />
-                        <View style={{ flex: 1 }}>
-                            <Button variant="primary" label="Assign" onPress={handleSave} enabled={!isFetchingProfiles && selectedProfileId} style={{ borderRadius: 6 }} />
-                        </View>
-                    </View>
+    setIsLoading(true);
+    try {
+      await persistAssignment(selectedProfile);
+    } catch (error) {
+      console.error("Error saving seat assignment:", error);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Save Error", "Failed to assign this seat. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-                </View>
+  const handleGuest = async () => {
+    if (seat === 1) return;
+
+    setIsLoading(true);
+    try {
+      await persistAssignment({
+        id: `guest-seat-${seat}`,
+        name: "Guest",
+        isGuest: true,
+        sessionOnly: true,
+      });
+    } catch (error) {
+      console.error("Error assigning guest:", error);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Save Error", "Could not create the session-only guest.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUnassign = async () => {
+    setIsLoading(true);
+    try {
+      const raw = await AsyncStorage.getItem(SEAT_ASSIGNMENTS_KEY);
+      const assignments: Record<number, Profile> = raw ? JSON.parse(raw) : {};
+      delete assignments[seat];
+      await AsyncStorage.setItem(SEAT_ASSIGNMENTS_KEY, JSON.stringify(assignments));
+
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      onSuccess?.(seat, null);
+      resetAndClose();
+    } catch (error) {
+      console.error("Error unassigning seat:", error);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Error", "Failed to unassign this seat. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const role = ROLE_LABELS[seat] ?? `Seat ${seat}`;
+
+  return (
+    <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
+      <View style={styles.backdrop}>
+        <View style={styles.container}>
+          <View style={styles.headerBlock}>
+            <Text style={styles.eyebrow}>SEAT {seat}</Text>
+            <Text style={styles.header}>{role}</Text>
+            <Text style={styles.subhead}>
+              Pick a saved occupant. Passenger seats can also use a guest profile that is erased when the session ends.
+            </Text>
+          </View>
+
+          {seat !== 1 && (
+            <Pressable
+              disabled={isLoading || isFetchingProfiles}
+              onPress={() => void handleGuest()}
+              style={({ pressed }) => [styles.guestCard, pressed && styles.pressed]}
+            >
+              <View style={styles.guestIcon}>
+                <Text style={styles.guestIconText}>G</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.guestTitle}>Guest • session only</Text>
+                <Text style={styles.guestText}>No saved passenger profile or long-term assignment data.</Text>
+              </View>
+              <Text style={styles.guestAction}>USE</Text>
+            </Pressable>
+          )}
+
+          <View style={styles.savedHeaderRow}>
+            <Text style={styles.savedHeader}>SAVED PROFILES</Text>
+            <Text style={styles.savedCount}>{profiles.length}</Text>
+          </View>
+
+          <View style={styles.listWrap}>
+            {isFetchingProfiles ? (
+              <ActivityIndicator size="large" color={themes.primaryBttn} style={styles.loader} />
+            ) : (
+              <FlatList
+                data={profiles}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item, index }) => (
+                  <ProfileList
+                    name={item.name}
+                    pfp={item.icon}
+                    checked={item.id === selectedProfileId}
+                    onPress={() => {
+                      void Haptics.selectionAsync();
+                      setSelectedProfileId(item.id);
+                    }}
+                    isLast={index !== profiles.length - 1}
+                  />
+                )}
+                style={{ width: "100%" }}
+                ListEmptyComponent={
+                  <View style={styles.emptyWrap}>
+                    <Text style={styles.emptyTitle}>No saved profiles available</Text>
+                    <Text style={styles.emptyText}>Create one from Profiles, or use Guest for a passenger seat.</Text>
+                  </View>
+                }
+              />
+            )}
+          </View>
+
+          <View style={styles.actionRow}>
+            {isCurrentlyAssigned && (
+              <Button
+                variant="tertiary"
+                label="Remove"
+                onPress={() => void handleUnassign()}
+                enabled={!isFetchingProfiles && !isLoading}
+              />
+            )}
+            <Button
+              variant="secondary"
+              label="Cancel"
+              onPress={resetAndClose}
+              enabled={!isLoading}
+            />
+            <View style={{ flex: 1 }}>
+              <Button
+                variant="primary"
+                label="Assign"
+                onPress={() => void handleSave()}
+                enabled={!isFetchingProfiles && !isLoading && Boolean(selectedProfileId)}
+                fullWidth
+              />
             </View>
-        </Modal>
-    );
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
 }
 
 const styles = StyleSheet.create({
-    // Full-screen overlay to dim screen and center content
-    backdrop: {
-        flex: 1,
-        backgroundColor: "rgba(0, 0, 0, 0.75)",
-        justifyContent: "center",
-        alignItems: "center",
-        paddingHorizontal: spacing.two, // Prevents modal from touching screen edges
-    },
-    // Centered card content container
-    container: {
-        width: "100%", // Or a fixed width/max-width like 320
-        maxWidth: 400,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: themes.backgroundElement,
-        borderWidth: spacing.quarter,
-        borderColor: themes.secondaryBttn,
-        padding: spacing.one,
-        borderRadius: spacing.edge,
-        gap: spacing.one
-    },
-    header: {
-        color: themes.text,
-        fontSize: fontsize.header,
-        fontFamily: "Heading-Font"
-    },
-    actionRow: {
-        flexDirection: "row",
-        gap: spacing.half,
-        maxWidth: "100%",
-    }
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(3, 7, 15, 0.82)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: spacing.two,
+  },
+  container: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: themes.backgroundElement,
+    borderWidth: 1,
+    borderColor: themes.divider,
+    padding: spacing.two,
+    borderRadius: 24,
+    gap: spacing.two,
+  },
+  headerBlock: {
+    gap: spacing.half,
+  },
+  eyebrow: {
+    color: themes.primaryBttn,
+    fontSize: 10,
+    letterSpacing: 1.2,
+    fontFamily: "Body-Bold",
+  },
+  header: {
+    color: themes.text,
+    fontSize: fontsize.header,
+    fontFamily: "Heading-Font",
+  },
+  subhead: {
+    color: themes.textSecondary,
+    fontSize: fontsize.caption,
+    lineHeight: 18,
+    fontFamily: "Body-Regular",
+  },
+  guestCard: {
+    minHeight: 68,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.one,
+    padding: spacing.one + 4,
+    borderRadius: 17,
+    backgroundColor: themes.primarySoft,
+    borderWidth: 1,
+    borderColor: themes.primaryBorder,
+  },
+  guestIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: themes.primaryBttn,
+  },
+  guestIconText: {
+    color: themes.primaryBttnText,
+    fontSize: 14,
+    fontFamily: "Body-Bold",
+  },
+  guestTitle: {
+    color: themes.text,
+    fontSize: 14,
+    fontFamily: "Body-Bold",
+  },
+  guestText: {
+    color: themes.textSecondary,
+    fontSize: 10,
+    lineHeight: 14,
+    marginTop: 2,
+    fontFamily: "Body-Regular",
+  },
+  guestAction: {
+    color: themes.primaryBttn,
+    fontSize: 10,
+    letterSpacing: 0.8,
+    fontFamily: "Body-Bold",
+  },
+  pressed: {
+    opacity: 0.75,
+  },
+  savedHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  savedHeader: {
+    color: themes.textMuted,
+    fontSize: 10,
+    letterSpacing: 1.1,
+    fontFamily: "Body-Bold",
+  },
+  savedCount: {
+    color: themes.textSecondary,
+    fontSize: fontsize.caption,
+    fontFamily: "Body-Medium",
+  },
+  listWrap: {
+    maxHeight: 290,
+    width: "100%",
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: themes.divider,
+  },
+  loader: {
+    padding: spacing.three,
+  },
+  emptyWrap: {
+    padding: spacing.three,
+    alignItems: "center",
+  },
+  emptyTitle: {
+    color: themes.text,
+    fontSize: 14,
+    fontFamily: "Body-Bold",
+  },
+  emptyText: {
+    color: themes.textSecondary,
+    fontSize: fontsize.caption,
+    lineHeight: 17,
+    textAlign: "center",
+    marginTop: spacing.half,
+    fontFamily: "Body-Regular",
+  },
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.half,
+  },
 });

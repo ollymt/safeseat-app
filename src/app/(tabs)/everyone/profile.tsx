@@ -23,6 +23,7 @@ import * as Haptics from "expo-haptics";
 import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
 
 import Button from "@/components/button";
+import SettingSwitch from "@/components/setting-switch";
 import TextInput from "@/components/text-input";
 import { Dropdown } from "react-native-element-dropdown";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
@@ -158,7 +159,25 @@ export default function Profile() {
 	const [tempLbs, setTempLbs] = useState<string>("");
 
 	// Unit preference is shared across the entire app.
-	const { useMetric: isMetric } = useUserPreferences();
+	const {
+		useMetric: isMetric,
+		consent,
+		setConsent,
+		behavioralMonitoring,
+		setBehavioralMonitoring,
+		physiologicalMonitoring,
+		setPhysiologicalMonitoring,
+		emergencyEscalation,
+		setEmergencyEscalation,
+	} = useUserPreferences();
+
+	const healthMonitoringEnabled = behavioralMonitoring && physiologicalMonitoring;
+	const setHealthMonitoring = async (value: boolean) => {
+		await Promise.all([
+			setBehavioralMonitoring(value),
+			setPhysiologicalMonitoring(value),
+		]);
+	};
 
 	// 4. UI Interaction State
 	const [editMode, setEditMode] = useState(false);
@@ -755,20 +774,15 @@ export default function Profile() {
 									overflow: "hidden",
 								}}
 							>
-								<Image
-									source={
-										!userIcon || userIcon === "Not Set" || userIcon === ""
-											? { uri: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNyV3QnQOwXP124try4wkWE0xXqxT6KZitbq4TerzfLkMDDY-v1CXzTGw&s=10" }
-											: { uri: userIcon }
-									}
-									style={{
-										width: 120,
-										height: 120,
-										opacity: editMode ? 0.5 : 1,
-										alignItems: "center",
-										justifyContent: "center"
-									}}
-								/>
+									{!userIcon || userIcon === "Not Set" || userIcon === "" ? (
+										<View style={{ width: 120, height: 120, alignItems: "center", justifyContent: "center", backgroundColor: themes.primarySoft, opacity: editMode ? 0.5 : 1 }}>
+											<Text style={{ color: themes.primaryBttn, fontSize: 40, fontFamily: "Body-Bold" }}>
+												{userName.trim().charAt(0).toUpperCase() || "?"}
+											</Text>
+										</View>
+									) : (
+										<Image source={{ uri: userIcon }} style={{ width: 120, height: 120, opacity: editMode ? 0.5 : 1 }} />
+									)}
 								{editMode &&
 									<Text style={{
 										fontSize: fontsize.button,
@@ -787,6 +801,41 @@ export default function Profile() {
 						</View>
 
 						<View style={{ gap: spacing.three }}>
+
+							{!isSubProfile && (
+								<View style={{ gap: spacing.one }}>
+									<Text style={{ fontFamily: "Heading-Font", color: themes.text, fontSize: fontsize.header, marginTop: spacing.one }}>
+										Privacy & Consent
+									</Text>
+									<View style={{ borderRadius: spacing.edge, overflow: "hidden", borderWidth: 1, borderColor: themes.divider }}>
+										<SettingSwitch
+											name="Data Sharing Consent"
+											value={consent}
+											onValueChange={(value) => void setConsent(value)}
+										/>
+										<SettingSwitch
+											name="Health Monitoring"
+											value={healthMonitoringEnabled}
+											onValueChange={(value) => void setHealthMonitoring(value)}
+										/>
+										<SettingSwitch
+											name="Automated SMS Escalation"
+											value={emergencyEscalation}
+											onValueChange={(value) => void setEmergencyEscalation(value)}
+											isLast
+										/>
+									</View>
+									<Text style={{ color: themes.textSecondary, fontSize: fontsize.caption, lineHeight: 18, paddingHorizontal: spacing.half }}>
+										Consent is revocable. Automated escalation is SMS only and is intended for the confirmed driver-alone emergency path; SafeSeat never places an automated voice call.
+									</Text>
+									<Button
+										variant="secondary"
+										label="Manage Emergency Contacts"
+										onPress={() => router.push("/(tabs)/everyone" as any)}
+										fullWidth
+									/>
+								</View>
+							)}
 
 							<View style={{ gap: spacing.one }}>
 								<Text style={{

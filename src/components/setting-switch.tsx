@@ -92,7 +92,7 @@ export default function SettingSwitch({
 const setitem = StyleSheet.create({
     setItemBase: {
         width: "100%",
-        height: 56,
+        minHeight: 54,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
@@ -116,12 +116,12 @@ const setitem = StyleSheet.create({
         alignItems: "center",
     },
     settingName: {
-        fontSize: 18,
+        fontSize: 16,
         fontFamily: "Body-Medium",
         flex: 1
     },
     settingValue: {
-        fontSize: 18,
+        fontSize: 15,
         fontFamily: "Condensed-Bold",
     },
     drawerCont: {

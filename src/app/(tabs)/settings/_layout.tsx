@@ -1,7 +1,7 @@
 import { Stack } from "expo-router";
 import { Themes as themes } from "@/constants/theme";
 
-export default function TabsLayout() {
+export default function SettingsLayout() {
   return (
     <Stack
       screenOptions={{
@@ -14,6 +14,7 @@ export default function TabsLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ title: "Settings" }} />
+      <Stack.Screen name="diagnostics" options={{ title: "System Self-Diagnostic" }} />
     </Stack>
   );
 }

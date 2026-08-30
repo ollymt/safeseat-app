@@ -253,13 +253,16 @@ export default function Everyone() {
 						}}
 					>
 						<Text style={[styles.pageHeader, { color: themes.text, flex: 1 }]}>
-							People
+							Profiles
 						</Text>
 					</View>
+					<Text style={styles.pageSubhead}>
+						Saved occupants and the emergency contacts used by the driver. Temporary guests are created only from Assign and are not saved here.
+					</Text>
 
 					<View style={{ paddingBottom: spacing.one }}>
 						<MiniTab
-							values={["Profiles", "Contacts"]}
+							values={["Occupants", "Emergency Contacts"]}
 							selectedIndex={selectedIndex}
 							onChange={(index: number) => {
 								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
@@ -362,10 +365,7 @@ export default function Everyone() {
 									>
 										<ProfileCard
 											name={item.name}
-											img={
-												item.img ||
-												"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNyV3QnQOwXP124try4wkWE0xXqxT6KZitbq4TerzfLkMDDY-v1CXzTGw&s=10"
-											}
+											img={item.img}
 											isLast={index === section.data.length - 1}
 											onPress={() => {
 												Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -406,7 +406,7 @@ export default function Everyone() {
 								ListEmptyComponent={() => (
 									<View style={{ padding: spacing.two, alignItems: "center" }}>
 										<Text style={{ color: themes.textSecondary }}>
-											No profiles found. Create one to get started!
+											No saved occupant profiles found.
 										</Text>
 									</View>
 								)}
@@ -491,6 +491,7 @@ export default function Everyone() {
 						visible={addContactVisible}
 						onClose={() => {
 							setAddContactVisible(false);
+							void loadAllUserData();
 						}}
 					/>
 				</View>
@@ -526,6 +527,13 @@ const styles = StyleSheet.create({
 	pageHeader: {
 		fontSize: fontsize.pageHeader,
 		fontFamily: "Logo-Font",
+	},
+	pageSubhead: {
+		color: themes.textSecondary,
+		fontSize: 13,
+		lineHeight: 19,
+		fontFamily: "Body-Regular",
+		marginBottom: spacing.two,
 	},
 	sectionHeaderContainer: {
 		paddingVertical: spacing.one,

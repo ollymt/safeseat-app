@@ -163,7 +163,7 @@ export default function TabLayout() {
             <Tabs.Screen
               name="everyone"
               options={{
-                title: "People",
+                title: "Profiles",
                 tabBarIcon: ({ focused }: { focused: boolean }) => (
                   <Host matchContents>
                     <Icon
@@ -225,26 +225,28 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.one,
   },
   tabDrawer: {
-    minHeight: 72,
+    minHeight: 66,
     flexDirection: "row",
     alignItems: "stretch",
     backgroundColor: themes.backgroundElement,
     borderRadius: 24,
     borderWidth: 1,
     borderColor: themes.divider,
-    padding: spacing.half,
+    padding: 5,
   },
   tabButton: {
     flex: 1,
-    minHeight: 62,
+    minHeight: 54,
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.half,
-    borderRadius: 18,
+    borderRadius: 16,
     paddingHorizontal: spacing.half,
   },
   activeTabButton: {
     backgroundColor: themes.primarySoft,
+    borderWidth: 1,
+    borderColor: themes.primaryBorder,
   },
   pressedTabButton: {
     opacity: 0.72,
