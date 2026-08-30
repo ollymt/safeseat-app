@@ -2,7 +2,7 @@ import Button from "@/components/button";
 import AssignCard from "@/components/assign-card";
 import AssignSeatModal from "@/components/assign-seat-modal";
 import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
-import { useUserPreferences } from "@/hooks/user-preferences-context";
+import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect } from "expo-router";
@@ -10,6 +10,7 @@ import { useCallback, useMemo, useState } from "react";
 import {
   Alert,
   ImageBackground,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -33,6 +34,7 @@ export type SeatState = "empty" | "assigned" | "safe" | "warning" | "emergency" 
 const SEAT_ASSIGNMENTS_KEY = "seatAssignments";
 const IS_LOCKED_IN_KEY = "isLockedIn";
 const SEAT_STATUSES_KEY = "seatStatuses";
+const HARDWARE_SEAT_KEY = "safeSeatHardwareSeatNo";
 
 const SEATS = [
   { seatNo: 1, seatCode: "driver" },
@@ -45,13 +47,13 @@ const SEATS = [
 export default function Assign() {
   const insets = useSafeAreaInsets();
   const bottomPad = 88 + insets.bottom;
-  const { consent } = useUserPreferences();
+  const { connected: hubConnected, telemetryReady, seatState: hubSeatState, refresh: refreshHub } = useSafeSeatHub();
 
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [selectedSeat, setSelectedSeat] = useState(1);
   const [assignments, setAssignments] = useState<Record<number, Profile>>({});
   const [isLockedIn, setIsLockedIn] = useState(false);
-  const [seatStatuses, setSeatStatuses] = useState<Record<number, SeatState>>({});
+  const [hardwareSeatNo, setHardwareSeatNo] = useState<number | null>(null);
 
   const assignedSeatCount = useMemo(
     () => SEATS.filter((seat) => Boolean(assignments[seat.seatNo])).length,
@@ -65,15 +67,19 @@ export default function Assign() {
 
   const loadState = useCallback(async () => {
     try {
-      const [rawAssignments, rawLockedIn, rawStatuses] = await Promise.all([
+      const [rawAssignments, rawLockedIn, rawHardwareSeat] = await Promise.all([
         AsyncStorage.getItem(SEAT_ASSIGNMENTS_KEY),
         AsyncStorage.getItem(IS_LOCKED_IN_KEY),
-        AsyncStorage.getItem(SEAT_STATUSES_KEY),
+        AsyncStorage.getItem(HARDWARE_SEAT_KEY),
       ]);
 
-      setAssignments(rawAssignments ? JSON.parse(rawAssignments) : {});
+      const parsedAssignments: Record<number, Profile> = rawAssignments ? JSON.parse(rawAssignments) : {};
+      const parsedHardwareSeat = rawHardwareSeat ? Number(JSON.parse(rawHardwareSeat)) : null;
+      const fallbackHardwareSeat = Number(Object.keys(parsedAssignments)[0]) || null;
+
+      setAssignments(parsedAssignments);
       setIsLockedIn(rawLockedIn ? JSON.parse(rawLockedIn) : false);
-      setSeatStatuses(rawStatuses ? JSON.parse(rawStatuses) : {});
+      setHardwareSeatNo(parsedHardwareSeat && parsedAssignments[parsedHardwareSeat] ? parsedHardwareSeat : fallbackHardwareSeat);
     } catch (error) {
       console.error("Failed to load seat & lock state:", error);
     }
@@ -89,13 +95,62 @@ export default function Assign() {
     const hasProfile = Boolean(assignments[seatNo]);
     if (!hasProfile) return "empty";
     if (!isLockedIn) return "assigned";
-    if (!consent && seatNo !== 1) return "unknown";
-    return seatStatuses[seatNo] ?? "unknown";
+
+    // The current UAT prototype has one physical Main Hub/seat assembly.
+    // Only the explicitly linked seat receives authoritative live Fusion state.
+    if (seatNo === hardwareSeatNo) {
+      return hubConnected && telemetryReady ? hubSeatState : "unknown";
+    }
+
+    // Other assigned positions remain pending rather than copying one
+    // prototype's state across the whole conceptual five-seat cabin.
+    return "unknown";
+  };
+
+  const getSeatLabel = (seatNo: number | null) => {
+    if (!seatNo) return "Not selected";
+    const seat = SEATS.find((item) => item.seatNo === seatNo);
+    if (!seat) return `Seat ${seatNo}`;
+    return seat.seatCode.replace(/\b\w/g, (letter) => letter.toUpperCase());
+  };
+
+  const persistHardwareSeat = async (seatNo: number | null) => {
+    setHardwareSeatNo(seatNo);
+    if (seatNo) {
+      await AsyncStorage.setItem(HARDWARE_SEAT_KEY, JSON.stringify(seatNo));
+    } else {
+      await AsyncStorage.removeItem(HARDWARE_SEAT_KEY);
+    }
+  };
+
+  const chooseHardwareSeat = () => {
+    if (isLockedIn) {
+      Alert.alert("Deployment is locked", "End the monitoring session before changing the prototype seat link.");
+      return;
+    }
+
+    const assigned = SEATS.filter((seat) => Boolean(assignments[seat.seatNo]));
+    if (assigned.length === 0) {
+      Alert.alert("Assign an occupant first", "The physical SafeSeat prototype can only be linked to an assigned seat.");
+      return;
+    }
+
+    const currentIndex = assigned.findIndex((seat) => seat.seatNo === hardwareSeatNo);
+    const nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % assigned.length;
+    void persistHardwareSeat(assigned[nextIndex].seatNo);
+    void Haptics.selectionAsync();
   };
 
   const handleLockIn = async () => {
     if (!hasAssignedSeats) return;
 
+    let linkedSeat = hardwareSeatNo;
+    if (!linkedSeat || !assignments[linkedSeat]) {
+      linkedSeat = Number(Object.keys(assignments)[0]) || null;
+      await persistHardwareSeat(linkedSeat);
+    }
+
+    void refreshHub();
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     const initialStatuses: Record<number, SeatState> = {};
@@ -110,7 +165,6 @@ export default function Assign() {
         AsyncStorage.setItem(SEAT_STATUSES_KEY, JSON.stringify(initialStatuses)),
       ]);
       setIsLockedIn(true);
-      setSeatStatuses(initialStatuses);
     } catch (error) {
       console.error("Failed to lock deployment:", error);
       Alert.alert("Could not start session", "SafeSeat could not save the locked deployment state.");
@@ -146,7 +200,9 @@ export default function Assign() {
 
               setIsLockedIn(false);
               setAssignments(persistentAssignments);
-              setSeatStatuses({});
+              if (hardwareSeatNo && !persistentAssignments[hardwareSeatNo]) {
+                await persistHardwareSeat(Number(Object.keys(persistentAssignments)[0]) || null);
+              }
               void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             } catch (error) {
               console.error("Failed to end session:", error);
@@ -159,12 +215,17 @@ export default function Assign() {
   };
 
   const handleSeatAssigned = (seatNumber: number, profile: Profile | null) => {
-    setAssignments((previous) => {
-      const updated = { ...previous };
-      if (profile) updated[seatNumber] = profile;
-      else delete updated[seatNumber];
-      return updated;
-    });
+    const updated = { ...assignments };
+    if (profile) updated[seatNumber] = profile;
+    else delete updated[seatNumber];
+    setAssignments(updated);
+
+    if (profile && hardwareSeatNo === null) {
+      void persistHardwareSeat(seatNumber);
+    } else if (!profile && hardwareSeatNo === seatNumber) {
+      const nextSeat = Number(Object.keys(updated)[0]) || null;
+      void persistHardwareSeat(nextSeat);
+    }
   };
 
   const handleCardPress = (seatNo: number) => {
@@ -230,6 +291,36 @@ export default function Assign() {
             </View>
           </View>
 
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Choose the seat linked to the SafeSeat Main Hub"
+            onPress={chooseHardwareSeat}
+            style={({ pressed }) => [styles.hardwareLinkCard, pressed && !isLockedIn && styles.hardwareLinkPressed]}
+          >
+            <View
+              style={[
+                styles.hardwareLinkDot,
+                { backgroundColor: hubConnected ? themes.primaryBttn : themes.textMuted },
+              ]}
+            />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.hardwareLinkTitle}>UAT prototype link</Text>
+              <Text style={styles.hardwareLinkText}>
+                {getSeatLabel(hardwareSeatNo)} · {hubConnected ? (telemetryReady ? "Main Hub live" : "Hub warming up") : "Hub offline"}
+              </Text>
+              <Text style={styles.hardwareLinkHint}>
+                {isLockedIn
+                  ? "End the session to change which physical seat is linked."
+                  : "Tap to cycle the physical one-seat prototype through the assigned cabin positions."}
+              </Text>
+            </View>
+            <View style={[styles.hardwareLinkPill, hubConnected && styles.hardwareLinkPillLive]}>
+              <Text style={[styles.hardwareLinkPillText, hubConnected && styles.hardwareLinkPillTextLive]}>
+                {hubConnected ? "LIVE" : "OFFLINE"}
+              </Text>
+            </View>
+          </Pressable>
+
           <ImageBackground
             source={require("../../../../assets/images/appImgs/car-cropped.png")}
             style={styles.carMap}
@@ -246,6 +337,7 @@ export default function Assign() {
                   state={getCardState(seat.seatNo)}
                   seatCode={seat.seatCode}
                   locked={isLockedIn}
+                  hardwareLinked={seat.seatNo === hardwareSeatNo}
                 />
               ))}
             </View>
@@ -261,6 +353,7 @@ export default function Assign() {
                   state={getCardState(seat.seatNo)}
                   seatCode={seat.seatCode}
                   locked={isLockedIn}
+                  hardwareLinked={seat.seatNo === hardwareSeatNo}
                 />
               ))}
             </View>
@@ -387,6 +480,65 @@ const styles = StyleSheet.create({
     fontFamily: "Body-Bold",
   },
   sessionPillTextLocked: {
+    color: themes.primaryBttn,
+  },
+  hardwareLinkCard: {
+    minHeight: 78,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.one,
+    padding: spacing.one + 4,
+    borderRadius: 18,
+    backgroundColor: themes.surfaceSoft,
+    borderWidth: 1,
+    borderColor: themes.divider,
+  },
+  hardwareLinkPressed: {
+    opacity: 0.76,
+    borderColor: themes.primaryBorder,
+  },
+  hardwareLinkDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  hardwareLinkTitle: {
+    color: themes.text,
+    fontSize: 14,
+    fontFamily: "Body-Bold",
+  },
+  hardwareLinkText: {
+    color: themes.textSecondary,
+    fontSize: fontsize.caption,
+    marginTop: 2,
+    fontFamily: "Body-Medium",
+  },
+  hardwareLinkHint: {
+    color: themes.textMuted,
+    fontSize: 10,
+    lineHeight: 14,
+    marginTop: 3,
+    fontFamily: "Body-Regular",
+  },
+  hardwareLinkPill: {
+    paddingHorizontal: spacing.one,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: themes.backgroundElement,
+    borderWidth: 1,
+    borderColor: themes.divider,
+  },
+  hardwareLinkPillLive: {
+    backgroundColor: themes.primarySoft,
+    borderColor: themes.primaryBorder,
+  },
+  hardwareLinkPillText: {
+    color: themes.textMuted,
+    fontSize: 9,
+    fontFamily: "Body-Bold",
+    letterSpacing: 0.7,
+  },
+  hardwareLinkPillTextLive: {
     color: themes.primaryBttn,
   },
   carMap: {

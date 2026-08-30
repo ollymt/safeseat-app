@@ -28,6 +28,7 @@ type AssignCardProps = {
 	name?: string;
 	pfp?: string;
 	locked?: boolean;
+	hardwareLinked?: boolean;
 	state: string;
 	onPress: () => void;
 };
@@ -40,6 +41,7 @@ export default function AssignCard({
 	pfp,
 	state = "empty",
 	locked = true,
+	hardwareLinked = false,
 	onPress,
 }: AssignCardProps) {
 	const displayName = assignedProfile?.name ?? name;
@@ -75,6 +77,12 @@ export default function AssignCard({
 				},
 			]}
 		>
+			{hardwareLinked && (
+				<View style={assigncard.hubBadge} pointerEvents="none">
+					<View style={assigncard.hubDot} />
+					<Text style={assigncard.hubBadgeText}>HUB</Text>
+				</View>
+			)}
 			{displayName ? (
 				<View style={[assigncard.profileContainer]}>
 					{imageUri ? (
@@ -209,12 +217,41 @@ export default function AssignCard({
 const assigncard = StyleSheet.create({
 	baseCard: {
 		flex: 1,
+		position: "relative",
 		borderRadius: spacing.edge,
 		borderWidth: spacing.quarter,
 		justifyContent: "center",
 		alignItems: "center",
 		overflow: "hidden",
 		padding: spacing.one,
+	},
+
+	hubBadge: {
+		position: "absolute",
+		top: 7,
+		right: 7,
+		zIndex: 2,
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 4,
+		paddingHorizontal: 7,
+		paddingVertical: 4,
+		borderRadius: 999,
+		backgroundColor: themes.primarySoft,
+		borderWidth: 1,
+		borderColor: themes.primaryBorder,
+	},
+	hubDot: {
+		width: 6,
+		height: 6,
+		borderRadius: 3,
+		backgroundColor: themes.primaryBttn,
+	},
+	hubBadgeText: {
+		color: themes.primaryBttn,
+		fontSize: 9,
+		fontFamily: "Body-Bold",
+		letterSpacing: 0.7,
 	},
 	profileContainer: {
 		alignItems: "center",

@@ -1,5 +1,6 @@
 import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
 import { useUserPreferences } from "@/hooks/user-preferences-context";
+import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
 import { clearSession } from "@/utils/securitySession";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Icon } from "@expo/ui";
@@ -37,11 +38,13 @@ import { auth, db } from "../../../firebase";
 const IS_LOCKED_IN_KEY = "isLockedIn";
 const SEAT_ASSIGNMENTS_KEY = "seatAssignments";
 const SEAT_STATUSES_KEY = "seatStatuses";
+const HARDWARE_SEAT_KEY = "safeSeatHardwareSeatNo";
 
 export default function Settings() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomPad = 88 + insets.bottom;
+  const { connected: hubConnected, telemetryReady } = useSafeSeatHub();
 
   const [currentTab, setCurrentTab] = useState(0);
   const [userEmail, setUserEmail] = useState("Not set");
@@ -115,6 +118,7 @@ export default function Settings() {
                 SEAT_ASSIGNMENTS_KEY,
                 SEAT_STATUSES_KEY,
                 IS_LOCKED_IN_KEY,
+                HARDWARE_SEAT_KEY,
               ]);
               setIsLockedIn(false);
               await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -148,6 +152,7 @@ export default function Settings() {
                 SEAT_ASSIGNMENTS_KEY,
                 SEAT_STATUSES_KEY,
                 IS_LOCKED_IN_KEY,
+                HARDWARE_SEAT_KEY,
                 "app_emergency_contacts",
                 "userPreferences",
               ]);
@@ -260,7 +265,7 @@ export default function Settings() {
                 />
               </View>
               <Text style={styles.caption}>
-                Camera verification is event-triggered only. Turning it off does not turn off the primary seat sensors.
+                These preferences are saved in the app. The deployed Main Hub telemetry API is currently read-only, so the runtime remains the authority until a deliberate hardware-control channel is added.
               </Text>
 
               <Text style={styles.sectionTitle}>SHARING & ESCALATION</Text>
@@ -323,19 +328,19 @@ export default function Settings() {
                 <SettingPageItem
                   name="System Self-Diagnostic"
                   iconName={Icon.select({ ios: "waveform.path.ecg", android: settingsXml })}
-                  value="Ready"
+                  value={hubConnected ? (telemetryReady ? "Live" : "Warming") : "Offline"}
                   onPress={() => router.push("/(tabs)/settings/diagnostics" as any)}
                   showChevron
                 />
                 <SettingPageItem
                   name="System Status"
                   iconName={Icon.select({ ios: "checkmark.shield.fill", android: shieldXml })}
-                  value="App ready"
+                  value={hubConnected ? (telemetryReady ? "Main Hub live" : "Hub warming") : "App ready"}
                   isLast
                 />
               </View>
               <Text style={styles.caption}>
-                Hardware module checks are prepared but remain marked as awaiting integration until the Main Hub is connected.
+                Self-Diagnostic now reads live Main Hub and module-health telemetry whenever this phone is connected to the SafeSeat local network.
               </Text>
 
               <Text style={styles.sectionTitle}>APP</Text>
@@ -377,7 +382,7 @@ export default function Settings() {
 
           <View style={styles.footer}>
             <Text style={styles.footerBrand}>SafeSeat</Text>
-            <Text style={styles.captionCenter}>Non-diagnostic occupant safety monitoring • v1.1</Text>
+            <Text style={styles.captionCenter}>Non-diagnostic occupant safety monitoring • v1.2</Text>
           </View>
 
           <ChangeEmailModal

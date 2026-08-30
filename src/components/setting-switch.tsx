@@ -99,17 +99,20 @@ const setitem = StyleSheet.create({
         padding: 12,
     },
     leftContainer: {
+        flex: 1,
+        minWidth: 0,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "flex-start",
         gap: 12,
+        paddingRight: 12,
     },
     rightContainer: {
         flexDirection: "row",
         justifyContent: "flex-end",
         alignItems: "center",
-        flex: 1,
-        paddingRight: 6,
+        flexShrink: 0,
+        minWidth: 52,
     },
     iconWrapper: {
         justifyContent: "center",
@@ -117,8 +120,10 @@ const setitem = StyleSheet.create({
     },
     settingName: {
         fontSize: 16,
+        lineHeight: 21,
         fontFamily: "Body-Medium",
-        flex: 1
+        flex: 1,
+        flexShrink: 1,
     },
     settingValue: {
         fontSize: 15,

@@ -1,10 +1,11 @@
 import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
 import { useUserPreferences } from "@/hooks/user-preferences-context";
+import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Host, Icon } from "@expo/ui";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -29,7 +30,7 @@ type Profile = {
 
 const SEAT_ASSIGNMENTS_KEY = "seatAssignments";
 const IS_LOCKED_IN_KEY = "isLockedIn";
-const SEAT_STATUSES_KEY = "seatStatuses";
+const HARDWARE_SEAT_KEY = "safeSeatHardwareSeatNo";
 
 const SEAT_ROLES: Record<number, string> = {
   1: "driver",
@@ -39,7 +40,6 @@ const SEAT_ROLES: Record<number, string> = {
   5: "right rear",
 };
 
-const DRIVER_SEAT_NO = 1;
 const SEAT_NUMBERS = [1, 2, 3, 4, 5];
 
 export default function Home() {
@@ -47,24 +47,28 @@ export default function Home() {
   const insets = useSafeAreaInsets();
   const bottomPad = 88 + insets.bottom;
 
-  const { consent, eventCameraVerification } = useUserPreferences();
+  const { eventCameraVerification } = useUserPreferences();
+  const { connected: hubConnected, telemetryReady, seatState: hubSeatState, status: hubStatus } = useSafeSeatHub();
 
   const [isLockedIn, setIsLockedIn] = useState(false);
   const [assignments, setAssignments] = useState<Record<number, Profile>>({});
-  const [seatStatuses, setSeatStatuses] = useState<Record<number, SeatState>>({});
+  const [hardwareSeatNo, setHardwareSeatNo] = useState<number | null>(null);
   const [dismissedSeats, setDismissedSeats] = useState<Set<number>>(new Set());
 
   const loadData = useCallback(async () => {
     try {
-      const [rawLockedIn, rawAssignments, rawStatuses] = await Promise.all([
+      const [rawLockedIn, rawAssignments, rawHardwareSeat] = await Promise.all([
         AsyncStorage.getItem(IS_LOCKED_IN_KEY),
         AsyncStorage.getItem(SEAT_ASSIGNMENTS_KEY),
-        AsyncStorage.getItem(SEAT_STATUSES_KEY),
+        AsyncStorage.getItem(HARDWARE_SEAT_KEY),
       ]);
 
+      const parsedAssignments: Record<number, Profile> = rawAssignments ? JSON.parse(rawAssignments) : {};
+      const parsedHardwareSeat = rawHardwareSeat ? Number(JSON.parse(rawHardwareSeat)) : null;
+
       setIsLockedIn(rawLockedIn ? JSON.parse(rawLockedIn) : false);
-      setAssignments(rawAssignments ? JSON.parse(rawAssignments) : {});
-      setSeatStatuses(rawStatuses ? JSON.parse(rawStatuses) : {});
+      setAssignments(parsedAssignments);
+      setHardwareSeatNo(parsedHardwareSeat && parsedAssignments[parsedHardwareSeat] ? parsedHardwareSeat : (Number(Object.keys(parsedAssignments)[0]) || null));
     } catch (error) {
       console.error("Failed to load home state from device:", error);
     }
@@ -79,12 +83,15 @@ export default function Home() {
   const getSeatState = (seatNo: number): SeatState => {
     const profile = assignments[seatNo];
     if (!profile) return "empty";
+    if (!isLockedIn) return "assigned";
 
-    if (!consent && seatNo !== DRIVER_SEAT_NO) {
-      return "unknown";
+    if (seatNo === hardwareSeatNo) {
+      return hubConnected && telemetryReady ? hubSeatState : "unknown";
     }
 
-    return seatStatuses[seatNo] ?? "unknown";
+    // The current physical UAT prototype represents one seat. Never mirror
+    // its Fusion state onto the other conceptual cabin seats.
+    return "unknown";
   };
 
   const getDisplayName = (profile?: Profile): string | undefined => {
@@ -94,6 +101,10 @@ export default function Home() {
   };
 
   const assignedSeatCount = SEAT_NUMBERS.filter((seatNo) => Boolean(assignments[seatNo])).length;
+
+  const hardwareSeatRole = hardwareSeatNo ? SEAT_ROLES[hardwareSeatNo] : undefined;
+  const fusionText = hubStatus?.system?.fusion_state ? String(hubStatus.system.fusion_state).toUpperCase() : "PENDING";
+  const hubBadgeText = hubConnected ? (telemetryReady ? "LIVE" : "WARMING") : "OFFLINE";
 
   const stateSummary = useMemo(() => {
     const summary = { safe: 0, warning: 0, emergency: 0, unknown: 0 };
@@ -109,7 +120,7 @@ export default function Home() {
     });
 
     return summary;
-  }, [assignments, consent, isLockedIn, seatStatuses]);
+  }, [assignments, hardwareSeatNo, hubConnected, hubSeatState, isLockedIn, telemetryReady]);
 
   const emergencySeatNo = isLockedIn
     ? SEAT_NUMBERS.find(
@@ -123,7 +134,15 @@ export default function Home() {
   const emergencyProfile =
     emergencySeatNo !== undefined ? assignments[emergencySeatNo] : undefined;
 
-  const hasKnownState = stateSummary.safe + stateSummary.warning + stateSummary.emergency > 0;
+  useEffect(() => {
+    if (!hardwareSeatNo || hubSeatState === "emergency") return;
+    setDismissedSeats((previous) => {
+      if (!previous.has(hardwareSeatNo)) return previous;
+      const next = new Set(previous);
+      next.delete(hardwareSeatNo);
+      return next;
+    });
+  }, [hardwareSeatNo, hubSeatState]);
 
   return (
     <View style={styles.screen}>
@@ -158,19 +177,21 @@ export default function Home() {
                     </Host>
                   </View>
                   <View style={styles.monitoringCopy}>
-                    <Text style={styles.monitoringTitle}>Deployment locked</Text>
+                    <Text style={styles.monitoringTitle}>{hubConnected ? "Main Hub connected" : "Waiting for Main Hub"}</Text>
                     <Text style={styles.monitoringSubtitle}>
-                      {assignedSeatCount} {assignedSeatCount === 1 ? "occupant" : "occupants"} in this session
+                      {hardwareSeatRole ? `${hardwareSeatRole} linked · ` : ""}{assignedSeatCount} {assignedSeatCount === 1 ? "occupant" : "occupants"} in session
                     </Text>
                     <Text style={styles.monitoringHint}>
-                      {hasKnownState
-                        ? "Safety states update when the monitoring source reports them."
-                        : "Waiting for authoritative SafeSeat status."}
+                      {hubConnected
+                        ? telemetryReady
+                          ? `Authoritative Fusion: ${fusionText}. Live status comes directly from the Main Hub.`
+                          : "Main Hub is reachable and telemetry is still initializing."
+                        : "Connect this phone to the SafeSeat Wi-Fi network to receive authoritative live status."}
                     </Text>
                   </View>
-                  <View style={styles.liveBadge}>
-                    <View style={styles.liveDot} />
-                    <Text style={styles.liveText}>LOCKED</Text>
+                  <View style={[styles.liveBadge, !hubConnected && styles.liveBadgeOffline]}>
+                    <View style={[styles.liveDot, !hubConnected && styles.liveDotOffline]} />
+                    <Text style={[styles.liveText, !hubConnected && styles.liveTextOffline]}>{hubBadgeText}</Text>
                   </View>
                 </View>
 
@@ -199,7 +220,9 @@ export default function Home() {
                 <View style={styles.section}>
                   <View style={styles.sectionHeadingRow}>
                     <Text style={styles.sectionHeader}>Occupant Status</Text>
-                    <Text style={styles.sectionMeta}>{assignedSeatCount}/5 assigned</Text>
+                    <Text style={styles.sectionMeta}>
+                      {assignedSeatCount}/5 assigned{hardwareSeatNo ? ` · HUB S${hardwareSeatNo}` : ""}
+                    </Text>
                   </View>
                   {SEAT_NUMBERS.map((seatNo) => {
                     const profile = assignments[seatNo];
@@ -225,8 +248,8 @@ export default function Home() {
                   </View>
                   <Text style={styles.privacyText}>
                     {eventCameraVerification
-                      ? "Camera verification is enabled, but remains event-triggered and should stay inactive during normal monitoring."
-                      : "Camera verification is disabled. Primary seat monitoring preferences remain unchanged."}
+                      ? "Camera verification preference is enabled. The Main Hub remains the trigger authority and the camera stays verification-only."
+                      : "Camera verification is disabled in app preferences. The current Main Hub API is read-only, so this preference does not yet command the runtime."}
                   </Text>
                 </View>
               </>
@@ -389,17 +412,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: themes.primaryBorder,
   },
+  liveBadgeOffline: {
+    backgroundColor: themes.surfaceSoft,
+    borderColor: themes.divider,
+  },
   liveDot: {
     width: 6,
     height: 6,
     borderRadius: 999,
     backgroundColor: themes.primaryBttn,
   },
+  liveDotOffline: {
+    backgroundColor: themes.textMuted,
+  },
   liveText: {
     color: themes.primaryBttn,
     fontSize: 9,
     letterSpacing: 0.7,
     fontFamily: "Body-Bold",
+  },
+  liveTextOffline: {
+    color: themes.textMuted,
   },
   statusStrip: {
     minHeight: 70,
