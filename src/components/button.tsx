@@ -60,7 +60,7 @@ export default function Button({
 			{loading ? <ActivityIndicator color={themes.text} /> : (
 				<>
 					{children}
-					{label && <Text style={textStyle}>{label}</Text>}
+					{label && <Text style={[variant === "primary" ? button.primaryText : variant === "secondary" ? button.secondaryText : variant === "tertiary" ? button.tertiaryText : variant === "warn" ? button.warnText : button.baseText, button.baseText]}>{label}</Text>}
 				</>
 			)}
 		</Pressable>
@@ -77,6 +77,7 @@ const button = StyleSheet.create({
 		paddingRight: spacing.two,
 		borderRadius: spacing.edge,
 		height: spacing.six,
+		display: "flex",
 		alignItems: "center",
 		justifyContent: "center",
 	},

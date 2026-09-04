@@ -54,22 +54,26 @@ export default function SplashScreen() {
 							borderWidth: 0,
 						}}
 					>
-						<View style={{ width: "100%", flexDirection: "row", gap: 5 }}>
-							<Button
-								label="Sign-up"
-								onPress={() => {
-									router.push("/(auth)/signup");
-								}}
-								variant="secondary"
-								style={{ flex: 1 }}
-							/>
-							<Button
-								label="Log-in"
-								onPress={() => {
-									router.push("/(auth)/login");
-								}}
-								style={{ flex: 1 }}
-							/>
+						<View style={{ width: "100%", flexDirection: "row", gap: spacing.one }}>
+							<View style={{ flex: 1 }}>
+								<Button
+									label="Sign-up"
+									onPress={() => {
+										router.push("/(auth)/signup");
+									}}
+									variant="secondary"
+									style={{ width: "100%" }}
+								/>
+							</View>
+							<View style={{ flex: 1 }}>
+								<Button
+									label="Log-in"
+									onPress={() => {
+										router.push("/(auth)/login");
+									}}
+									style={{ width: "100%" }}
+								/>
+							</View>
 						</View>
 					</View>
 				</View>

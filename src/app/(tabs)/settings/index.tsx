@@ -6,7 +6,8 @@ import {
 	Dimensions, Linking, ScrollView,
 	StyleSheet,
 	Text,
-	View
+	View,
+	Alert
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -305,7 +306,38 @@ export default function Settings() {
 													enabled={!isLockedIn}
 													onPress={() => {
 														if (isLockedIn) return;
-														// Add your Log Out logic here
+														Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+														Alert.alert(
+															"Are you sure you want to sign out?",
+															"You will have to sign in again next time and your local caches will be cleared.",
+															[
+																{ text: "No", style: "cancel" },
+																{
+																	text: "Yes",
+																	style: "destructive",
+																	onPress: async () => {
+																		try {
+																			// 1. Clear session and auth flags
+																			await SecureStore.deleteItemAsync("is_logged_in");
+																			await SecureStore.deleteItemAsync("security_session_token");
+
+																			// 2. 🧼 CLEAR CACHED USER DATA ON LOGOUT
+																			await SecureStore.deleteItemAsync("user_health_profile");
+																			await SecureStore.deleteItemAsync("user_privacy_prefs");
+
+																			// 3. Optional: Trigger Firebase sign out if you want to completely destroy the active session
+																			// await auth.signOut();
+
+																			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+																			router.replace("/(auth)/login");
+																		} catch (error) {
+																			Alert.alert("Error", "Could not complete sign out process safely.");
+																			console.error(error);
+																		}
+																	},
+																},
+															],
+														);
 													}}
 												/>
 												<SettingPageItem
