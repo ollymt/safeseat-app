@@ -39,6 +39,7 @@ const IS_LOCKED_IN_KEY = "isLockedIn";
 const SEAT_ASSIGNMENTS_KEY = "seatAssignments";
 const SEAT_STATUSES_KEY = "seatStatuses";
 const HARDWARE_SEAT_KEY = "safeSeatHardwareSeatNo";
+const SEAT_CONSENTS_KEY = "seatSessionConsents";
 
 export default function Settings() {
   const router = useRouter();
@@ -119,6 +120,7 @@ export default function Settings() {
                 SEAT_STATUSES_KEY,
                 IS_LOCKED_IN_KEY,
                 HARDWARE_SEAT_KEY,
+                SEAT_CONSENTS_KEY,
               ]);
               setIsLockedIn(false);
               await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -153,6 +155,7 @@ export default function Settings() {
                 SEAT_STATUSES_KEY,
                 IS_LOCKED_IN_KEY,
                 HARDWARE_SEAT_KEY,
+                SEAT_CONSENTS_KEY,
                 "app_emergency_contacts",
                 "userPreferences",
               ]);

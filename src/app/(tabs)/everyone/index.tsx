@@ -256,13 +256,9 @@ export default function Everyone() {
 							Profiles
 						</Text>
 					</View>
-					<Text style={styles.pageSubhead}>
-						People you can quickly assign to a seat, plus emergency contacts.
-					</Text>
-
 					<View style={{ paddingBottom: spacing.one }}>
 						<MiniTab
-							values={["Occupants", "Emergency Contacts"]}
+							values={["People", "Emergency Contacts"]}
 							selectedIndex={selectedIndex}
 							onChange={(index: number) => {
 								Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
@@ -272,67 +268,17 @@ export default function Everyone() {
 					</View>
 
 					{selectedIndex === 0 ? (
-						<View style={{ flexDirection: "row", gap: spacing.one }}>
-							<Pressable
-								style={{ flex: 1 }}
-								onPress={() => {
-									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
-									searchInputRef.current?.focus();
-								}}
-							>
-								<TextInput
-									ref={searchInputRef}
-									placeholder="Search"
-									value={searchQuery}
-									onChangeText={setSearchQuery}
-									enabled={true}
-								/>
-							</Pressable>
-
-							<Button
-								variant="secondary"
-								onPress={() => {
-									setAddProfileVisible(true);
-								}}
-							>
-								<View
-									style={{
-										paddingHorizontal: spacing.two,
-										paddingVertical: spacing.one,
-									}}
-								>
-									<Host>
-										<Icon
-											name={Icon.select({
-												ios: "plus",
-												android: addXml,
-											})}
-											size={spacing.three}
-										/>
-									</Host>
-								</View>
-							</Button>
+						<View style={styles.peopleTools}>
+							<View style={styles.toolRow}>
+								<Pressable style={{ flex: 1 }} onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft); searchInputRef.current?.focus(); }}>
+									<TextInput ref={searchInputRef} placeholder="Search people" value={searchQuery} onChangeText={setSearchQuery} enabled />
+								</Pressable>
+								<Button variant="primary" label="Add Person" onPress={() => setAddProfileVisible(true)} style={styles.addButton} />
+							</View>
 						</View>
 					) : (
-						<View style={{ paddingBottom: spacing.one }}>
-							<Button
-								variant="secondary"
-								onPress={() => {
-									setAddContactVisible(true);
-								}}
-							>
-								<View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.half }}>
-									<Host matchContents>
-										<Icon
-											name={Icon.select({
-												ios: "plus",
-												android: addXml,
-											})}
-										/>
-									</Host>
-									<Text style={{ color: themes.secondaryBttnText, fontSize: fontsize.button, fontFamily: "Body-Medium" }}>New Contact</Text>
-								</View>
-							</Button>
+						<View style={styles.peopleTools}>
+							<Button variant="primary" label="Add Emergency Contact" onPress={() => setAddContactVisible(true)} fullWidth />
 						</View>
 					)}
 
@@ -404,10 +350,9 @@ export default function Everyone() {
 									<View style={[styles.sectionFooterSpacer]} />
 								)}
 								ListEmptyComponent={() => (
-									<View style={{ padding: spacing.two, alignItems: "center" }}>
-										<Text style={{ color: themes.textSecondary }}>
-											No saved occupant profiles found.
-										</Text>
+									<View style={styles.emptyState}>
+										<Text style={styles.emptyStateTitle}>No saved people yet</Text>
+										
 									</View>
 								)}
 							/>
@@ -465,10 +410,9 @@ export default function Everyone() {
 									</View>
 								)}
 								ListEmptyComponent={() => (
-									<View style={{ padding: spacing.two, alignItems: "center" }}>
-										<Text style={{ color: themes.textSecondary }}>
-											No emergency contacts added yet.
-										</Text>
+									<View style={styles.emptyState}>
+										<Text style={styles.emptyStateTitle}>No emergency contacts yet</Text>
+										
 									</View>
 								)}
 							/>
@@ -535,6 +479,16 @@ const styles = StyleSheet.create({
 		fontFamily: "Body-Regular",
 		marginBottom: spacing.two,
 	},
+	peopleTools: { gap: spacing.one, paddingBottom: spacing.one },
+	toolRow: { flexDirection: "row", gap: spacing.one, alignItems: "center" },
+	addButton: { minHeight: spacing.six, paddingHorizontal: spacing.one + 4 },
+	infoStrip: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: spacing.one + 2, paddingVertical: 9, borderRadius: 14, backgroundColor: themes.primarySoft, borderWidth: 1, borderColor: themes.primaryBorder },
+	emergencyInfoStrip: { backgroundColor: "rgba(255,103,111,0.055)", borderColor: "rgba(255,103,111,0.18)" },
+	infoDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: themes.primaryBttn },
+	infoStripText: { flex: 1, color: themes.textSecondary, fontSize: 9.5, lineHeight: 13.5, fontFamily: "Body-Medium" },
+	emptyState: { paddingVertical: spacing.four, paddingHorizontal: spacing.two, alignItems: "center" },
+	emptyStateTitle: { color: themes.text, fontSize: 15, fontFamily: "Body-Bold", textAlign: "center" },
+	emptyStateText: { color: themes.textMuted, fontSize: 10.5, lineHeight: 15, fontFamily: "Body-Regular", textAlign: "center", marginTop: 5, maxWidth: 280 },
 	sectionHeaderContainer: {
 		paddingVertical: spacing.one,
 		marginTop: spacing.none,

@@ -1,232 +1,100 @@
 import callXml from "@expo/material-symbols/call.xml";
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
 import { Host, Icon } from "@expo/ui";
-import { useState } from "react";
-import { MenuView } from '@expo/ui/community/menu';
-import { Pressable, StyleSheet, Text, useColorScheme, View, Linking, Alert } from "react-native";
-import { useRouter } from "expo-router";
-import Button from "./button";
-
 import * as Haptics from "expo-haptics";
+import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 
 type ContactCardProps = {
-    name: string;
-    phone: string;
-    order: "primary" | "secondary" | "tertiary" | "quaternary" | "quinary" | "none";
-    onPress?: () => void;
+  name: string;
+  phone: string;
+  order: "primary" | "secondary" | "tertiary" | "quaternary" | "quinary" | "none";
+  onPress?: () => void;
 };
 
-export default function ContactCard({
-    name,
-    phone,
-    order,
-    onPress
-}: ContactCardProps) {
-    const router = useRouter();
+const ORDER_META = {
+  primary: { label: "1ST CONTACT", number: "1", color: themes.primaryBttn },
+  secondary: { label: "2ND CONTACT", number: "2", color: themes.info },
+  tertiary: { label: "3RD CONTACT", number: "3", color: themes.info },
+  quaternary: { label: "4TH CONTACT", number: "4", color: themes.textSecondary },
+  quinary: { label: "5TH CONTACT", number: "5", color: themes.textSecondary },
+  none: { label: "NO ORDER", number: "—", color: themes.textMuted },
+} as const;
 
-    // 🌟 Helper function to determine badge/border color based on order
-    const getOrderColor = () => {
-        switch (order) {
-            case "primary":
-                return themes.green;
-            case "secondary":
-                return themes.lightOrange;
-            default:
-                return themes.text; // 🌟 Defaults to textSecondary when priority is not set
-        }
-    };
+export default function ContactCard({ name, phone, order, onPress }: ContactCardProps) {
+  const meta = ORDER_META[order];
 
-    const accentColor = getOrderColor();
+  const handleMakeCall = async () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const url = `tel:${phone}`;
+    try {
+      if (await Linking.canOpenURL(url)) await Linking.openURL(url);
+      else Alert.alert("Calling unavailable", "Phone calls are not supported on this device.");
+    } catch (error) {
+      console.error("Could not open dialer:", error);
+      Alert.alert("Calling unavailable", "SafeSeat could not open the phone dialer.");
+    }
+  };
 
-    // 1. Trigger a Phone Call
-    const handleMakeCall = async (phoneNumber: string) => {
-        const url = `tel:${phoneNumber}`;
-        try {
-            const supported = await Linking.canOpenURL(url);
-            if (supported) {
-                await Linking.openURL(url);
-            } else {
-                Alert.alert("Error", "Phone calls are not supported on this device.");
-            }
-        } catch (error) {
-            console.error("An error occurred trying to open the dialer:", error);
-        }
-    };
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${name}, ${meta.label}, ${phone}`}
+      onPress={onPress}
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+    >
+      <View style={[styles.orderBadge, { borderColor: `${meta.color}66`, backgroundColor: `${meta.color}12` }]}> 
+        <Text style={[styles.orderNumber, { color: meta.color }]}>{meta.number}</Text>
+      </View>
 
-    // 2. Trigger a Text Message (SMS)
-    const handleSendSMS = async (phoneNumber: string, messageBody?: string) => {
-        const url = messageBody
-            ? `sms:${phoneNumber}?body=${encodeURIComponent(messageBody)}`
-            : `sms:${phoneNumber}`;
+      <View style={styles.copy}>
+        <Text style={[styles.orderLabel, { color: meta.color }]}>{meta.label}</Text>
+        <Text style={styles.name} numberOfLines={1}>{name}</Text>
+        <Text style={styles.phone} numberOfLines={1}>{phone}</Text>
+        <Text style={styles.hint}>Tap to view or edit</Text>
+      </View>
 
-        try {
-            const supported = await Linking.canOpenURL(url);
-            if (supported) {
-                await Linking.openURL(url);
-            } else {
-                Alert.alert("Error", "SMS messaging is not supported on this device.");
-            }
-        } catch (error) {
-            console.error("An error occurred trying to open messages:", error);
-        }
-    };
-
-    const isUnimportant = (order != "primary" && order != "secondary" && order != "tertiary")
-
-    return (
-        <Pressable
-            style={[
-                contcard.baseCard,
-                isUnimportant && contcard.emptySeat,
-                {
-                    backgroundColor: themes.backgroundElement,
-                    borderWidth: spacing.quarter,
-                    boxSizing: "border-box",
-                    borderColor:
-                        order == "primary"
-                            ? themes.green
-                            : order == "secondary"
-                                ? themes.lightOrange
-                                : order == "tertiary"
-                                    ? themes.warnBttn
-                                    : themes.secondaryBttn,
-                },
-            ]}
-            onPress={onPress}
-        >
-            <View
-                style={[
-                    contcard.leftArea,
-                    {
-                        backgroundColor:
-                            order == "primary"
-                                ? themes.green
-                                : order == "secondary"
-                                    ? themes.lightOrange
-                                    : order == "tertiary"
-                                        ? themes.warnBttn
-                                        : themes.secondaryBttn,
-                    },
-                ]}
-            />
-            <View
-                style={{
-                    paddingVertical: spacing.one,
-                    flex: 1,
-                    borderWidth: spacing.none,
-                    borderColor: "#fff",
-                    gap: spacing.half
-                }}
-            >
-
-                <Text
-                    style={[contcard.role, {
-                        color: order == "primary"
-                            ? themes.green
-                            : order == "secondary"
-                                ? themes.lightOrange
-                                : order == "tertiary"
-                                    ? themes.warnBttn
-                                    : themes.textSecondary
-                    }]}
-                >
-                    {order.toUpperCase()}
-                </Text>
-
-                <Text style={[contcard.name, { color: themes.text }]}>
-                    {name == "empty" ? "Empty" : name}
-                </Text>
-
-                <Text
-                    style={[contcard.role, {
-                        color: order == "primary"
-                            ? themes.green
-                            : order == "secondary"
-                                ? themes.lightOrange
-                                : order == "tertiary"
-                                    ? themes.warnBttn
-                                    : themes.textSecondary
-                    }]}
-                >
-                    {phone}
-                </Text>
-            </View>
-
-            <Pressable
-                style={[
-                    contcard.rightArea,
-                    {
-                        backgroundColor:
-                            order == "primary"
-                                ? themes.green
-                                : order == "secondary"
-                                    ? themes.lightOrange
-                                    : order == "tertiary"
-                                        ? themes.warnBttn
-                                        : themes.secondaryBttn,
-                    },
-                ]}
-                onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    handleMakeCall(phone);
-                }}
-            >
-                <Host matchContents>
-                    <Icon name={Icon.select({
-                        ios: "phone.fill",
-                        android: callXml
-                    })} color={isUnimportant ? themes.text : themes.background} size={spacing.five}/>
-                </Host>
-            </Pressable>
-        </Pressable>
-    );
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Call ${name}`}
+        onPress={(event) => {
+          event.stopPropagation();
+          void handleMakeCall();
+        }}
+        style={({ pressed }) => [styles.callButton, pressed && styles.callPressed]}
+      >
+        <Host matchContents>
+          <Icon name={Icon.select({ ios: "phone.fill", android: callXml })} color={themes.primaryBttnText} size={22} />
+        </Host>
+        <Text style={styles.callText}>CALL</Text>
+      </Pressable>
+    </Pressable>
+  );
 }
 
-const contcard = StyleSheet.create({
-    baseCard: {
-        width: "100%",
-        borderWidth: spacing.none,
-        borderColor: themes.text,
-        flexDirection: "row",
-        gap: spacing.one,
-        borderRadius: spacing.edge,
-        overflow: "hidden",
-        padding: spacing.quarter,
-    },
-    seatNoCont: {
-        width: "15%",
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    leftArea: {
-        width: spacing.three,
-        borderTopLeftRadius: spacing.one,
-        borderTopRightRadius: spacing.quarter,
-        borderBottomLeftRadius: spacing.one,
-        borderBottomRightRadius: spacing.quarter
-    },
-    rightArea: {
-        width: spacing.eight,
-        borderTopLeftRadius: spacing.quarter,
-        borderTopRightRadius: spacing.one,
-        borderBottomLeftRadius: spacing.quarter,
-        borderBottomRightRadius: spacing.one,
-        alignItems: "center",
-        justifyContent: "center"
-    },
-    name: {
-        fontSize: fontsize.header,
-        fontFamily: "Body-Bold",
-    },
-    stateName: {
-        fontSize: fontsize.body,
-        fontFamily: "Body-Bold",
-    },
-    role: {
-        fontSize: fontsize.body,
-        fontFamily: "Body-Bold"
-    },
-    emptySeat: {
-        opacity: 1,
-    },
+const styles = StyleSheet.create({
+  card: {
+    width: "100%",
+    minHeight: 88,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.one,
+    paddingHorizontal: spacing.one + 4,
+    paddingVertical: spacing.one,
+    borderRadius: 20,
+    backgroundColor: themes.backgroundElement,
+    borderWidth: 1,
+    borderColor: themes.divider,
+    overflow: "hidden",
+  },
+  cardPressed: { opacity: 0.82, transform: [{ scale: 0.99 }] },
+  orderBadge: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  orderNumber: { fontSize: 17, fontFamily: "Body-Bold" },
+  copy: { flex: 1, minWidth: 0 },
+  orderLabel: { fontSize: 8, letterSpacing: 0.75, fontFamily: "Body-Bold" },
+  name: { color: themes.text, fontSize: fontsize.body, fontFamily: "Body-Bold", marginTop: 2 },
+  phone: { color: themes.textSecondary, fontSize: 10.5, fontFamily: "Body-Medium", marginTop: 2 },
+  hint: { color: themes.textMuted, fontSize: 8.5, fontFamily: "Body-Regular", marginTop: 2 },
+  callButton: { width: 56, minHeight: 58, borderRadius: 16, alignItems: "center", justifyContent: "center", gap: 2, backgroundColor: themes.primaryBttn },
+  callPressed: { opacity: 0.75, transform: [{ scale: 0.96 }] },
+  callText: { color: themes.primaryBttnText, fontSize: 7.5, letterSpacing: 0.55, fontFamily: "Body-Bold" },
 });

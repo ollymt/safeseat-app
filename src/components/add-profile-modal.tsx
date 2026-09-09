@@ -1,494 +1,301 @@
-// components/AddProfileModal.tsx
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
 import { useUserPreferences } from "@/hooks/user-preferences-context";
-import { Host, Icon } from "@expo/ui";
 import * as Haptics from "expo-haptics";
-import { useEffect, useState } from "react";
-import { Alert, Platform, StyleSheet, useColorScheme, Modal, Text, View, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard } from "react-native";
-
-import Button from "./button";
-import { Dropdown } from "react-native-element-dropdown"
-
-// 🛠️ Firebase Imports
 import { addDoc, collection } from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Alert,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableWithoutFeedback,
+  View,
+} from "react-native";
+import { Dropdown } from "react-native-element-dropdown";
+
 import { auth, db } from "../firebase";
+import Button from "./button";
 import TextInput from "./text-input";
 
 type Props = {
-    visible: boolean;
-    onClose: () => void;
-    onSuccess?: () => void;
+  visible: boolean;
+  onClose: () => void;
+  onSuccess?: () => void;
 };
 
-// Standardized list of blood types for validation
 const bloodTypes = [
-    { label: "A+", value: "a+" },
-    { label: "A-", value: "a-" },
-    { label: "B+", value: "b+" },
-    { label: "B-", value: "b-" },
-    { label: "AB+", value: "ab+" },
-    { label: "AB-", value: "ab-" },
-    { label: "O+", value: "o+" },
-    { label: "O-", value: "o-" },
+  { label: "A+", value: "a+" },
+  { label: "A-", value: "a-" },
+  { label: "B+", value: "b+" },
+  { label: "B-", value: "b-" },
+  { label: "AB+", value: "ab+" },
+  { label: "AB-", value: "ab-" },
+  { label: "O+", value: "o+" },
+  { label: "O-", value: "o-" },
 ];
 
-// 🌟 Pure math helper: Check if leap year
-const isLeapYear = (year: number): boolean => {
-    return (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
-};
+const isLeapYear = (year: number): boolean =>
+  (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
 
-// 🌟 Manual calendar checker: Validates days in months (February / Leap Year safe)
 const isValidDate = (year: number, month: number, day: number): boolean => {
-    const currentYear = new Date().getFullYear(); // Only using Date to get current year ceiling
-    if (year < 1900 || year > currentYear) return false;
-    if (month < 1 || month > 12) return false;
-
-    const daysInMonths = [
-        31,
-        isLeapYear(year) ? 29 : 28, // Feb leap year toggle
-        31,
-        30,
-        31,
-        30,
-        31,
-        31,
-        30,
-        31,
-        30,
-        31
-    ];
-
-    const maxDays = daysInMonths[month - 1];
-    return day >= 1 && day <= maxDays;
+  const currentYear = new Date().getFullYear();
+  if (year < 1900 || year > currentYear || month < 1 || month > 12) return false;
+  const daysInMonths = [31, isLeapYear(year) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day >= 1 && day <= daysInMonths[month - 1];
 };
+
+function FieldHeader({ label, optional = false, hint }: { label: string; optional?: boolean; hint?: string }) {
+  return (
+    <View style={styles.fieldHeaderRow}>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        {hint ? <Text style={styles.fieldHint}>{hint}</Text> : null}
+      </View>
+      <View style={[styles.requirementPill, optional && styles.optionalPill]}>
+        <Text style={[styles.requirementText, optional && styles.optionalText]}>{optional ? "OPTIONAL" : "REQUIRED"}</Text>
+      </View>
+    </View>
+  );
+}
 
 export default function AddProfileModal({ visible, onClose, onSuccess }: Props) {
-    const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [name, setName] = useState("");
+  const [icon, setIcon] = useState("");
+  const [birthYear, setBirthYear] = useState("");
+  const [birthMonth, setBirthMonth] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+  const { useMetric: isMetric } = useUserPreferences();
+  const [heightCm, setHeightCm] = useState("");
+  const [heightFt, setHeightFt] = useState("");
+  const [heightIn, setHeightIn] = useState("");
+  const [weightKg, setWeightKg] = useState("");
+  const [weightLb, setWeightLb] = useState("");
+  const [bloodType, setBloodType] = useState("");
+  const [allergies, setAllergies] = useState("");
 
-    const [name, setName] = useState("");
-    const [icon, setIcon] = useState("");
+  useEffect(() => {
+    if (visible) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }, [visible]);
 
-    // Controlled string states for easy input typing
-    const [birthYear, setBirthYear] = useState("");
-    const [birthMonth, setBirthMonth] = useState("");
-    const [birthDate, setBirthDate] = useState("");
+  const parseNum = (value: string) => parseFloat(value) || 0;
+  const hasUnsavedChanges = [name, icon, birthMonth, birthDate, birthYear, bloodType, allergies, heightCm, heightFt, heightIn, weightKg, weightLb]
+    .some((value) => value.trim() !== "");
 
-    const { useMetric: isMetric } = useUserPreferences();
+  const parsedYear = parseInt(birthYear, 10);
+  const parsedMonth = parseInt(birthMonth, 10);
+  const parsedDate = parseInt(birthDate, 10);
+  const isValidDateInput = isValidDate(parsedYear, parsedMonth, parsedDate);
 
-    const [heightCm, setHeightCm] = useState("");
-    const [heightFt, setHeightFt] = useState("");
-    const [heightIn, setHeightIn] = useState("");
+  const isUnder18 = useMemo(() => {
+    if (!isValidDateInput) return true;
+    const today = new Date();
+    let age = today.getFullYear() - parsedYear;
+    const birthdayPassed = parsedMonth < today.getMonth() + 1 || (parsedMonth === today.getMonth() + 1 && parsedDate <= today.getDate());
+    if (!birthdayPassed) age -= 1;
+    return age < 18;
+  }, [isValidDateInput, parsedDate, parsedMonth, parsedYear]);
 
-    const [weightKg, setWeightKg] = useState("");
-    const [weightLb, setWeightLb] = useState("");
+  const isHeightInvalid = isMetric ? parseNum(heightCm) <= 0 : parseNum(heightFt) <= 0;
+  const isWeightInvalid = isMetric ? parseNum(weightKg) <= 0 : parseNum(weightLb) <= 0;
+  const isFormInvalid = name.trim() === "" || !isValidDateInput || isUnder18 || bloodType.trim() === "" || isHeightInvalid || isWeightInvalid;
 
-    const [bloodType, setBloodType] = useState("");
+  const handleResetAndClose = () => {
+    setName(""); setIcon(""); setBirthYear(""); setBirthMonth(""); setBirthDate("");
+    setHeightCm(""); setHeightFt(""); setHeightIn(""); setWeightKg(""); setWeightLb("");
+    setBloodType(""); setAllergies("");
+    onClose();
+  };
 
-    const [allergies, setAllergies] = useState("");
+  const requestClose = () => {
+    if (!hasUnsavedChanges) {
+      handleResetAndClose();
+      return;
+    }
+    Alert.alert("Discard this profile?", "Your entered information has not been saved yet.", [
+      { text: "Keep Editing", style: "cancel" },
+      { text: "Discard", style: "destructive", onPress: handleResetAndClose },
+    ]);
+  };
 
-    const [discardConfirmVisible, setDiscardConfirmVisible] = useState(false);
+  const handleSave = async () => {
+    if (isFormInvalid || isLoading) return;
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Authentication Error", "You must be signed in to add profiles.");
+      return;
+    }
 
-    useEffect(() => {
-        if (visible) {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        }
-    }, [visible]);
+    setIsLoading(true);
+    try {
+      let finalHeightCm = 0;
+      let finalWeightKg = 0;
+      if (isMetric) {
+        finalHeightCm = parseNum(heightCm);
+        finalWeightKg = parseNum(weightKg);
+      } else {
+        const totalInches = parseNum(heightFt) * 12 + parseNum(heightIn);
+        finalHeightCm = Math.round(totalInches * 2.54 * 10) / 10;
+        finalWeightKg = Math.round(parseNum(weightLb) * 0.45359237 * 10) / 10;
+      }
 
-    const parseNum = (val: string) => parseFloat(val) || 0;
+      await addDoc(collection(db, "users", currentUser.uid, "profiles"), {
+        name: name.trim(),
+        icon: icon.trim() || null,
+        birthYear: parsedYear,
+        birthMonth: parsedMonth,
+        birthDate: parsedDate,
+        bloodType,
+        allergies: allergies.trim() || null,
+        heightCm: finalHeightCm,
+        weightKg: finalWeightKg,
+        displayHeight: isMetric ? `${heightCm} cm` : `${heightFt} ft ${heightIn || "0"} in`,
+        displayWeight: isMetric ? `${weightKg} kg` : `${weightLb} lb`,
+        createdAt: new Date().toISOString(),
+      });
 
-    const hasUnsavedChanges =
-        name !== "" ||
-        icon !== "" ||
-        birthMonth !== "" ||
-        birthDate !== "" ||
-        birthYear !== "" ||
-        bloodType !== "" ||
-        allergies !== "" ||
-        parseNum(heightCm) > 0 ||
-        parseNum(heightFt) > 0 ||
-        parseNum(heightIn) > 0 ||
-        parseNum(weightKg) > 0 ||
-        parseNum(weightLb) > 0;
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      handleResetAndClose();
+      onSuccess?.();
+    } catch (error) {
+      console.error("Error saving profile to Firestore:", error);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Save Error", "Failed to create this profile. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    const parsedYear = parseInt(birthYear, 10);
-    const parsedMonth = parseInt(birthMonth, 10);
-    const parsedDate = parseInt(birthDate, 10);
-
-    // 🌟 1. Validate Month, Day, Year bounds (Leap-year safe)
-    const isValidDateInput = isValidDate(parsedYear, parsedMonth, parsedDate);
-
-    // 🌟 2. Pure Arithmetic Age Check (No date objects for comparisons)
-    const isUnder18 = (() => {
-        if (!isValidDateInput) return true;
-
-        const today = new Date();
-        const currentYear = today.getFullYear();
-        const currentMonth = today.getMonth() + 1; // 1-12 range
-        const currentDay = today.getDate();
-
-        const age = currentYear - parsedYear;
-
-        if (age > 18) return false;
-        if (age < 18) return true;
-
-        // If they are exactly 18, compare birthday month and day to today
-        if (parsedMonth < currentMonth) return false;
-        if (parsedMonth > currentMonth) return true;
-
-        return parsedDate > currentDay; // If birth day has not occurred yet this month, they are under 18
-    })();
-
-    const isHeightInvalid = isMetric
-        ? parseNum(heightCm) <= 0
-        : (parseNum(heightFt) <= 0 || parseNum(heightIn) <= 0);
-
-    const isWeightInvalid = isMetric
-        ? parseNum(weightKg) <= 0
-        : parseNum(weightLb) <= 0;
-
-    const isFormInvalid =
-        name.trim() === "" ||
-        !isValidDateInput ||
-        isUnder18 ||
-        bloodType.trim() === "" ||
-        isHeightInvalid ||
-        isWeightInvalid;
-
-    const handleResetAndClose = () => {
-        setName("");
-        setIcon("");
-        setBirthYear("");
-        setBirthMonth("");
-        setBirthDate("");
-        setHeightCm("");
-        setHeightFt("");
-        setHeightIn("");
-        setWeightKg("");
-        setWeightLb("");
-        setBloodType("");
-        setAllergies("");
-        setDiscardConfirmVisible(false);
-        onClose();
-    };
-
-    const handleSave = async () => {
-        const currentUser = auth.currentUser;
-        if (!currentUser) {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            Alert.alert("Authentication Error", "You must be signed in to add profiles.");
-            return;
-        }
-
-        setIsLoading(true);
-        try {
-            const subcollectionRef = collection(db, "users", currentUser.uid, "profiles");
-
-            let finalHeightCm = 0;
-            let finalWeightKg = 0;
-
-            if (isMetric) {
-                finalHeightCm = parseNum(heightCm);
-                finalWeightKg = parseNum(weightKg);
-            } else {
-                const totalInches = (parseNum(heightFt) * 12) + parseNum(heightIn);
-                finalHeightCm = Math.round((totalInches * 2.54) * 10) / 10;
-                finalWeightKg = Math.round((parseNum(weightLb) * 0.45359237) * 10) / 10;
-            }
-
-            // 🌟 Stored strictly as integers & strings
-            // 🌟 Stored strictly as integers & strings
-            await addDoc(subcollectionRef, {
-                name: name.trim(),
-                icon: icon.trim() || null,
-
-                // Integers
-                birthYear: parsedYear,
-                birthMonth: parsedMonth,
-                birthDate: parsedDate,
-
-                // String
-                bloodType: bloodType,
-                allergies: allergies.trim() || null, // 👈 Added here
-
-                heightCm: finalHeightCm,
-                weightKg: finalWeightKg,
-                displayHeight: isMetric ? `${heightCm} cm` : `${heightFt} ft ${heightIn} in`,
-                displayWeight: isMetric ? `${weightKg} kg` : `${weightLb} lb`,
-                createdAt: new Date().toISOString()
-            });
-
-            handleResetAndClose();
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-            if (onSuccess) onSuccess();
-        } catch (error) {
-            console.error("Error saving profile to Firestore: ", error);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            Alert.alert("Save Error", "Failed to create this profile. Please try again.");
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    return (
-        <Modal
-            animationType="fade"
-            transparent={true}
-            visible={visible}
-            onRequestClose={onClose}
-        >
-            {/* Full-screen backdrop wrapper that centers children */}
-            <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
-                <View style={styles.backdrop}>
-                    <KeyboardAvoidingView
-                        behavior={Platform.OS == "ios" ? "padding" : "height"}
-                        style={{ width: "100%" }}
-                    >
-
-                        <View style={styles.container}>
-                            <Text style={styles.header}>
-                                New Profile
-                            </Text>
-                            <View style={{ width: "100%", gap: spacing.one }}>
-                                <TextInput
-                                    type="text"
-                                    variant="regular"
-                                    placeholder="Name"
-                                    enabled={!isLoading}
-                                    value={name}
-                                    onChangeText={setName}
-                                />
-                                <View style={{ flexDirection: "row", gap: spacing.one, alignItems: "center" }}>
-                                    <Text style={{ marginHorizontal: spacing.one, flex: 1, textAlign: "center", fontSize: fontsize.body, color: themes.text, fontFamily: "Body-Medium" }}>Birthday</Text>
-                                    <TextInput
-                                        type="number"
-                                        variant="regular"
-                                        placeholder="MM"
-                                        enabled={!isLoading}
-                                        value={birthMonth}
-                                        onChangeText={setBirthMonth}
-                                    />
-                                    <TextInput
-                                        type="number"
-                                        variant="regular"
-                                        placeholder="DD"
-                                        enabled={!isLoading}
-                                        value={birthDate}
-                                        onChangeText={setBirthDate}
-                                    />
-                                    <TextInput
-                                        type="number"
-                                        variant="regular"
-                                        placeholder="YYYY"
-                                        enabled={!isLoading}
-                                        value={birthYear}
-                                        onChangeText={setBirthYear}
-                                    />
-                                </View>
-                                {isMetric ? (
-                                    <View style={{ flexDirection: "row", gap: spacing.one }}>
-                                        <View style={{ flex: 1 }}>
-                                            <TextInput
-                                                type="number"
-                                                variant="regular"
-                                                placeholder="Height (cm)"
-                                                enabled={!isLoading}
-                                                value={heightCm}
-                                                onChangeText={setHeightCm}
-                                            />
-                                        </View>
-                                        <View style={{ flex: 1 }}>
-                                            <TextInput
-                                                type="number"
-                                                variant="regular"
-                                                placeholder="Weight (kg)"
-                                                enabled={!isLoading}
-                                                value={weightKg}
-                                                onChangeText={setWeightKg}
-                                            />
-                                        </View>
-                                    </View>
-                                ) : (
-                                    <View style={{ gap: spacing.one }}>
-                                        <View style={{ flexDirection: "row", gap: spacing.one }}>
-                                            <View style={{ flex: 1 }}>
-                                                <TextInput
-                                                    type="number"
-                                                    variant="regular"
-                                                    placeholder="Height (ft)"
-                                                    enabled={!isLoading}
-                                                    value={heightFt}
-                                                    onChangeText={setHeightFt}
-                                                />
-                                            </View>
-                                            <View style={{ flex: 1 }}>
-                                                <TextInput
-                                                    type="number"
-                                                    variant="regular"
-                                                    placeholder="Height (in)"
-                                                        enabled={!isLoading}
-                                                    value={heightIn}
-                                                    onChangeText={setHeightIn}
-                                                />
-                                            </View>
-                                        </View>
-                                        <TextInput
-                                            type="number"
-                                            variant="regular"
-                                            placeholder="Weight (lb)"
-                                                enabled={!isLoading}
-                                            value={weightLb}
-                                            onChangeText={setWeightLb}
-                                        />
-                                    </View>
-                                )}
-
-                                <Dropdown
-                                    mode="default"
-                                    data={bloodTypes}
-                                    labelField="label"
-                                    valueField="value"
-                                    selectedTextStyle={{ color: themes.text, fontFamily: "Body-Medium" }}
-                                    placeholder="Blood Type"
-                                    placeholderStyle={{ color: themes.textInputPlaceholder }}
-                                    value={bloodType}
-                                    disable={isLoading}
-                                    style={[
-                                        styles.input
-                                    ]}
-                                    containerStyle={{
-                                        backgroundColor: themes.backgroundElement,
-                                        borderRadius: spacing.edge,
-                                        borderWidth: spacing.quarter,
-                                        borderColor: themes.secondaryBttn,
-                                        overflow: "hidden",
-                                        gap: spacing.none,
-                                    }}
-                                    itemTextStyle={{
-                                        color: themes.text,
-                                        margin: spacing.none,
-                                        padding: spacing.none,
-                                        fontFamily: "Body-Medium"
-                                    }}
-                                    itemContainerStyle={{
-                                        margin: spacing.none,
-                                        marginHorizontal: spacing.none,
-                                        padding: spacing.none,
-                                        borderBottomWidth: spacing.quarter,
-                                        borderColor: themes.secondaryBttn
-                                    }}
-                                    activeColor={themes.primaryBttn}
-                                    maxHeight={spacing.ten * 3}
-                                    onChange={(item) => { setBloodType(item.value) }}
-                                    autoScroll={false}
-                                />
-
-                                <TextInput
-                                    type="text"
-                                    variant="regular"
-                                    placeholder="Allergies (optional)"
-                                    enabled={!isLoading}
-                                    value={allergies}
-                                    onChangeText={setAllergies}
-                                />
-                            </View>
-
-                            <View style={styles.actionRow}>
-                                <Button 
-                                    variant={hasUnsavedChanges ? "warn" : "secondary"}
-                                    label={hasUnsavedChanges ? "Discard" : "Cancel"}
-                                    enabled={!isLoading}
-                                    onPress={() => {
-                                        if (hasUnsavedChanges) {
-                                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-                                            Alert.alert("Discard?", "You have unsaved changes. Discard?", [
-                                                {
-                                                    text: "Cancel",
-                                                    style: "cancel"
-                                                },
-                                                {
-                                                    text: "Discard",
-                                                    onPress: handleResetAndClose,
-                                                    style: "destructive"
-                                                }
-                                            ])
-                                        } else {
-                                            handleResetAndClose()
-                                        }
-                                }} 
-                                    style={{ borderRadius: 6 }} />
-                                <View style={{ flex: 1 }}>
-                                    <Button
-                                        variant="primary" 
-                                        label="Create" 
-                                        onPress={handleSave} 
-                                        style={{ borderRadius: 6 }} 
-                                        enabled={!isFormInvalid || !isLoading}
-                                        loading={isLoading}
-                                    />
-                                </View>
-                            </View>
-
-                        </View>
-
-                    </KeyboardAvoidingView>
+  return (
+    <Modal animationType="fade" transparent visible={visible} onRequestClose={requestClose}>
+      <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
+        <View style={styles.backdrop}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.keyboardWrap}>
+            <View style={styles.container}>
+              <View style={styles.modalHeader}>
+                <View style={styles.profileGlyph}><Text style={styles.profileGlyphText}>+</Text></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.eyebrow}>SAVED PERSON</Text>
+                  <Text style={styles.header}>Add a person</Text>
                 </View>
-            </TouchableWithoutFeedback>
-        </Modal>
-    );
+              </View>
+
+
+              <ScrollView style={styles.formScroll} contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <View style={styles.fieldGroup}>
+                  <FieldHeader label="Name" />
+                  <TextInput type="text" variant="regular" placeholder="Full name" enabled={!isLoading} value={name} onChangeText={setName} />
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <FieldHeader label="Birthday" hint="Profiles in this prototype must be for someone 18 or older." />
+                  <View style={styles.dateRow}>
+                    <View style={{ flex: 0.8 }}><TextInput type="number" variant="regular" placeholder="MM" enabled={!isLoading} value={birthMonth} onChangeText={setBirthMonth} /></View>
+                    <View style={{ flex: 0.8 }}><TextInput type="number" variant="regular" placeholder="DD" enabled={!isLoading} value={birthDate} onChangeText={setBirthDate} /></View>
+                    <View style={{ flex: 1.2 }}><TextInput type="number" variant="regular" placeholder="YYYY" enabled={!isLoading} value={birthYear} onChangeText={setBirthYear} /></View>
+                  </View>
+                  {(birthMonth || birthDate || birthYear) && (!isValidDateInput || isUnder18) ? (
+                    <Text style={styles.validationText}>{!isValidDateInput ? "Enter a valid birthday." : "This profile must be for someone 18 or older."}</Text>
+                  ) : null}
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <FieldHeader label="Height & weight" />
+                  {isMetric ? (
+                    <View style={styles.splitRow}>
+                      <View style={{ flex: 1 }}><TextInput type="number" variant="regular" placeholder="Height (cm)" enabled={!isLoading} value={heightCm} onChangeText={setHeightCm} /></View>
+                      <View style={{ flex: 1 }}><TextInput type="number" variant="regular" placeholder="Weight (kg)" enabled={!isLoading} value={weightKg} onChangeText={setWeightKg} /></View>
+                    </View>
+                  ) : (
+                    <View style={{ gap: spacing.one }}>
+                      <View style={styles.splitRow}>
+                        <View style={{ flex: 1 }}><TextInput type="number" variant="regular" placeholder="Height (ft)" enabled={!isLoading} value={heightFt} onChangeText={setHeightFt} /></View>
+                        <View style={{ flex: 1 }}><TextInput type="number" variant="regular" placeholder="Height (in)" enabled={!isLoading} value={heightIn} onChangeText={setHeightIn} /></View>
+                      </View>
+                      <TextInput type="number" variant="regular" placeholder="Weight (lb)" enabled={!isLoading} value={weightLb} onChangeText={setWeightLb} />
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <FieldHeader label="Blood type" />
+                  <Dropdown
+                    mode="default"
+                    data={bloodTypes}
+                    labelField="label"
+                    valueField="value"
+                    selectedTextStyle={styles.dropdownSelected}
+                    placeholder="Select blood type"
+                    placeholderStyle={styles.dropdownPlaceholder}
+                    value={bloodType}
+                    disable={isLoading}
+                    style={styles.input}
+                    containerStyle={styles.dropdownContainer}
+                    itemTextStyle={styles.dropdownItemText}
+                    itemContainerStyle={styles.dropdownItem}
+                    activeColor={themes.primaryBttn}
+                    maxHeight={spacing.ten * 3}
+                    onChange={(item) => setBloodType(item.value)}
+                    autoScroll={false}
+                  />
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <FieldHeader label="Allergies" optional />
+                  <TextInput type="text" variant="regular" placeholder="e.g. Peanuts, penicillin" enabled={!isLoading} value={allergies} onChangeText={setAllergies} />
+                </View>
+              </ScrollView>
+
+              <View style={styles.actionRow}>
+                <Button variant={hasUnsavedChanges ? "warn" : "secondary"} label={hasUnsavedChanges ? "Discard" : "Cancel"} enabled={!isLoading} onPress={requestClose} />
+                <View style={{ flex: 1 }}>
+                  <Button variant="primary" label="Create Profile" onPress={() => void handleSave()} enabled={!isFormInvalid && !isLoading} loading={isLoading} fullWidth />
+                </View>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
 }
 
 const styles = StyleSheet.create({
-    // Full-screen overlay to dim screen and center content
-    backdrop: {
-        flex: 1,
-        backgroundColor: "rgba(0, 0, 0, 0.75)",
-        justifyContent: "center",
-        alignItems: "center",
-        paddingHorizontal: spacing.two, // Prevents modal from touching screen edges
-    },
-    // Centered card content container
-    container: {
-        width: "100%", // Or a fixed width/max-width like 320
-        maxWidth: 400,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: themes.backgroundElement,
-        borderWidth: spacing.quarter,
-        borderColor: themes.secondaryBttn,
-        padding: spacing.one,
-        borderRadius: spacing.edge,
-        gap: spacing.one
-    },
-    header: {
-        color: themes.text,
-        fontSize: fontsize.header,
-        fontFamily: "Heading-Font"
-    },
-    actionRow: {
-        flexDirection: "row",
-        gap: spacing.half,
-        maxWidth: "100%",
-    },
-    input: {
-        height: spacing.six,
-        borderWidth: spacing.quarter,
-        paddingHorizontal: spacing.two,
-        fontSize: fontsize.button,
-        borderRadius: spacing.edge,
-        color: themes.text,
-        fontFamily: "Body-Medium",
-        backgroundColor: themes.backgroundElement,
-        borderColor: themes.textSecondary,
-        borderStyle: "dashed"
-    },
-    focused: {
-        borderColor: themes.text,
-        borderStyle: "solid"
-    },
-    warnInput: {
-        borderColor: themes.warnBttn,
-    },
-    disabledInput: {
-        opacity: 0.5,
-    },
+  backdrop: { flex: 1, backgroundColor: "rgba(3,7,15,0.86)", justifyContent: "center", alignItems: "center", paddingHorizontal: spacing.two },
+  keyboardWrap: { width: "100%", maxWidth: 430 },
+  container: { width: "100%", maxHeight: "90%", backgroundColor: themes.backgroundElevated, borderWidth: 1, borderColor: themes.divider, borderRadius: 26, padding: spacing.two, gap: spacing.one + 4, shadowColor: "#000", shadowOpacity: 0.32, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 8 },
+  modalHeader: { flexDirection: "row", alignItems: "center", gap: spacing.one + 2 },
+  profileGlyph: { width: 44, height: 44, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: themes.primarySoft, borderWidth: 1, borderColor: themes.primaryBorder },
+  profileGlyphText: { color: themes.primaryBttn, fontSize: 28, lineHeight: 29, fontFamily: "Body-Regular" },
+  eyebrow: { color: themes.primaryBttn, fontSize: 8.5, letterSpacing: 1, fontFamily: "Body-Bold" },
+  header: { color: themes.text, fontSize: 23, fontFamily: "Heading-Font", marginTop: 2 },
+  subhead: { color: themes.textSecondary, fontSize: 10.5, lineHeight: 15, fontFamily: "Body-Regular", marginTop: 2 },
+  requiredNotice: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 11, paddingVertical: 9, borderRadius: 14, backgroundColor: "rgba(52,209,127,0.07)", borderWidth: 1, borderColor: themes.primaryBorder },
+  requiredNoticeDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: themes.primaryBttn },
+  requiredNoticeText: { flex: 1, color: themes.textSecondary, fontSize: 9.5, lineHeight: 14, fontFamily: "Body-Medium" },
+  formScroll: { width: "100%", flexShrink: 1 },
+  formContent: { gap: spacing.two, paddingBottom: spacing.one },
+  fieldGroup: { gap: 7 },
+  fieldHeaderRow: { flexDirection: "row", alignItems: "center", gap: spacing.one },
+  fieldLabel: { color: themes.text, fontSize: 12.5, fontFamily: "Body-Bold" },
+  fieldHint: { color: themes.textMuted, fontSize: 8.5, lineHeight: 12, marginTop: 1, fontFamily: "Body-Regular" },
+  requirementPill: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 999, backgroundColor: themes.primarySoft, borderWidth: 1, borderColor: themes.primaryBorder },
+  requirementText: { color: themes.primaryBttn, fontSize: 6.8, letterSpacing: 0.5, fontFamily: "Body-Bold" },
+  optionalPill: { backgroundColor: themes.surfaceSoft, borderColor: themes.divider },
+  optionalText: { color: themes.textMuted },
+  dateRow: { flexDirection: "row", gap: spacing.one },
+  splitRow: { flexDirection: "row", gap: spacing.one },
+  validationText: { color: themes.lightOrange, fontSize: 9, fontFamily: "Body-Medium" },
+  input: { height: spacing.six, borderWidth: 1, paddingHorizontal: spacing.two, fontSize: fontsize.button, borderRadius: spacing.edge, color: themes.text, fontFamily: "Body-Medium", backgroundColor: themes.backgroundElement, borderColor: themes.secondaryBttn },
+  dropdownSelected: { color: themes.text, fontFamily: "Body-Medium" },
+  dropdownPlaceholder: { color: themes.textInputPlaceholder, fontFamily: "Body-Medium" },
+  dropdownContainer: { backgroundColor: themes.backgroundElement, borderRadius: spacing.edge, borderWidth: 1, borderColor: themes.secondaryBttn, overflow: "hidden" },
+  dropdownItemText: { color: themes.text, fontFamily: "Body-Medium" },
+  dropdownItem: { borderBottomWidth: 1, borderColor: themes.secondaryBttn },
+  actionRow: { flexDirection: "row", alignItems: "center", gap: spacing.half, width: "100%" },
 });

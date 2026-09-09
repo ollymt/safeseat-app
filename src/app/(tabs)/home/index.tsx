@@ -28,7 +28,20 @@ import lockOpenXml from "@expo/material-symbols/lock_open.xml";
 import sirenXml from "@expo/material-symbols/siren.xml";
 import warningXml from "@expo/material-symbols/warning.xml";
 
-export type SeatState = "empty" | "assigned" | "safe" | "warning" | "emergency" | "unknown";
+export type SeatState =
+  | "empty"
+  | "assigned"
+  | "safe"
+  | "warning"
+  | "emergency"
+  | "unknown"
+  | "consent"
+  | "declined"
+  | "offline"
+  | "ready"
+  | "monitoring";
+
+type ConsentState = "confirmed" | "declined";
 
 type Profile = {
   id: string;
@@ -44,6 +57,7 @@ const SEAT_ASSIGNMENTS_KEY = "seatAssignments";
 const IS_LOCKED_IN_KEY = "isLockedIn";
 const SEAT_STATUSES_KEY = "seatStatuses";
 const HARDWARE_SEAT_KEY = "safeSeatHardwareSeatNo";
+const SEAT_CONSENTS_KEY = "seatSessionConsents";
 
 const SEAT_ROLES: Record<number, string> = {
   1: "Driver",
@@ -100,9 +114,12 @@ export default function Home() {
   const [isLockedIn, setIsLockedIn] = useState(false);
   const [assignments, setAssignments] = useState<Record<number, Profile>>({});
   const [hardwareSeatNo, setHardwareSeatNo] = useState<number | null>(null);
+  const [consents, setConsents] = useState<Record<number, ConsentState>>({});
   const [dismissedSeats, setDismissedSeats] = useState<Set<number>>(new Set());
   const [endSessionVisible, setEndSessionVisible] = useState(false);
   const [endingSession, setEndingSession] = useState(false);
+  const [screenFocused, setScreenFocused] = useState(true);
+  const [animationCycle, setAnimationCycle] = useState(0);
 
   const heroEntrance = useRef(new Animated.Value(0)).current;
   const ambientPulse = useRef(new Animated.Value(0)).current;
@@ -112,16 +129,18 @@ export default function Home() {
 
   const loadData = useCallback(async () => {
     try {
-      const [rawLockedIn, rawAssignments, rawHardwareSeat] = await Promise.all([
+      const [rawLockedIn, rawAssignments, rawHardwareSeat, rawConsents] = await Promise.all([
         AsyncStorage.getItem(IS_LOCKED_IN_KEY),
         AsyncStorage.getItem(SEAT_ASSIGNMENTS_KEY),
         AsyncStorage.getItem(HARDWARE_SEAT_KEY),
+        AsyncStorage.getItem(SEAT_CONSENTS_KEY),
       ]);
 
       const parsedAssignments: Record<number, Profile> = rawAssignments ? JSON.parse(rawAssignments) : {};
       const parsedHardwareSeat = rawHardwareSeat ? Number(JSON.parse(rawHardwareSeat)) : null;
       setIsLockedIn(rawLockedIn ? JSON.parse(rawLockedIn) : false);
       setAssignments(parsedAssignments);
+      setConsents(rawConsents ? JSON.parse(rawConsents) : {});
       setHardwareSeatNo(
         parsedHardwareSeat && parsedAssignments[parsedHardwareSeat]
           ? parsedHardwareSeat
@@ -132,9 +151,32 @@ export default function Home() {
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { void loadData(); }, [loadData]));
+  useFocusEffect(
+    useCallback(() => {
+      setScreenFocused(true);
+      setAnimationCycle((value) => value + 1);
+      void loadData();
+
+      return () => {
+        setScreenFocused(false);
+        heroEntrance.stopAnimation();
+        ambientPulse.stopAnimation();
+        livePulse.stopAnimation();
+        stateMotion.stopAnimation();
+        heroEntrance.setValue(1);
+        ambientPulse.setValue(0);
+        livePulse.setValue(0);
+        stateMotion.setValue(0);
+        passengerEntrance.forEach((value) => value.setValue(1));
+      };
+    }, [ambientPulse, heroEntrance, livePulse, loadData, passengerEntrance, stateMotion]),
+  );
 
   useEffect(() => {
+    if (!screenFocused) {
+      ambientPulse.setValue(0);
+      return;
+    }
     const ambientLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(ambientPulse, {
@@ -153,9 +195,13 @@ export default function Home() {
     );
     ambientLoop.start();
     return () => ambientLoop.stop();
-  }, [ambientPulse]);
+  }, [ambientPulse, screenFocused]);
 
   useEffect(() => {
+    if (!screenFocused) {
+      livePulse.setValue(0);
+      return;
+    }
     const liveLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(livePulse, {
@@ -174,21 +220,24 @@ export default function Home() {
     );
     if (isLockedIn && hubConnected) liveLoop.start();
     return () => liveLoop.stop();
-  }, [hubConnected, isLockedIn, livePulse]);
+  }, [hubConnected, isLockedIn, livePulse, screenFocused]);
 
   const getSeatState = useCallback((seatNo: number): SeatState => {
     const profile = assignments[seatNo];
     if (!profile) return "empty";
-    if (!isLockedIn) return "assigned";
 
-    if (seatNo === hardwareSeatNo) {
-      return hubConnected && telemetryReady ? hubSeatState : "unknown";
-    }
+    const consent = consents[seatNo];
+    if (consent === "declined") return "declined";
+    if (consent !== "confirmed") return "consent";
 
-    // The current UAT prototype represents one physical seat. Do not mirror
-    // one Main Hub's Fusion result across conceptual cabin positions.
-    return "unknown";
-  }, [assignments, hardwareSeatNo, hubConnected, hubSeatState, isLockedIn, telemetryReady]);
+    // Only the physically linked prototype seat may enter ANALYZING or a
+    // Fusion state. Other conceptual cabin positions remain visibly offline.
+    if (seatNo !== hardwareSeatNo) return "offline";
+    if (!hubConnected || !telemetryReady) return "offline";
+
+    if (!isLockedIn) return "ready";
+    return hubSeatState;
+  }, [assignments, consents, hardwareSeatNo, hubConnected, hubSeatState, isLockedIn, telemetryReady]);
 
   const getDisplayName = (profile?: Profile): string | undefined => {
     if (!profile) return undefined;
@@ -215,6 +264,10 @@ export default function Home() {
   }, [assignedSeatCount, assignments, getSeatState, isLockedIn]);
 
   useEffect(() => {
+    if (!screenFocused) {
+      heroEntrance.setValue(1);
+      return;
+    }
     heroEntrance.setValue(0);
     Animated.spring(heroEntrance, {
       toValue: 1,
@@ -223,13 +276,13 @@ export default function Home() {
       mass: 0.8,
       useNativeDriver: true,
     }).start();
-  }, [heroEntrance, isLockedIn, overallState]);
+  }, [heroEntrance, isLockedIn, overallState, screenFocused]);
 
   useEffect(() => {
     stateMotion.stopAnimation();
     stateMotion.setValue(0);
 
-    if (!isLockedIn) return;
+    if (!screenFocused || !isLockedIn) return;
 
     if (overallState === "unknown") return;
 
@@ -252,12 +305,12 @@ export default function Home() {
     );
     loop.start();
     return () => loop.stop();
-  }, [isLockedIn, overallState, stateMotion]);
+  }, [isLockedIn, overallState, screenFocused, stateMotion]);
 
   useEffect(() => {
     const assigned = SEAT_NUMBERS.filter((seatNo) => Boolean(assignments[seatNo]));
-    passengerEntrance.forEach((value) => value.setValue(0));
-    if (!isLockedIn || assigned.length === 0) return;
+    passengerEntrance.forEach((value) => value.setValue(screenFocused ? 0 : 1));
+    if (!screenFocused || !isLockedIn || assigned.length === 0) return;
 
     Animated.stagger(70, assigned.map((seatNo) =>
       Animated.spring(passengerEntrance[seatNo - 1], {
@@ -268,7 +321,7 @@ export default function Home() {
         useNativeDriver: true,
       })
     )).start();
-  }, [assignments, isLockedIn, passengerEntrance]);
+  }, [assignments, isLockedIn, passengerEntrance, screenFocused]);
 
   const overallSeatNo = useMemo(() => {
     if (overallState === "safe") return hardwareSeatNo ?? undefined;
@@ -293,15 +346,19 @@ export default function Home() {
     if (!profile) return;
 
     const state = getSeatState(seatNo);
+    const specialCopy: Partial<Record<SeatState, { label: string; headline: string; detail?: string }>> = {
+      consent: { label: "CONSENT NEEDED", headline: "Monitoring consent has not been confirmed.", detail: "Open Seats to review consent." },
+      declined: { label: "NOT MONITORED", headline: "Monitoring consent was declined." },
+      offline: { label: "OFFLINE", headline: "SafeSeat is not receiving monitoring data for this seat." },
+      ready: { label: "READY", headline: "This seat is ready to be monitored." },
+      monitoring: { label: "MONITORING", headline: "Monitoring is active for this seat." },
+      assigned: { label: "READY", headline: "This seat is ready to be monitored." },
+    };
     const stateCopy = state === "safe" || state === "warning" || state === "emergency" || state === "unknown"
       ? STATUS_COPY[state]
-      : STATUS_COPY.unknown;
+      : specialCopy[state] ?? { label: "STATUS", headline: "SafeSeat status is unavailable." };
     const person = getDisplayName(profile);
-    const message = [
-      person,
-      stateCopy.headline,
-      stateCopy.detail || undefined,
-    ].filter(Boolean).join("\n\n");
+    const message = [person, stateCopy.headline, stateCopy.detail].filter(Boolean).join("\n\n");
 
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Alert.alert(`${SEAT_ROLES[seatNo]} · ${stateCopy.label}`, message);
@@ -333,6 +390,7 @@ export default function Home() {
         AsyncStorage.setItem(IS_LOCKED_IN_KEY, JSON.stringify(false)),
         AsyncStorage.setItem(SEAT_ASSIGNMENTS_KEY, JSON.stringify(persistentAssignments)),
         AsyncStorage.setItem(SEAT_STATUSES_KEY, JSON.stringify({})),
+        AsyncStorage.removeItem(SEAT_CONSENTS_KEY),
       ];
 
       if (nextHardwareSeat) {
@@ -345,6 +403,7 @@ export default function Home() {
 
       setIsLockedIn(false);
       setAssignments(persistentAssignments);
+      setConsents({});
       setHardwareSeatNo(nextHardwareSeat);
       setEndSessionVisible(false);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -443,232 +502,135 @@ export default function Home() {
       </View>
 
       <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
-        <ScrollView
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
-          showsVerticalScrollIndicator={false}
-          bounces
-        >
-          <View style={styles.container}>
+        {isLockedIn ? (
+          <View style={styles.activeContainer}>
             <View style={styles.headerRow}>
               <View>
-                <Text style={styles.eyebrow}>{isLockedIn ? "SAFESEAT ACTIVE" : "SAFESEAT"}</Text>
+                <Text style={styles.eyebrow}>SAFESEAT ACTIVE</Text>
                 <Text style={styles.pageHeader}>Home</Text>
               </View>
 
-              {isLockedIn ? (
-                <View style={[styles.liveBadge, !hubConnected && styles.liveBadgeOffline]}>
-                  <View style={styles.liveDotWrap}>
-                    {hubConnected ? (
-                      <Animated.View style={[styles.livePulseRing, { opacity: liveRingOpacity, transform: [{ scale: liveRingScale }] }]} />
-                    ) : null}
-                    <View style={[styles.liveDot, !hubConnected && styles.liveDotOffline]} />
-                  </View>
-                  <Text style={[styles.liveText, !hubConnected && styles.liveTextOffline]}>
-                    {hubConnected ? (telemetryReady ? "LIVE" : "CONNECTING") : "OFFLINE"}
-                  </Text>
+              <View style={[styles.liveBadge, !hubConnected && styles.liveBadgeOffline]}>
+                <View style={styles.liveDotWrap}>
+                  {hubConnected ? (
+                    <Animated.View style={[styles.livePulseRing, { opacity: liveRingOpacity, transform: [{ scale: liveRingScale }] }]} />
+                  ) : null}
+                  <View style={[styles.liveDot, !hubConnected && styles.liveDotOffline]} />
                 </View>
-              ) : null}
+                <Text style={[styles.liveText, !hubConnected && styles.liveTextOffline]}>
+                  {hubConnected ? (telemetryReady ? "LIVE" : "CONNECTING") : "OFFLINE"}
+                </Text>
+              </View>
             </View>
 
-            {isLockedIn ? (
-              <>
-                <Animated.View style={{ opacity: heroEntrance, transform: [{ translateY: heroTranslateY }, { scale: heroScale }] }}>
-                  <LinearGradient
-                    colors={heroColors}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={[styles.statusConsole, { borderColor: `${copy.color}55` }]}
-                  >
-                    <Animated.View
-                      pointerEvents="none"
-                      style={[
-                        styles.statusGlow,
-                        { backgroundColor: copy.color, opacity: auraOpacity, transform: [{ scale: auraScale }] },
-                      ]}
-                    />
-                    <View pointerEvents="none" style={styles.consoleBrandGlow} />
-                    <View style={[styles.stateAccentLine, { backgroundColor: copy.color }]} />
-
-                    <View style={styles.consoleTopRow}>
-                      <View style={styles.consoleTitleRow}>
-                        <View style={[styles.consoleIndicator, { backgroundColor: hubConnected ? themes.primaryBttn : themes.textMuted }]} />
-                        <Text style={styles.consoleEyebrow}>{hubConnected ? "LIVE MONITORING" : "MONITORING PAUSED"}</Text>
-                      </View>
-                      <View style={styles.occupantPill}>
-                        <Text style={styles.occupantPillNumber}>{assignedSeatCount}</Text>
-                        <Text style={styles.occupantPillLabel}>{assignedSeatCount === 1 ? "PERSON" : "PEOPLE"}</Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.consoleMain}>
-                      {renderStatusSymbol()}
-                      <Text style={[styles.statusLabel, { color: copy.color }]}>{copy.label}</Text>
-                      <Text style={styles.statusHeadline}>{copy.headline}</Text>
-                      {copy.detail ? <Text style={styles.statusDetail}>{copy.detail}</Text> : null}
-
-                      {overallSeatNo && overallState !== "safe" ? (
-                        <View style={[styles.focusChip, { borderColor: `${copy.color}55`, backgroundColor: `${copy.color}12` }]}>
-                          <Text style={styles.focusChipCaption}>{overallState === "warning" ? "CHECK" : overallState === "emergency" ? "NEEDS HELP" : "ANALYZING"}</Text>
-                          <Text style={[styles.focusChipText, { color: copy.color }]}>{SEAT_ROLES[overallSeatNo]}</Text>
-                        </View>
-                      ) : null}
-                    </View>
-
-                    <View style={styles.consoleBottom}>
-                      <View style={styles.monitoringChip}>
-                        <View style={[styles.monitoringChipDot, { backgroundColor: hubConnected ? themes.primaryBttn : themes.textMuted }]} />
-                        <Text style={styles.monitoringChipText}>
-                          {hubConnected ? (telemetryReady ? "Main Hub connected" : "Main Hub connecting") : "Main Hub offline"}
-                        </Text>
-                      </View>
-                      <Text style={styles.consoleBottomHint}>SafeSeat stays active in the background</Text>
-                    </View>
-                  </LinearGradient>
-                </Animated.View>
-
-                <View style={styles.sessionControls}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="View seats and people in the car"
-                    onPress={() => {
-                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      router.push("/assign");
-                    }}
-                    style={({ pressed }) => [styles.sessionControl, styles.seatsControl, pressed && styles.controlPressed]}
-                  >
-                    <View style={styles.sessionControlIcon}>
-                      <Host matchContents>
-                        <Icon name={Icon.select({ ios: "carseat.right.fill", android: lockOpenXml })} size={23} color={themes.primaryBttn} />
-                      </Host>
-                    </View>
-                    <View style={styles.sessionControlCopy}>
-                      <Text style={styles.sessionControlTitle}>Seats</Text>
-                      <Text style={styles.sessionControlText}>View cabin</Text>
-                    </View>
-                    <Text style={styles.sessionControlChevron}>›</Text>
-                  </Pressable>
-
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="End monitoring session"
-                    onPress={openEndSession}
-                    style={({ pressed }) => [styles.sessionControl, styles.endControl, pressed && styles.controlPressed]}
-                  >
-                    <View style={styles.endIconWrap}>
-                      <View style={styles.endIconSquare} />
-                    </View>
-                    <View style={styles.sessionControlCopy}>
-                      <Text style={styles.endControlTitle}>End Session</Text>
-                      <Text style={styles.endControlText}>Stop monitoring</Text>
-                    </View>
-                  </Pressable>
+            <View style={styles.activeSeatList}>
+              {SEAT_NUMBERS.map((seatNo) => (
+                <View key={seatNo} style={styles.homeSeatRowActive}>
+                  <SeatCard
+                    home
+                    seatNo={seatNo}
+                    role={SEAT_ROLES[seatNo]}
+                    name={getDisplayName(assignments[seatNo])}
+                    photo={getProfilePhoto(assignments[seatNo])}
+                    state={assignments[seatNo] ? getSeatState(seatNo) : "empty"}
+                    animationActive={screenFocused}
+                    animationCycle={animationCycle}
+                    onPress={() => assignments[seatNo] ? showSeatDetails(seatNo) : router.push("/assign")}
+                  />
                 </View>
+              ))}
+            </View>
 
-                <View style={styles.section}>
-                  <View style={styles.sectionHeadingRow}>
-                    <View>
-                      <Text style={styles.sectionHeader}>People in the car</Text>
-                      <Text style={styles.sectionSubhead}>Tap for status details</Text>
-                    </View>
-                    <View style={styles.sectionCountPill}>
-                      <Text style={styles.sectionCountText}>{assignedSeatCount}</Text>
-                    </View>
-                  </View>
-
-                  {SEAT_NUMBERS.filter((seatNo) => Boolean(assignments[seatNo])).map((seatNo) => {
-                    const entry = passengerEntrance[seatNo - 1];
-                    const entryY = entry.interpolate({ inputRange: [0, 1], outputRange: [12, 0] });
-                    return (
-                      <Animated.View key={seatNo} style={{ opacity: entry, transform: [{ translateY: entryY }] }}>
-                        <SeatCard
-                          seatNo={seatNo}
-                          role={SEAT_ROLES[seatNo]}
-                          name={getDisplayName(assignments[seatNo])}
-                          photo={getProfilePhoto(assignments[seatNo])}
-                          state={getSeatState(seatNo)}
-                          onPress={() => showSeatDetails(seatNo)}
-                        />
-                      </Animated.View>
-                    );
-                  })}
+            <View style={styles.sessionControls}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="View and change seat assignments"
+                onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push("/assign");
+                }}
+                style={({ pressed }) => [styles.sessionControl, styles.seatsControl, pressed && styles.controlPressed]}
+              >
+                <View style={styles.sessionControlIcon}>
+                  <Host matchContents>
+                    <Icon name={Icon.select({ ios: "carseat.right.fill", android: lockOpenXml })} size={23} color={themes.primaryBttn} />
+                  </Host>
                 </View>
-              </>
-            ) : (
-              <Animated.View style={{ opacity: heroEntrance, transform: [{ translateY: heroTranslateY }, { scale: heroScale }] }}>
-                <LinearGradient
-                  colors={["#102B25", "#102334", "#0D1827"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.setupHero}
-                >
-                  <Animated.View style={[styles.setupGlow, { opacity: auraOpacity, transform: [{ scale: auraScale }] }]} />
-                  <View style={styles.setupTopRow}>
-                    <View>
-                      <Text style={styles.setupEyebrow}>BEFORE MONITORING</Text>
-                      <Text style={styles.setupTitle}>Who's in the car?</Text>
-                    </View>
-                    <View style={styles.setupReadyPill}>
-                      <View style={styles.setupReadyDot} />
-                      <Text style={styles.setupReadyText}>READY</Text>
-                    </View>
-                  </View>
+                <View style={styles.sessionControlCopy}>
+                  <Text style={styles.sessionControlTitle}>Seats</Text>
+                  <Text style={styles.sessionControlText}>Change assignments</Text>
+                </View>
+                <Text style={styles.sessionControlChevron}>›</Text>
+              </Pressable>
 
-                  <Text style={styles.setupSubtitle}>Choose the seats that are occupied. SafeSeat will use that setup when monitoring starts.</Text>
-
-                  <View style={styles.cabinPreview} accessibilityElementsHidden>
-                    <View style={styles.cabinPreviewHeader}>
-                      <Text style={styles.cabinPreviewLabel}>CABIN</Text>
-                      <Text style={styles.cabinPreviewHint}>5 seats available</Text>
-                    </View>
-                    <View style={styles.cabinFrontRow}>
-                      <View style={[styles.cabinSeat, styles.cabinSeatPrimary]}>
-                        <Text style={styles.cabinSeatShort}>D</Text>
-                        <Text style={styles.cabinSeatLabel}>Driver</Text>
-                      </View>
-                      <View style={styles.cabinSeat}>
-                        <Text style={styles.cabinSeatShort}>F</Text>
-                        <Text style={styles.cabinSeatLabel}>Front</Text>
-                      </View>
-                    </View>
-                    <View style={styles.cabinRearRow}>
-                      <View style={styles.cabinSeatSmall}>
-                        <Text style={styles.cabinSeatShortSmall}>L</Text>
-                        <Text style={styles.cabinSeatLabelSmall}>Rear L</Text>
-                      </View>
-                      <View style={styles.cabinSeatSmall}>
-                        <Text style={styles.cabinSeatShortSmall}>C</Text>
-                        <Text style={styles.cabinSeatLabelSmall}>Rear C</Text>
-                      </View>
-                      <View style={styles.cabinSeatSmall}>
-                        <Text style={styles.cabinSeatShortSmall}>R</Text>
-                        <Text style={styles.cabinSeatLabelSmall}>Rear R</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Choose who is in each seat"
-                    onPress={() => {
-                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      router.push("/assign");
-                    }}
-                    style={({ pressed }) => [styles.setupPrimaryAction, pressed && styles.setupPrimaryActionPressed]}
-                  >
-                    <View style={styles.setupPrimaryIcon}>
-                      <Text style={styles.setupPrimaryIconText}>+</Text>
-                    </View>
-                    <View style={styles.setupPrimaryCopy}>
-                      <Text style={styles.setupPrimaryTitle}>Choose Seats</Text>
-                      <Text style={styles.setupPrimaryText}>Add the driver and anyone riding</Text>
-                    </View>
-                    <Text style={styles.setupPrimaryChevron}>›</Text>
-                  </Pressable>
-                </LinearGradient>
-              </Animated.View>
-            )}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="End monitoring session"
+                onPress={openEndSession}
+                style={({ pressed }) => [styles.sessionControl, styles.endControl, pressed && styles.controlPressed]}
+              >
+                <View style={styles.endIconWrap}>
+                  <View style={styles.endIconSquare} />
+                </View>
+                <View style={styles.sessionControlCopy}>
+                  <Text style={styles.endControlTitle}>End Session</Text>
+                  <Text style={styles.endControlText}>Stop monitoring</Text>
+                </View>
+              </Pressable>
+            </View>
           </View>
-        </ScrollView>
+        ) : (
+          <ScrollView
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
+            showsVerticalScrollIndicator={false}
+            bounces
+          >
+            <View style={styles.container}>
+              <View style={styles.headerRow}>
+                <View>
+                  <Text style={styles.eyebrow}>SAFESEAT</Text>
+                  <Text style={styles.pageHeader}>Home</Text>
+                </View>
+              </View>
+
+              <View style={styles.preSessionTopRow}>
+                <View>
+                  <Text style={styles.preSessionLabel}>SEAT SETUP</Text>
+                  <Text style={styles.preSessionTitle}>{assignedSeatCount}/5 selected</Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Choose seats"
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push("/assign");
+                  }}
+                  style={({ pressed }) => [styles.chooseSeatsButton, pressed && styles.controlPressed]}
+                >
+                  <Text style={styles.chooseSeatsButtonText}>Choose Seats</Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.homeSeatList}>
+                {SEAT_NUMBERS.map((seatNo) => (
+                  <View key={seatNo} style={styles.homeSeatRow}>
+                    <SeatCard
+                      compact
+                      seatNo={seatNo}
+                      role={SEAT_ROLES[seatNo]}
+                      name={getDisplayName(assignments[seatNo])}
+                      photo={getProfilePhoto(assignments[seatNo])}
+                      state={assignments[seatNo] ? getSeatState(seatNo) : "empty"}
+                      animationActive={false}
+                      animationCycle={animationCycle}
+                      onPress={() => router.push("/assign")}
+                    />
+                  </View>
+                ))}
+              </View>
+            </View>
+          </ScrollView>
+        )}
 
         <Modal
           visible={endSessionVisible}
@@ -768,8 +730,19 @@ const styles = StyleSheet.create({
     left: -185,
   },
   safeArea: { flex: 1, backgroundColor: "transparent" },
-  scrollContent: { flexGrow: 1, paddingTop: spacing.one },
-  container: { flex: 1, width: "100%", paddingHorizontal: spacing.two, gap: spacing.two },
+  scrollContent: { flexGrow: 1, paddingTop: spacing.half },
+  container: { flex: 1, width: "100%", paddingHorizontal: spacing.two, gap: spacing.one },
+  activeContainer: {
+    flex: 1,
+    width: "100%",
+    paddingHorizontal: spacing.two,
+    paddingTop: spacing.half,
+    paddingBottom: spacing.one,
+    gap: spacing.one,
+    minHeight: 0,
+  },
+  activeSeatList: { flex: 1, minHeight: 0, gap: 7 },
+  homeSeatRowActive: { flex: 1, minHeight: 0, width: "100%" },
 
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   eyebrow: { color: themes.primaryBttn, fontSize: 9.5, letterSpacing: 1.35, fontFamily: "Body-Bold" },
@@ -863,7 +836,7 @@ const styles = StyleSheet.create({
   occupantPillLabel: { color: themes.textMuted, fontSize: 7.5, letterSpacing: 0.45, fontFamily: "Body-Bold" },
 
   consoleMain: {
-    minHeight: 270,
+    minHeight: 228,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: spacing.one,
@@ -871,17 +844,17 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.two,
   },
   symbolStage: {
-    width: 112,
-    height: 112,
+    width: 100,
+    height: 100,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
     marginBottom: spacing.one,
   },
   symbolCore: {
-    width: 90,
-    height: 90,
-    borderRadius: 30,
+    width: 82,
+    height: 82,
+    borderRadius: 27,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1.2,
@@ -896,14 +869,14 @@ const styles = StyleSheet.create({
   },
   statePulseRing: {
     position: "absolute",
-    width: 88,
-    height: 88,
-    borderRadius: 30,
+    width: 80,
+    height: 80,
+    borderRadius: 27,
     borderWidth: 1.3,
   },
   statusLabel: {
-    fontSize: 34,
-    lineHeight: 38,
+    fontSize: 31,
+    lineHeight: 35,
     letterSpacing: 1.5,
     fontFamily: "Body-Bold",
     textAlign: "center",
@@ -953,11 +926,36 @@ const styles = StyleSheet.create({
   monitoringChipText: { color: themes.textSecondary, fontSize: 9.5, fontFamily: "Body-Bold" },
   consoleBottomHint: { color: themes.textMuted, fontSize: 8.5, fontFamily: "Body-Regular", textAlign: "right", flexShrink: 1 },
 
+  homeSeatList: { gap: 8 },
+  homeSeatRow: { width: "100%" },
+  preSessionTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.one,
+  },
+  preSessionLabel: { color: themes.textMuted, fontSize: 8.5, letterSpacing: 1.05, fontFamily: "Body-Bold" },
+  preSessionTitle: { color: themes.text, fontSize: 19, fontFamily: "Body-Bold", marginTop: 2 },
+  chooseSeatsButton: {
+    minHeight: 40,
+    paddingHorizontal: spacing.two,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: themes.primaryBttn,
+    shadowColor: themes.primaryBttn,
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 3,
+  },
+  chooseSeatsButtonText: { color: themes.background, fontSize: 11, fontFamily: "Body-Bold" },
+
   sessionControls: { flexDirection: "row", gap: spacing.one },
   sessionControl: {
     flex: 1,
-    minHeight: 66,
-    borderRadius: 20,
+    minHeight: 52,
+    borderRadius: 18,
     borderWidth: 1,
     flexDirection: "row",
     alignItems: "center",
@@ -1016,6 +1014,8 @@ const styles = StyleSheet.create({
     borderColor: themes.divider,
   },
   sectionCountText: { color: themes.textSecondary, fontSize: 11, fontFamily: "Body-Bold" },
+  peopleGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.one },
+  personTileWrap: { width: "48.5%" },
 
   setupHero: {
     position: "relative",
@@ -1100,6 +1100,36 @@ const styles = StyleSheet.create({
   cabinSeatShortSmall: { color: themes.textSecondary, fontSize: 13, fontFamily: "Body-Bold" },
   cabinSeatLabel: { color: themes.textSecondary, fontSize: 8.5, marginTop: 3, fontFamily: "Body-Bold" },
   cabinSeatLabelSmall: { color: themes.textMuted, fontSize: 7.5, marginTop: 2, fontFamily: "Body-Bold" },
+
+  setupSummaryPanel: {
+    marginTop: spacing.two,
+    borderRadius: 20,
+    padding: spacing.one + 4,
+    backgroundColor: "rgba(7,17,27,0.52)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    gap: spacing.one,
+  },
+  setupSummaryTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.one },
+  setupSummaryEyebrow: { color: themes.textMuted, fontSize: 8, letterSpacing: 0.9, fontFamily: "Body-Bold" },
+  setupSummaryCount: { color: themes.text, fontSize: 14, marginTop: 3, fontFamily: "Body-Bold" },
+  setupSummaryStatus: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999, backgroundColor: themes.surfaceSoft, borderWidth: 1, borderColor: themes.divider },
+  setupSummaryStatusReady: { backgroundColor: themes.primarySoft, borderColor: themes.primaryBorder },
+  setupSummaryDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: themes.textMuted },
+  setupSummaryDotReady: { backgroundColor: themes.primaryBttn },
+  setupSummaryStatusText: { color: themes.textMuted, fontSize: 7.5, letterSpacing: 0.55, fontFamily: "Body-Bold" },
+  setupSummaryStatusTextReady: { color: themes.primaryBttn },
+  setupPeoplePreview: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  setupPersonChip: { width: "48.5%", minHeight: 46, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 8, paddingVertical: 7, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.035)", borderWidth: 1, borderColor: "rgba(255,255,255,0.06)" },
+  setupPersonAvatar: { width: 30, height: 30, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: themes.primarySoft, borderWidth: 1, borderColor: themes.primaryBorder },
+  setupPersonInitial: { color: themes.primaryBttn, fontSize: 11, fontFamily: "Body-Bold" },
+  setupPersonName: { color: themes.text, fontSize: 10.5, fontFamily: "Body-Bold" },
+  setupPersonSeat: { color: themes.textMuted, fontSize: 7.5, marginTop: 1, fontFamily: "Body-Regular" },
+  setupEmptySummary: { minHeight: 56, flexDirection: "row", alignItems: "center", gap: spacing.one },
+  setupEmptyIcon: { width: 36, height: 36, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: themes.primarySoft, borderWidth: 1, borderColor: themes.primaryBorder },
+  setupEmptyIconText: { color: themes.primaryBttn, fontSize: 22, lineHeight: 23, fontFamily: "Body-Regular" },
+  setupEmptyTitle: { color: themes.text, fontSize: 12.5, fontFamily: "Body-Bold" },
+  setupEmptyText: { color: themes.textMuted, fontSize: 9, marginTop: 2, fontFamily: "Body-Regular" },
 
   setupPrimaryAction: {
     minHeight: 62,

@@ -80,8 +80,9 @@ export default function ProfileCard({
 
       <View style={styles.copy}>
         <Text style={styles.profileName}>{name}</Text>
-        <Text style={styles.profileMeta}>Saved occupant profile</Text>
+        <Text style={styles.profileMeta}>Tap to view or edit</Text>
       </View>
+      <Text style={styles.chevron}>›</Text>
     </Pressable>
   );
 }
@@ -132,4 +133,5 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 2,
   },
+  chevron: { color: themes.textMuted, fontSize: 24, lineHeight: 24, fontFamily: "Body-Regular" },
 });

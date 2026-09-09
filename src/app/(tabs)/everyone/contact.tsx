@@ -33,11 +33,11 @@ import { Host, Icon } from "@expo/ui";
 const { width: screenWidth } = Dimensions.get("window");
 
 const HIERARCHY_OPTIONS = [
-    { label: "Primary", value: 1 },
-    { label: "Secondary", value: 2 },
-    { label: "Tertiary", value: 3 },
-    { label: "Quaternary", value: 4 },
-    { label: "Quinary", value: 5 },
+    { label: "1st contact", value: 1 },
+    { label: "2nd contact", value: 2 },
+    { label: "3rd contact", value: 3 },
+    { label: "4th contact", value: 4 },
+    { label: "5th contact", value: 5 },
 ];
 
 export default function Contact() {
@@ -129,6 +129,10 @@ export default function Contact() {
     const handleSaveChanges = async () => {
         const currentUser = auth.currentUser;
         if (!currentUser || !id) return;
+        if (!userName.trim() || !userPhone.trim()) {
+            Alert.alert("Required information missing", "Name and phone number are required.");
+            return;
+        }
 
         setSaving(true);
         try {
@@ -268,7 +272,7 @@ export default function Contact() {
                             </View>
                             <View style={styles.priorityBadge}>
                                 <Text style={styles.priorityBadgeText}>
-                                    {HIERARCHY_OPTIONS.find((item) => item.value === userHierarchy)?.label ?? `Priority ${userHierarchy}`}
+                                    {HIERARCHY_OPTIONS.find((item) => item.value === userHierarchy)?.label ?? `Contact ${userHierarchy}`}
                                 </Text>
                             </View>
                             <Text style={[styles.pageHeader, { color: themes.text, flex: 1 }]}>
@@ -285,7 +289,7 @@ export default function Contact() {
                                     fontSize: fontsize.header,
                                     marginTop: spacing.one,
                                 }}>
-                                    Basic Information
+                                    Contact details
                                 </Text>
 
                                 <View style={{ borderRadius: spacing.edge, overflow: "hidden" }}>
@@ -293,7 +297,7 @@ export default function Contact() {
                                     {/* Name */}
                                     <View style={[styles.fixedFieldContainer, !editMode && styles.notLast, { backgroundColor: editMode ? themes.background : themes.backgroundElement }]}>
                                         <Text style={[styles.fixedInfoLabel, { color: themes.primaryBttn }]}>
-                                            Name:
+                                            Name
                                         </Text>
                                         {editMode ? (
                                             <View style={{ flex: 1 }}>
@@ -315,7 +319,7 @@ export default function Contact() {
                                     {/* Number */}
                                     <View style={[styles.fixedFieldContainer, !editMode && styles.notLast, { backgroundColor: editMode ? themes.background : themes.backgroundElement }]}>
                                         <Text style={[styles.fixedInfoLabel, { color: themes.primaryBttn }]}>
-                                            Number:
+                                            Phone number
                                         </Text>
                                         {editMode ? (
                                             <View style={{ flex: 1 }}>
@@ -337,7 +341,7 @@ export default function Contact() {
                                     {/* Hierarchy */}
                                     <View style={[styles.fixedFieldContainer, { backgroundColor: editMode ? themes.background : themes.backgroundElement }]}>
                                         <Text style={[styles.fixedInfoLabel, { color: themes.primaryBttn }]}>
-                                            Hierarchy:
+                                            Contact order
                                         </Text>
                                         {editMode ? (
                                             <View style={{ flex: 1 }}>
@@ -347,7 +351,7 @@ export default function Contact() {
                                                     labelField="label"
                                                     valueField="value"
                                                     selectedTextStyle={{ color: themes.text, fontFamily: "Body-Medium" }}
-                                                    placeholder="Hierarchy"
+                                                    placeholder="Contact order"
                                                     placeholderStyle={{ color: themes.textInputPlaceholder }}
                                                     value={userHierarchy}
                                                     disable={saving}
@@ -385,7 +389,7 @@ export default function Contact() {
                                             </View>
                                         ) : (
                                             <Text style={{ color: themes.text, fontFamily: "Body-Medium", fontSize: fontsize.body }}>
-                                                {HIERARCHY_OPTIONS.find(o => o.value === userHierarchy)?.label ?? "Primary"}
+                                                {HIERARCHY_OPTIONS.find(o => o.value === userHierarchy)?.label ?? "1st contact"}
                                             </Text>
                                         )}
                                     </View>
@@ -555,6 +559,14 @@ const styles = StyleSheet.create({
     dropdown: {
         height: spacing.seven,
         width: "100%",
+    },
+    sectionHelper: {
+        color: themes.textMuted,
+        fontSize: 9.5,
+        lineHeight: 14,
+        fontFamily: "Body-Regular",
+        marginTop: -spacing.half,
+        marginBottom: spacing.one,
     },
     input: {
         height: spacing.six,

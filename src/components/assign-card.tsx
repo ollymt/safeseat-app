@@ -49,27 +49,34 @@ export default function AssignCard({
   };
 
   const imageUri = getFormattedImageUri(rawIcon);
-  const stateColor = state === "safe"
+  const stateColor = state === "safe" || state === "ready" || state === "monitoring"
     ? themes.green
-    : state === "warning"
+    : state === "warning" || state === "consent"
       ? themes.lightOrange
-      : state === "emergency"
+      : state === "emergency" || state === "declined"
         ? themes.warnBttn
         : state === "unknown"
           ? themes.info
-          : hardwareLinked
-            ? themes.primaryBttn
-            : "#A8B8C8";
+          : state === "offline"
+            ? themes.textMuted
+            : hardwareLinked
+              ? themes.primaryBttn
+              : "#A8B8C8";
 
   const stateLabel = state === "safe" ? "SAFE"
     : state === "warning" ? "WARNING"
       : state === "emergency" ? "EMERGENCY"
         : state === "unknown" ? "ANALYZING"
-          : displayName ? "ASSIGNED" : "";
+          : state === "consent" ? "CONSENT NEEDED"
+            : state === "declined" ? "NOT MONITORED"
+              : state === "offline" ? "OFFLINE"
+                : state === "ready" ? "READY"
+                  : state === "monitoring" ? "MONITORING"
+                    : displayName ? "ASSIGNED" : "";
 
-  const stateIcon = state === "safe"
+  const stateIcon = state === "safe" || state === "ready" || state === "monitoring"
     ? Icon.select({ ios: "checkmark.circle.fill", android: checkXml })
-    : state === "warning"
+    : state === "warning" || state === "consent" || state === "declined"
       ? Icon.select({ ios: "exclamationmark.triangle.fill", android: warningXml })
       : state === "emergency"
         ? Icon.select({ ios: "light.beacon.max.fill", android: sirenXml })
@@ -86,7 +93,7 @@ export default function AssignCard({
         displayName ? styles.assignedCard : styles.emptyCard,
         hardwareLinked && styles.hardwareCard,
         {
-          borderColor: hardwareLinked ? themes.primaryBttn : stateColor,
+          borderColor: stateColor,
           opacity: pressed ? 0.9 : 1,
           transform: [{ scale: pressed ? 0.965 : 1 }],
         },
@@ -103,10 +110,10 @@ export default function AssignCard({
           )}
           <Text style={styles.seatLabel} numberOfLines={1}>{seatLabel}</Text>
           <Text style={styles.profileName} numberOfLines={1}>{displayName}</Text>
-          {locked && stateLabel ? (
+          {stateLabel ? (
             <View style={styles.compactState}>
-              <Host matchContents><Icon name={stateIcon} color={stateColor} size={14} /></Host>
-              <Text style={[styles.compactStateText, { color: stateColor }]}>{stateLabel}</Text>
+              <Host matchContents><Icon name={stateIcon} color={stateColor} size={13} /></Host>
+              <Text style={[styles.compactStateText, { color: stateColor }]} numberOfLines={1}>{stateLabel}</Text>
             </View>
           ) : (
             <Text style={styles.assignedText}>Assigned</Text>
@@ -167,7 +174,7 @@ const styles = StyleSheet.create({
   profileName: { fontSize: 11, lineHeight: 13, color: themes.text, fontFamily: "Body-Bold", textAlign: "center", maxWidth: "100%" },
   assignedText: { fontSize: 8, color: themes.textSecondary, fontFamily: "Body-Medium" },
   compactState: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 1 },
-  compactStateText: { fontSize: 7.5, letterSpacing: 0.35, fontFamily: "Body-Bold" },
+  compactStateText: { fontSize: 6.8, letterSpacing: 0.18, fontFamily: "Body-Bold" },
   emptyContent: { justifyContent: "center", alignItems: "center", gap: 4, width: "100%" },
   plusCircle: { width: 29, height: 29, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(6,14,24,0.58)", borderWidth: 1, borderColor: "rgba(255,255,255,0.58)" },
   actionPill: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 999, backgroundColor: "rgba(6,14,24,0.56)", borderWidth: 1, borderColor: "rgba(255,255,255,0.16)" },

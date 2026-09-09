@@ -443,7 +443,7 @@ export default function EmergencyModal({
                       <Text style={styles.contactPhone}>{contact.phone || "No phone number"}</Text>
                     </View>
                     <Text style={styles.contactOrder}>
-                      {contact.hierarchy > 0 ? `#${contact.hierarchy}` : ""}
+                      {contact.hierarchy > 0 ? `${contact.hierarchy}${contact.hierarchy === 1 ? "st" : contact.hierarchy === 2 ? "nd" : contact.hierarchy === 3 ? "rd" : "th"}` : ""}
                     </Text>
                   </Pressable>
                 ))}
