@@ -1,22 +1,32 @@
-import Button from "@/components/button";
 import EmergencyModal from "@/components/emergency-modal";
 import SeatCard from "@/components/seat-card";
 import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
 import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Host, Icon } from "@expo/ui";
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Easing,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { Host, Icon } from "@expo/ui";
-import { LinearGradient } from "expo-linear-gradient";
 
 import checkXml from "@expo/material-symbols/check.xml";
-import warningXml from "@expo/material-symbols/warning.xml";
-import sirenXml from "@expo/material-symbols/siren.xml";
 import circleXml from "@expo/material-symbols/circle.xml";
 import lockOpenXml from "@expo/material-symbols/lock_open.xml";
+import sirenXml from "@expo/material-symbols/siren.xml";
+import warningXml from "@expo/material-symbols/warning.xml";
 
 export type SeatState = "empty" | "assigned" | "safe" | "warning" | "emergency" | "unknown";
 
@@ -32,6 +42,7 @@ type Profile = {
 
 const SEAT_ASSIGNMENTS_KEY = "seatAssignments";
 const IS_LOCKED_IN_KEY = "isLockedIn";
+const SEAT_STATUSES_KEY = "seatStatuses";
 const HARDWARE_SEAT_KEY = "safeSeatHardwareSeatNo";
 
 const SEAT_ROLES: Record<number, string> = {
@@ -73,6 +84,13 @@ const STATUS_COPY = {
 
 type OverallState = keyof typeof STATUS_COPY;
 
+const getHeroColors = (state: OverallState): [string, string, string] => {
+  if (state === "safe") return ["#123429", "#102A27", "#0E1D29"];
+  if (state === "warning") return ["#352F1F", "#1F2A2C", "#0E1D29"];
+  if (state === "emergency") return ["#382329", "#23232D", "#0E1D29"];
+  return ["#182D43", "#12263A", "#0E1D29"];
+};
+
 export default function Home() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -83,12 +101,13 @@ export default function Home() {
   const [assignments, setAssignments] = useState<Record<number, Profile>>({});
   const [hardwareSeatNo, setHardwareSeatNo] = useState<number | null>(null);
   const [dismissedSeats, setDismissedSeats] = useState<Set<number>>(new Set());
+  const [endSessionVisible, setEndSessionVisible] = useState(false);
+  const [endingSession, setEndingSession] = useState(false);
 
-  // Home motion is intentionally subtle: it communicates that monitoring is live
-  // without creating distracting movement for a driver.
   const heroEntrance = useRef(new Animated.Value(0)).current;
   const ambientPulse = useRef(new Animated.Value(0)).current;
   const livePulse = useRef(new Animated.Value(0)).current;
+  const stateMotion = useRef(new Animated.Value(0)).current;
   const passengerEntrance = useRef(SEAT_NUMBERS.map(() => new Animated.Value(0))).current;
 
   const loadData = useCallback(async () => {
@@ -157,22 +176,6 @@ export default function Home() {
     return () => liveLoop.stop();
   }, [hubConnected, isLockedIn, livePulse]);
 
-  useEffect(() => {
-    const assigned = SEAT_NUMBERS.filter((seatNo) => Boolean(assignments[seatNo]));
-    passengerEntrance.forEach((value) => value.setValue(0));
-    if (!isLockedIn || assigned.length === 0) return;
-
-    Animated.stagger(80, assigned.map((seatNo) =>
-      Animated.spring(passengerEntrance[seatNo - 1], {
-        toValue: 1,
-        damping: 18,
-        stiffness: 155,
-        mass: 0.75,
-        useNativeDriver: true,
-      })
-    )).start();
-  }, [assignments, isLockedIn, passengerEntrance]);
-
   const getSeatState = useCallback((seatNo: number): SeatState => {
     const profile = assignments[seatNo];
     if (!profile) return "empty";
@@ -194,6 +197,10 @@ export default function Home() {
   };
 
   const assignedSeatCount = SEAT_NUMBERS.filter((seatNo) => Boolean(assignments[seatNo])).length;
+  const guestSeatCount = SEAT_NUMBERS.filter((seatNo) => {
+    const profile = assignments[seatNo];
+    return Boolean(profile?.isGuest || profile?.sessionOnly);
+  }).length;
 
   const overallState = useMemo<OverallState>(() => {
     if (!isLockedIn || assignedSeatCount === 0) return "unknown";
@@ -218,12 +225,58 @@ export default function Home() {
     }).start();
   }, [heroEntrance, isLockedIn, overallState]);
 
+  useEffect(() => {
+    stateMotion.stopAnimation();
+    stateMotion.setValue(0);
+
+    if (!isLockedIn) return;
+
+    if (overallState === "unknown") return;
+
+    const duration = overallState === "safe" ? 1500 : overallState === "warning" ? 700 : 520;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(stateMotion, {
+          toValue: 1,
+          duration,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(stateMotion, {
+          toValue: 0,
+          duration,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [isLockedIn, overallState, stateMotion]);
+
+  useEffect(() => {
+    const assigned = SEAT_NUMBERS.filter((seatNo) => Boolean(assignments[seatNo]));
+    passengerEntrance.forEach((value) => value.setValue(0));
+    if (!isLockedIn || assigned.length === 0) return;
+
+    Animated.stagger(70, assigned.map((seatNo) =>
+      Animated.spring(passengerEntrance[seatNo - 1], {
+        toValue: 1,
+        damping: 18,
+        stiffness: 155,
+        mass: 0.75,
+        useNativeDriver: true,
+      })
+    )).start();
+  }, [assignments, isLockedIn, passengerEntrance]);
+
   const overallSeatNo = useMemo(() => {
     if (overallState === "safe") return hardwareSeatNo ?? undefined;
     return SEAT_NUMBERS.find((seatNo) => Boolean(assignments[seatNo]) && getSeatState(seatNo) === overallState);
   }, [assignments, getSeatState, hardwareSeatNo, overallState]);
 
   const copy = STATUS_COPY[overallState];
+  const heroColors = getHeroColors(overallState);
   const overallIcon = overallState === "safe"
     ? Icon.select({ ios: "checkmark.circle.fill", android: checkXml })
     : overallState === "warning"
@@ -254,6 +307,56 @@ export default function Home() {
     Alert.alert(`${SEAT_ROLES[seatNo]} · ${stateCopy.label}`, message);
   };
 
+  const openEndSession = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setEndSessionVisible(true);
+  };
+
+  const confirmEndSession = async () => {
+    if (endingSession) return;
+    setEndingSession(true);
+
+    try {
+      const persistentAssignments: Record<number, Profile> = {};
+      Object.entries(assignments).forEach(([seatNo, profile]) => {
+        if (!profile.sessionOnly && !profile.isGuest) {
+          persistentAssignments[Number(seatNo)] = profile;
+        }
+      });
+
+      let nextHardwareSeat = hardwareSeatNo;
+      if (nextHardwareSeat && !persistentAssignments[nextHardwareSeat]) {
+        nextHardwareSeat = Number(Object.keys(persistentAssignments)[0]) || null;
+      }
+
+      const writes: Promise<void>[] = [
+        AsyncStorage.setItem(IS_LOCKED_IN_KEY, JSON.stringify(false)),
+        AsyncStorage.setItem(SEAT_ASSIGNMENTS_KEY, JSON.stringify(persistentAssignments)),
+        AsyncStorage.setItem(SEAT_STATUSES_KEY, JSON.stringify({})),
+      ];
+
+      if (nextHardwareSeat) {
+        writes.push(AsyncStorage.setItem(HARDWARE_SEAT_KEY, JSON.stringify(nextHardwareSeat)));
+      } else {
+        writes.push(AsyncStorage.removeItem(HARDWARE_SEAT_KEY));
+      }
+
+      await Promise.all(writes);
+
+      setIsLockedIn(false);
+      setAssignments(persistentAssignments);
+      setHardwareSeatNo(nextHardwareSeat);
+      setEndSessionVisible(false);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace("/assign");
+    } catch (error) {
+      console.error("Failed to end session from Home:", error);
+      Alert.alert("Could not end session", "SafeSeat could not end monitoring. Please try again.");
+    } finally {
+      setEndingSession(false);
+    }
+  };
+
   const emergencySeatNo = isLockedIn
     ? SEAT_NUMBERS.find(
         (seatNo) => getSeatState(seatNo) === "emergency" && assignments[seatNo] && !dismissedSeats.has(seatNo),
@@ -273,12 +376,64 @@ export default function Home() {
 
   const heroTranslateY = heroEntrance.interpolate({ inputRange: [0, 1], outputRange: [14, 0] });
   const heroScale = heroEntrance.interpolate({ inputRange: [0, 1], outputRange: [0.985, 1] });
-  const auraScale = ambientPulse.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.12] });
-  const auraOpacity = ambientPulse.interpolate({ inputRange: [0, 1], outputRange: [0.055, 0.13] });
-  const ringScale = ambientPulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.16] });
-  const ringOpacity = ambientPulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.05] });
+  const auraScale = ambientPulse.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1.12] });
+  const auraOpacity = ambientPulse.interpolate({ inputRange: [0, 1], outputRange: [0.045, 0.12] });
   const liveRingScale = livePulse.interpolate({ inputRange: [0, 1], outputRange: [1, 2.3] });
   const liveRingOpacity = livePulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] });
+
+  const safeScale = stateMotion.interpolate({ inputRange: [0, 1], outputRange: [1, 1.07] });
+  const attentionScale = stateMotion.interpolate({ inputRange: [0, 1], outputRange: [1, overallState === "emergency" ? 1.12 : 1.06] });
+  const warningLift = stateMotion.interpolate({ inputRange: [0, 1], outputRange: [0, -3] });
+  const stateRingOpacity = stateMotion.interpolate({ inputRange: [0, 1], outputRange: [0.34, 0.06] });
+  const stateRingScale = stateMotion.interpolate({ inputRange: [0, 1], outputRange: [0.92, overallState === "emergency" ? 1.35 : 1.22] });
+
+  const renderStatusSymbol = () => {
+    if (overallState === "unknown") {
+      return (
+        <View style={styles.symbolStage}>
+          <View style={[styles.symbolCore, styles.symbolCoreRaised, { borderColor: `${copy.color}55`, backgroundColor: `${copy.color}10` }]}>
+            <ActivityIndicator size="large" color={copy.color} />
+          </View>
+        </View>
+      );
+    }
+
+    const animatedTransform = overallState === "safe"
+      ? [{ scale: safeScale }]
+      : overallState === "warning"
+        ? [{ translateY: warningLift }, { scale: attentionScale }]
+        : [{ scale: attentionScale }];
+
+    return (
+      <View style={styles.symbolStage}>
+        <Animated.View
+          style={[
+            styles.statePulseRing,
+            {
+              borderColor: copy.color,
+              opacity: stateRingOpacity,
+              transform: [{ scale: stateRingScale }],
+            },
+          ]}
+        />
+        <Animated.View
+          style={[
+            styles.symbolCore,
+            styles.symbolCoreRaised,
+            {
+              borderColor: `${copy.color}77`,
+              backgroundColor: `${copy.color}12`,
+              transform: animatedTransform,
+            },
+          ]}
+        >
+          <Host matchContents>
+            <Icon name={overallIcon} color={copy.color} size={52} />
+          </Host>
+        </Animated.View>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.screen}>
@@ -286,6 +441,7 @@ export default function Home() {
         <Animated.View style={[styles.backgroundGlowTop, { opacity: auraOpacity, transform: [{ scale: auraScale }] }]} />
         <View style={styles.backgroundGlowBottom} />
       </View>
+
       <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
         <ScrollView
           contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
@@ -295,9 +451,10 @@ export default function Home() {
           <View style={styles.container}>
             <View style={styles.headerRow}>
               <View>
-                <Text style={styles.eyebrow}>{isLockedIn ? "LIVE TRIP" : "SAFESEAT"}</Text>
+                <Text style={styles.eyebrow}>{isLockedIn ? "SAFESEAT ACTIVE" : "SAFESEAT"}</Text>
                 <Text style={styles.pageHeader}>Home</Text>
               </View>
+
               {isLockedIn ? (
                 <View style={[styles.liveBadge, !hubConnected && styles.liveBadgeOffline]}>
                   <View style={styles.liveDotWrap}>
@@ -316,56 +473,102 @@ export default function Home() {
             {isLockedIn ? (
               <>
                 <Animated.View style={{ opacity: heroEntrance, transform: [{ translateY: heroTranslateY }, { scale: heroScale }] }}>
-                <LinearGradient
-                  colors={["#12283A", "#0F2130", themes.backgroundElement]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={[styles.overallCard, { borderColor: `${copy.color}55` }]}
-                >
-                  <View style={styles.brandEdge} />
-                  <Animated.View style={[styles.statusGlow, { backgroundColor: copy.color, opacity: auraOpacity, transform: [{ scale: auraScale }] }]} />
-                  <View style={styles.brandGlow} />
+                  <LinearGradient
+                    colors={heroColors}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={[styles.statusConsole, { borderColor: `${copy.color}55` }]}
+                  >
+                    <Animated.View
+                      pointerEvents="none"
+                      style={[
+                        styles.statusGlow,
+                        { backgroundColor: copy.color, opacity: auraOpacity, transform: [{ scale: auraScale }] },
+                      ]}
+                    />
+                    <View pointerEvents="none" style={styles.consoleBrandGlow} />
+                    <View style={[styles.stateAccentLine, { backgroundColor: copy.color }]} />
 
-                  <View style={styles.heroTopRow}>
-                    <View style={styles.heroSignal}>
-                      <View style={[styles.heroSignalDot, { backgroundColor: copy.color }]} />
-                      <Text style={styles.heroSignalText}>CABIN STATUS</Text>
+                    <View style={styles.consoleTopRow}>
+                      <View style={styles.consoleTitleRow}>
+                        <View style={[styles.consoleIndicator, { backgroundColor: hubConnected ? themes.primaryBttn : themes.textMuted }]} />
+                        <Text style={styles.consoleEyebrow}>{hubConnected ? "LIVE MONITORING" : "MONITORING PAUSED"}</Text>
+                      </View>
+                      <View style={styles.occupantPill}>
+                        <Text style={styles.occupantPillNumber}>{assignedSeatCount}</Text>
+                        <Text style={styles.occupantPillLabel}>{assignedSeatCount === 1 ? "PERSON" : "PEOPLE"}</Text>
+                      </View>
                     </View>
-                    <Text style={styles.heroCount}>
-                      {assignedSeatCount} {assignedSeatCount === 1 ? "OCCUPANT" : "OCCUPANTS"}
-                    </Text>
-                  </View>
 
-                  <View style={styles.heroMainRow}>
-                    <View style={[styles.overallIcon, { borderColor: `${copy.color}88`, backgroundColor: `${copy.color}13` }]}>
-                      <Animated.View style={[styles.iconPulseRing, { borderColor: copy.color, opacity: ringOpacity, transform: [{ scale: ringScale }] }]} />
+                    <View style={styles.consoleMain}>
+                      {renderStatusSymbol()}
+                      <Text style={[styles.statusLabel, { color: copy.color }]}>{copy.label}</Text>
+                      <Text style={styles.statusHeadline}>{copy.headline}</Text>
+                      {copy.detail ? <Text style={styles.statusDetail}>{copy.detail}</Text> : null}
+
+                      {overallSeatNo && overallState !== "safe" ? (
+                        <View style={[styles.focusChip, { borderColor: `${copy.color}55`, backgroundColor: `${copy.color}12` }]}>
+                          <Text style={styles.focusChipCaption}>{overallState === "warning" ? "CHECK" : overallState === "emergency" ? "NEEDS HELP" : "ANALYZING"}</Text>
+                          <Text style={[styles.focusChipText, { color: copy.color }]}>{SEAT_ROLES[overallSeatNo]}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+
+                    <View style={styles.consoleBottom}>
+                      <View style={styles.monitoringChip}>
+                        <View style={[styles.monitoringChipDot, { backgroundColor: hubConnected ? themes.primaryBttn : themes.textMuted }]} />
+                        <Text style={styles.monitoringChipText}>
+                          {hubConnected ? (telemetryReady ? "Main Hub connected" : "Main Hub connecting") : "Main Hub offline"}
+                        </Text>
+                      </View>
+                      <Text style={styles.consoleBottomHint}>SafeSeat stays active in the background</Text>
+                    </View>
+                  </LinearGradient>
+                </Animated.View>
+
+                <View style={styles.sessionControls}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="View seats and people in the car"
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      router.push("/assign");
+                    }}
+                    style={({ pressed }) => [styles.sessionControl, styles.seatsControl, pressed && styles.controlPressed]}
+                  >
+                    <View style={styles.sessionControlIcon}>
                       <Host matchContents>
-                        <Icon name={overallIcon} color={copy.color} size={38} />
+                        <Icon name={Icon.select({ ios: "carseat.right.fill", android: lockOpenXml })} size={23} color={themes.primaryBttn} />
                       </Host>
                     </View>
-                    <View style={styles.heroCopy}>
-                      <Text style={[styles.overallLabel, { color: copy.color }]}>{copy.label}</Text>
-                      <Text style={styles.overallHeadline}>{copy.headline}</Text>
+                    <View style={styles.sessionControlCopy}>
+                      <Text style={styles.sessionControlTitle}>Seats</Text>
+                      <Text style={styles.sessionControlText}>View cabin</Text>
                     </View>
-                  </View>
+                    <Text style={styles.sessionControlChevron}>›</Text>
+                  </Pressable>
 
-                  <View style={styles.heroFooter}>
-                    {copy.detail ? <Text style={styles.overallDetail}>{copy.detail}</Text> : <Text style={styles.overallDetail}>Monitoring continues while SafeSeat analyzes the available sensors.</Text>}
-                    {overallSeatNo && overallState !== "safe" ? (
-                      <View style={[styles.seatFocusPill, { borderColor: `${copy.color}55` }]}>
-                        <View style={[styles.seatFocusDot, { backgroundColor: copy.color }]} />
-                        <Text style={styles.seatFocusText}>{SEAT_ROLES[overallSeatNo]}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                </LinearGradient>
-                </Animated.View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="End monitoring session"
+                    onPress={openEndSession}
+                    style={({ pressed }) => [styles.sessionControl, styles.endControl, pressed && styles.controlPressed]}
+                  >
+                    <View style={styles.endIconWrap}>
+                      <View style={styles.endIconSquare} />
+                    </View>
+                    <View style={styles.sessionControlCopy}>
+                      <Text style={styles.endControlTitle}>End Session</Text>
+                      <Text style={styles.endControlText}>Stop monitoring</Text>
+                    </View>
+                  </Pressable>
+                </View>
 
                 <View style={styles.section}>
                   <View style={styles.sectionHeadingRow}>
                     <View>
-                      <Text style={styles.sectionHeader}>Passengers</Text>
-                      <Text style={styles.sectionSubhead}>Tap a passenger for details</Text>
+                      <Text style={styles.sectionHeader}>People in the car</Text>
+                      <Text style={styles.sectionSubhead}>Tap for status details</Text>
                     </View>
                     <View style={styles.sectionCountPill}>
                       <Text style={styles.sectionCountText}>{assignedSeatCount}</Text>
@@ -389,60 +592,137 @@ export default function Home() {
                     );
                   })}
                 </View>
-
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="View seats and passengers"
-                  onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    router.push("/assign");
-                  }}
-                  style={({ pressed }) => [styles.manageSeatsCard, pressed && styles.manageSeatsPressed]}
-                >
-                  <View style={styles.manageSeatsIcon}>
-                    <Host matchContents>
-                      <Icon name={Icon.select({ ios: "carseat.right.fill", android: lockOpenXml })} size={25} color={themes.primaryBttn} />
-                    </Host>
-                  </View>
-                  <View style={styles.manageSeatsCopy}>
-                    <Text style={styles.manageSeatsTitle}>Seats & passengers</Text>
-                    <Text style={styles.manageSeatsText}>View the cabin setup or end monitoring</Text>
-                  </View>
-                  <Text style={styles.manageSeatsChevron}>›</Text>
-                </Pressable>
               </>
             ) : (
               <Animated.View style={{ opacity: heroEntrance, transform: [{ translateY: heroTranslateY }, { scale: heroScale }] }}>
-              <LinearGradient
-                colors={["rgba(52,209,127,0.18)", "#102638", themes.backgroundElement]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.setupHero}
-              >
-                <Animated.View style={[styles.setupGlow, { opacity: auraOpacity, transform: [{ scale: auraScale }] }]} />
-                <View style={styles.setupIconWrap}>
-                  <Host matchContents>
-                    <Icon name={Icon.select({ ios: "carseat.right.fill", android: lockOpenXml })} size={58} color={themes.primaryBttn} />
-                  </Host>
-                </View>
-                <Text style={styles.setupEyebrow}>READY FOR A TRIP?</Text>
-                <Text style={styles.setupTitle}>Set up who is riding</Text>
-                <Text style={styles.setupSubtitle}>Choose the occupied seats, then start SafeSeat monitoring.</Text>
+                <LinearGradient
+                  colors={["#102B25", "#102334", "#0D1827"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.setupHero}
+                >
+                  <Animated.View style={[styles.setupGlow, { opacity: auraOpacity, transform: [{ scale: auraScale }] }]} />
+                  <View style={styles.setupTopRow}>
+                    <View>
+                      <Text style={styles.setupEyebrow}>BEFORE MONITORING</Text>
+                      <Text style={styles.setupTitle}>Who's in the car?</Text>
+                    </View>
+                    <View style={styles.setupReadyPill}>
+                      <View style={styles.setupReadyDot} />
+                      <Text style={styles.setupReadyText}>READY</Text>
+                    </View>
+                  </View>
 
-                <View style={styles.cabinDots} accessibilityElementsHidden>
-                  {[1, 2, 3, 4, 5].map((dot) => (
-                    <View key={dot} style={[styles.cabinDot, dot <= 2 && styles.cabinDotFront]} />
-                  ))}
-                </View>
+                  <Text style={styles.setupSubtitle}>Choose the seats that are occupied. SafeSeat will use that setup when monitoring starts.</Text>
 
-                <View style={styles.setupAction}>
-                  <Button label="Set Up Seats" onPress={() => router.push("/assign")} fullWidth />
-                </View>
-              </LinearGradient>
+                  <View style={styles.cabinPreview} accessibilityElementsHidden>
+                    <View style={styles.cabinPreviewHeader}>
+                      <Text style={styles.cabinPreviewLabel}>CABIN</Text>
+                      <Text style={styles.cabinPreviewHint}>5 seats available</Text>
+                    </View>
+                    <View style={styles.cabinFrontRow}>
+                      <View style={[styles.cabinSeat, styles.cabinSeatPrimary]}>
+                        <Text style={styles.cabinSeatShort}>D</Text>
+                        <Text style={styles.cabinSeatLabel}>Driver</Text>
+                      </View>
+                      <View style={styles.cabinSeat}>
+                        <Text style={styles.cabinSeatShort}>F</Text>
+                        <Text style={styles.cabinSeatLabel}>Front</Text>
+                      </View>
+                    </View>
+                    <View style={styles.cabinRearRow}>
+                      <View style={styles.cabinSeatSmall}>
+                        <Text style={styles.cabinSeatShortSmall}>L</Text>
+                        <Text style={styles.cabinSeatLabelSmall}>Rear L</Text>
+                      </View>
+                      <View style={styles.cabinSeatSmall}>
+                        <Text style={styles.cabinSeatShortSmall}>C</Text>
+                        <Text style={styles.cabinSeatLabelSmall}>Rear C</Text>
+                      </View>
+                      <View style={styles.cabinSeatSmall}>
+                        <Text style={styles.cabinSeatShortSmall}>R</Text>
+                        <Text style={styles.cabinSeatLabelSmall}>Rear R</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Choose who is in each seat"
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      router.push("/assign");
+                    }}
+                    style={({ pressed }) => [styles.setupPrimaryAction, pressed && styles.setupPrimaryActionPressed]}
+                  >
+                    <View style={styles.setupPrimaryIcon}>
+                      <Text style={styles.setupPrimaryIconText}>+</Text>
+                    </View>
+                    <View style={styles.setupPrimaryCopy}>
+                      <Text style={styles.setupPrimaryTitle}>Choose Seats</Text>
+                      <Text style={styles.setupPrimaryText}>Add the driver and anyone riding</Text>
+                    </View>
+                    <Text style={styles.setupPrimaryChevron}>›</Text>
+                  </Pressable>
+                </LinearGradient>
               </Animated.View>
             )}
           </View>
         </ScrollView>
+
+        <Modal
+          visible={endSessionVisible}
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+          onRequestClose={() => !endingSession && setEndSessionVisible(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={() => !endingSession && setEndSessionVisible(false)}
+              accessibilityLabel="Close end session dialog"
+            />
+            <View style={styles.endModalCard}>
+              <View style={styles.endModalHandle} />
+              <View style={styles.endModalIcon}>
+                <View style={styles.endModalStopSquare} />
+              </View>
+              <Text style={styles.endModalEyebrow}>MONITORING SESSION</Text>
+              <Text style={styles.endModalTitle}>End this session?</Text>
+              <Text style={styles.endModalText}>
+                {guestSeatCount > 0
+                  ? `Monitoring will stop. ${guestSeatCount} guest assignment${guestSeatCount === 1 ? "" : "s"} will also be removed.`
+                  : "Monitoring will stop and SafeSeat will return to the Seats screen. Your saved seat assignments will stay available."}
+              </Text>
+
+              <View style={styles.endModalActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={endingSession}
+                  onPress={() => setEndSessionVisible(false)}
+                  style={({ pressed }) => [styles.keepMonitoringButton, pressed && styles.modalButtonPressed]}
+                >
+                  <Text style={styles.keepMonitoringText}>Keep Monitoring</Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={endingSession}
+                  onPress={() => void confirmEndSession()}
+                  style={({ pressed }) => [styles.confirmEndButton, pressed && styles.modalButtonPressed, endingSession && styles.disabledButton]}
+                >
+                  {endingSession ? (
+                    <ActivityIndicator size="small" color={themes.warnBttn} />
+                  ) : (
+                    <View style={styles.confirmEndDot} />
+                  )}
+                  <Text style={styles.confirmEndText}>{endingSession ? "Ending..." : "End Session"}</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {emergencySeatNo !== undefined && emergencyProfile ? (
           <EmergencyModal
@@ -461,15 +741,38 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: themes.background, position: "relative", overflow: "hidden" },
+  screen: {
+    flex: 1,
+    backgroundColor: themes.background,
+    position: "relative",
+    overflow: "hidden",
+  },
   backgroundArt: { ...StyleSheet.absoluteFillObject, overflow: "hidden" },
-  backgroundGlowTop: { position: "absolute", width: 330, height: 330, borderRadius: 165, backgroundColor: themes.primaryBttn, top: -190, right: -150 },
-  backgroundGlowBottom: { position: "absolute", width: 260, height: 260, borderRadius: 130, backgroundColor: "#163A4C", opacity: 0.12, bottom: 40, left: -180 },
+  backgroundGlowTop: {
+    position: "absolute",
+    width: 350,
+    height: 350,
+    borderRadius: 175,
+    backgroundColor: themes.primaryBttn,
+    top: -220,
+    right: -160,
+  },
+  backgroundGlowBottom: {
+    position: "absolute",
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: "#163A4C",
+    opacity: 0.13,
+    bottom: 30,
+    left: -185,
+  },
   safeArea: { flex: 1, backgroundColor: "transparent" },
   scrollContent: { flexGrow: 1, paddingTop: spacing.one },
   container: { flex: 1, width: "100%", paddingHorizontal: spacing.two, gap: spacing.two },
+
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  eyebrow: { color: themes.primaryBttn, fontSize: 10, letterSpacing: 1.4, fontFamily: "Body-Bold" },
+  eyebrow: { color: themes.primaryBttn, fontSize: 9.5, letterSpacing: 1.35, fontFamily: "Body-Bold" },
   pageHeader: { fontSize: fontsize.pageHeader, fontFamily: "Logo-Font", color: themes.text, marginTop: 1 },
   liveBadge: {
     flexDirection: "row",
@@ -478,7 +781,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.one + 3,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: themes.primarySoft,
+    backgroundColor: "rgba(52,209,127,0.10)",
     borderWidth: 1,
     borderColor: themes.primaryBorder,
     shadowColor: themes.primaryBttn,
@@ -493,51 +796,213 @@ const styles = StyleSheet.create({
   liveText: { color: themes.primaryBttn, fontSize: 9, letterSpacing: 0.7, fontFamily: "Body-Bold" },
   liveTextOffline: { color: themes.textMuted },
 
-  overallCard: {
+  statusConsole: {
     position: "relative",
     overflow: "hidden",
     paddingHorizontal: spacing.two,
-    paddingVertical: spacing.two,
+    paddingTop: spacing.two,
+    paddingBottom: spacing.two,
     borderRadius: 28,
-    borderWidth: 1.2,
-    shadowColor: themes.primaryBttn,
-    shadowOpacity: 0.09,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 5,
+    borderWidth: 1.1,
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 7,
   },
-  brandEdge: { position: "absolute", left: 0, top: 30, bottom: 30, width: 3, borderTopRightRadius: 3, borderBottomRightRadius: 3, backgroundColor: themes.primaryBttn, opacity: 0.9 },
-  brandGlow: { position: "absolute", width: 170, height: 170, borderRadius: 85, backgroundColor: themes.primaryBttn, opacity: 0.045, bottom: -115, left: -45 },
-  statusGlow: { position: "absolute", width: 250, height: 250, borderRadius: 125, top: -155, right: -72 },
-  heroTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.two },
-  heroSignal: { flexDirection: "row", alignItems: "center", gap: 6 },
-  heroSignalDot: { width: 7, height: 7, borderRadius: 4 },
-  heroSignalText: { color: themes.textSecondary, fontSize: 8.5, letterSpacing: 1, fontFamily: "Body-Bold" },
-  heroCount: { color: themes.textMuted, fontSize: 8.5, letterSpacing: 0.75, fontFamily: "Body-Bold" },
-  heroMainRow: { flexDirection: "row", alignItems: "center", gap: spacing.one + 4 },
-  overallIcon: { width: 68, height: 68, borderRadius: 24, alignItems: "center", justifyContent: "center", borderWidth: 1.2, position: "relative", shadowColor: themes.primaryBttn, shadowOpacity: 0.1, shadowRadius: 12 },
-  iconPulseRing: { position: "absolute", width: 58, height: 58, borderRadius: 21, borderWidth: 1.2 },
-  heroCopy: { flex: 1, minWidth: 0 },
-  overallLabel: { fontSize: 28, lineHeight: 31, letterSpacing: 1.4, fontFamily: "Body-Bold" },
-  overallHeadline: { color: themes.text, fontSize: 16.5, lineHeight: 21, fontFamily: "Body-Bold", marginTop: 4 },
-  heroFooter: { marginTop: spacing.two, paddingTop: spacing.one + 2, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.07)", gap: spacing.one },
-  overallDetail: { color: themes.textSecondary, fontSize: 11.5, lineHeight: 17, fontFamily: "Body-Regular" },
-  seatFocusPill: {
-    alignSelf: "flex-start",
+  stateAccentLine: {
+    position: "absolute",
+    top: 0,
+    left: 26,
+    right: 26,
+    height: 3,
+    borderBottomLeftRadius: 3,
+    borderBottomRightRadius: 3,
+    opacity: 0.92,
+  },
+  statusGlow: {
+    position: "absolute",
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    top: -210,
+    left: "50%",
+    marginLeft: -150,
+  },
+  consoleBrandGlow: {
+    position: "absolute",
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: themes.primaryBttn,
+    opacity: 0.03,
+    bottom: -165,
+    right: -80,
+  },
+  consoleTopRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: spacing.one + 3,
+    justifyContent: "space-between",
+    marginBottom: spacing.one,
+  },
+  consoleTitleRow: { flexDirection: "row", alignItems: "center", gap: 7 },
+  consoleIndicator: { width: 7, height: 7, borderRadius: 4 },
+  consoleEyebrow: { color: themes.textSecondary, fontSize: 8.5, letterSpacing: 1.05, fontFamily: "Body-Bold" },
+  occupantPill: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 4,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.035)",
+    backgroundColor: "rgba(255,255,255,0.045)",
     borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.07)",
   },
-  seatFocusDot: { width: 6, height: 6, borderRadius: 3 },
-  seatFocusText: { color: themes.text, fontSize: 9.5, letterSpacing: 0.35, fontFamily: "Body-Bold" },
+  occupantPillNumber: { color: themes.text, fontSize: 11, fontFamily: "Body-Bold" },
+  occupantPillLabel: { color: themes.textMuted, fontSize: 7.5, letterSpacing: 0.45, fontFamily: "Body-Bold" },
+
+  consoleMain: {
+    minHeight: 270,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.one,
+    paddingTop: spacing.one,
+    paddingBottom: spacing.two,
+  },
+  symbolStage: {
+    width: 112,
+    height: 112,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+    marginBottom: spacing.one,
+  },
+  symbolCore: {
+    width: 90,
+    height: 90,
+    borderRadius: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.2,
+    zIndex: 3,
+  },
+  symbolCoreRaised: {
+    shadowColor: "#000",
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 7 },
+    elevation: 4,
+  },
+  statePulseRing: {
+    position: "absolute",
+    width: 88,
+    height: 88,
+    borderRadius: 30,
+    borderWidth: 1.3,
+  },
+  statusLabel: {
+    fontSize: 34,
+    lineHeight: 38,
+    letterSpacing: 1.5,
+    fontFamily: "Body-Bold",
+    textAlign: "center",
+  },
+  statusHeadline: {
+    color: themes.text,
+    fontSize: 17,
+    lineHeight: 22,
+    fontFamily: "Body-Bold",
+    textAlign: "center",
+    marginTop: 6,
+    maxWidth: 310,
+  },
+  statusDetail: {
+    color: themes.textSecondary,
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontFamily: "Body-Regular",
+    textAlign: "center",
+    marginTop: 6,
+    maxWidth: 300,
+  },
+  focusChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    marginTop: spacing.two,
+  },
+  focusChipCaption: { color: themes.textMuted, fontSize: 7.5, letterSpacing: 0.8, fontFamily: "Body-Bold" },
+  focusChipText: { fontSize: 10.5, letterSpacing: 0.25, fontFamily: "Body-Bold" },
+
+  consoleBottom: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.one,
+    paddingTop: spacing.one + 2,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.07)",
+  },
+  monitoringChip: { flexDirection: "row", alignItems: "center", gap: 7, flexShrink: 1 },
+  monitoringChipDot: { width: 7, height: 7, borderRadius: 4 },
+  monitoringChipText: { color: themes.textSecondary, fontSize: 9.5, fontFamily: "Body-Bold" },
+  consoleBottomHint: { color: themes.textMuted, fontSize: 8.5, fontFamily: "Body-Regular", textAlign: "right", flexShrink: 1 },
+
+  sessionControls: { flexDirection: "row", gap: spacing.one },
+  sessionControl: {
+    flex: 1,
+    minHeight: 66,
+    borderRadius: 20,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.one + 3,
+    gap: spacing.one,
+  },
+  seatsControl: {
+    backgroundColor: "rgba(18,56,39,0.50)",
+    borderColor: themes.primaryBorder,
+  },
+  endControl: {
+    backgroundColor: "rgba(255,103,111,0.045)",
+    borderColor: "rgba(255,103,111,0.22)",
+  },
+  controlPressed: { opacity: 0.77, transform: [{ scale: 0.985 }] },
+  sessionControlIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: themes.primarySoft,
+    borderWidth: 1,
+    borderColor: themes.primaryBorder,
+  },
+  sessionControlCopy: { flex: 1, minWidth: 0 },
+  sessionControlTitle: { color: themes.text, fontSize: 13, fontFamily: "Body-Bold" },
+  sessionControlText: { color: themes.textMuted, fontSize: 8.5, marginTop: 2, fontFamily: "Body-Regular" },
+  sessionControlChevron: { color: themes.primaryBttn, fontSize: 27, lineHeight: 27, fontFamily: "Body-Regular" },
+  endIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,103,111,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,103,111,0.24)",
+  },
+  endIconSquare: { width: 13, height: 13, borderRadius: 3, backgroundColor: themes.warnBttn },
+  endControlTitle: { color: themes.warnBttn, fontSize: 12.5, fontFamily: "Body-Bold" },
+  endControlText: { color: themes.textMuted, fontSize: 8.5, marginTop: 2, fontFamily: "Body-Regular" },
 
   section: { gap: spacing.one },
-  sectionHeadingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 2 },
+  sectionHeadingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 },
   sectionHeader: { fontSize: 20, fontFamily: "Heading-Font", color: themes.text },
   sectionSubhead: { color: themes.textMuted, fontSize: 9.5, marginTop: 2, fontFamily: "Body-Regular" },
   sectionCountPill: {
@@ -552,51 +1017,182 @@ const styles = StyleSheet.create({
   },
   sectionCountText: { color: themes.textSecondary, fontSize: 11, fontFamily: "Body-Bold" },
 
-  manageSeatsCard: {
-    minHeight: 72,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.one + 2,
-    paddingHorizontal: spacing.one + 4,
-    paddingVertical: spacing.one + 2,
-    borderRadius: 20,
-    backgroundColor: themes.surfaceSoft,
-    borderWidth: 1,
-    borderColor: themes.divider,
-  },
-  manageSeatsPressed: { opacity: 0.78, transform: [{ scale: 0.99 }], borderColor: themes.primaryBorder },
-  manageSeatsIcon: { width: 42, height: 42, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: themes.primarySoft, borderWidth: 1, borderColor: themes.primaryBorder },
-  manageSeatsCopy: { flex: 1, minWidth: 0 },
-  manageSeatsTitle: { color: themes.text, fontSize: 13.5, fontFamily: "Body-Bold" },
-  manageSeatsText: { color: themes.textSecondary, fontSize: 9.5, marginTop: 3, fontFamily: "Body-Regular" },
-  manageSeatsChevron: { color: themes.primaryBttn, fontSize: 28, lineHeight: 28, fontFamily: "Body-Regular" },
-
   setupHero: {
     position: "relative",
     overflow: "hidden",
-    alignItems: "center",
     marginTop: spacing.one,
-    paddingHorizontal: spacing.three,
-    paddingTop: spacing.four,
-    paddingBottom: spacing.three,
-    borderRadius: 30,
+    paddingHorizontal: spacing.two,
+    paddingTop: spacing.two,
+    paddingBottom: spacing.two,
+    borderRadius: 28,
     borderWidth: 1,
     borderColor: themes.primaryBorder,
-    minHeight: 430,
-    justifyContent: "center",
+    minHeight: 410,
     shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 5,
+    shadowOpacity: 0.24,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 11 },
+    elevation: 6,
   },
-  setupGlow: { position: "absolute", width: 300, height: 300, borderRadius: 150, backgroundColor: themes.primaryBttn, top: -175, right: -88 },
-  setupIconWrap: { width: 96, height: 96, borderRadius: 31, alignItems: "center", justifyContent: "center", backgroundColor: themes.primarySoft, borderWidth: 1, borderColor: themes.primaryBorder, marginBottom: spacing.two },
-  setupEyebrow: { color: themes.primaryBttn, fontSize: 9, letterSpacing: 1.25, fontFamily: "Body-Bold" },
-  setupTitle: { color: themes.text, fontSize: 28, lineHeight: 33, fontFamily: "Body-Bold", textAlign: "center", marginTop: spacing.half },
-  setupSubtitle: { color: themes.textSecondary, fontSize: 13.5, lineHeight: 20, fontFamily: "Body-Regular", textAlign: "center", maxWidth: 310, marginTop: spacing.one },
-  cabinDots: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: spacing.three },
-  cabinDot: { width: 11, height: 11, borderRadius: 6, backgroundColor: themes.divider, borderWidth: 1, borderColor: "rgba(255,255,255,0.06)" },
-  cabinDotFront: { backgroundColor: themes.primarySoft, borderColor: themes.primaryBorder },
-  setupAction: { width: "100%", marginTop: spacing.three },
+  setupGlow: {
+    position: "absolute",
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: themes.primaryBttn,
+    top: -205,
+    right: -115,
+  },
+  setupTopRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: spacing.one },
+  setupReadyPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: "rgba(52,209,127,0.08)",
+    borderWidth: 1,
+    borderColor: themes.primaryBorder,
+  },
+  setupReadyDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: themes.primaryBttn },
+  setupReadyText: { color: themes.primaryBttn, fontSize: 8, letterSpacing: 0.7, fontFamily: "Body-Bold" },
+  setupEyebrow: { color: themes.primaryBttn, fontSize: 8.5, letterSpacing: 1.1, fontFamily: "Body-Bold" },
+  setupTitle: { color: themes.text, fontSize: 27, lineHeight: 32, fontFamily: "Body-Bold", marginTop: 4 },
+  setupSubtitle: { color: themes.textSecondary, fontSize: 12.5, lineHeight: 18, fontFamily: "Body-Regular", marginTop: spacing.one, maxWidth: 330 },
+
+  cabinPreview: {
+    marginTop: spacing.two,
+    padding: spacing.one + 4,
+    borderRadius: 22,
+    backgroundColor: "rgba(5,14,23,0.42)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.07)",
+    gap: spacing.one,
+  },
+  cabinPreviewHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 2 },
+  cabinPreviewLabel: { color: themes.textSecondary, fontSize: 8, letterSpacing: 1, fontFamily: "Body-Bold" },
+  cabinPreviewHint: { color: themes.textMuted, fontSize: 8.5, fontFamily: "Body-Regular" },
+  cabinFrontRow: { flexDirection: "row", gap: spacing.one, paddingHorizontal: spacing.two },
+  cabinRearRow: { flexDirection: "row", gap: spacing.one },
+  cabinSeat: {
+    flex: 1,
+    minHeight: 66,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.075)",
+  },
+  cabinSeatPrimary: { backgroundColor: "rgba(52,209,127,0.075)", borderColor: themes.primaryBorder },
+  cabinSeatSmall: {
+    flex: 1,
+    minHeight: 58,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.065)",
+  },
+  cabinSeatShort: { color: themes.primaryBttn, fontSize: 16, fontFamily: "Body-Bold" },
+  cabinSeatShortSmall: { color: themes.textSecondary, fontSize: 13, fontFamily: "Body-Bold" },
+  cabinSeatLabel: { color: themes.textSecondary, fontSize: 8.5, marginTop: 3, fontFamily: "Body-Bold" },
+  cabinSeatLabelSmall: { color: themes.textMuted, fontSize: 7.5, marginTop: 2, fontFamily: "Body-Bold" },
+
+  setupPrimaryAction: {
+    minHeight: 62,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.one,
+    paddingHorizontal: spacing.one + 3,
+    marginTop: spacing.two,
+    borderRadius: 20,
+    backgroundColor: themes.primaryBttn,
+    shadowColor: themes.primaryBttn,
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 7 },
+    elevation: 4,
+  },
+  setupPrimaryActionPressed: { opacity: 0.86, transform: [{ scale: 0.988 }] },
+  setupPrimaryIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(5,22,14,0.12)",
+  },
+  setupPrimaryIconText: { color: themes.primaryBttnText, fontSize: 25, lineHeight: 27, fontFamily: "Body-Regular" },
+  setupPrimaryCopy: { flex: 1 },
+  setupPrimaryTitle: { color: themes.primaryBttnText, fontSize: 14, fontFamily: "Body-Bold" },
+  setupPrimaryText: { color: "rgba(5,22,14,0.72)", fontSize: 9, marginTop: 2, fontFamily: "Body-Bold" },
+  setupPrimaryChevron: { color: themes.primaryBttnText, fontSize: 28, lineHeight: 28, fontFamily: "Body-Regular" },
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(3,8,15,0.78)",
+    justifyContent: "flex-end",
+    paddingHorizontal: spacing.two,
+    paddingBottom: spacing.two,
+  },
+  endModalCard: {
+    borderRadius: 30,
+    backgroundColor: "#111C2D",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+    paddingHorizontal: spacing.three,
+    paddingTop: spacing.one,
+    paddingBottom: spacing.three,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.45,
+    shadowRadius: 30,
+    shadowOffset: { width: 0, height: -10 },
+    elevation: 14,
+  },
+  endModalHandle: { width: 42, height: 4, borderRadius: 2, backgroundColor: themes.divider, marginBottom: spacing.three },
+  endModalIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,103,111,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(255,103,111,0.30)",
+    marginBottom: spacing.two,
+  },
+  endModalStopSquare: { width: 22, height: 22, borderRadius: 5, backgroundColor: themes.warnBttn },
+  endModalEyebrow: { color: themes.warnBttn, fontSize: 8.5, letterSpacing: 1.15, fontFamily: "Body-Bold" },
+  endModalTitle: { color: themes.text, fontSize: 25, lineHeight: 30, fontFamily: "Body-Bold", marginTop: 5, textAlign: "center" },
+  endModalText: { color: themes.textSecondary, fontSize: 12, lineHeight: 18, fontFamily: "Body-Regular", textAlign: "center", marginTop: spacing.one, maxWidth: 315 },
+  endModalActions: { width: "100%", gap: spacing.one, marginTop: spacing.three },
+  keepMonitoringButton: {
+    minHeight: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 17,
+    backgroundColor: themes.primarySoft,
+    borderWidth: 1,
+    borderColor: themes.primaryBorder,
+  },
+  keepMonitoringText: { color: themes.primaryBttn, fontSize: 13, fontFamily: "Body-Bold" },
+  confirmEndButton: {
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.one,
+    borderRadius: 17,
+    backgroundColor: "rgba(255,103,111,0.075)",
+    borderWidth: 1,
+    borderColor: "rgba(255,103,111,0.28)",
+  },
+  confirmEndDot: { width: 11, height: 11, borderRadius: 3, backgroundColor: themes.warnBttn },
+  confirmEndText: { color: themes.warnBttn, fontSize: 13, fontFamily: "Body-Bold" },
+  modalButtonPressed: { opacity: 0.76, transform: [{ scale: 0.99 }] },
+  disabledButton: { opacity: 0.55 },
 });
