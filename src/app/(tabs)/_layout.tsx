@@ -146,7 +146,7 @@ export default function TabLayout() {
             <Tabs.Screen
               name="assign"
               options={{
-                title: "Assign",
+                title: "Seats",
                 tabBarIcon: ({ focused }: { focused: boolean }) => (
                   <Host matchContents>
                     <Icon

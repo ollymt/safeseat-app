@@ -304,7 +304,7 @@ export default function Diagnostics() {
         <View style={styles.noticeCard}>
           <Text style={styles.noticeTitle}>Integration rule</Text>
           <Text style={styles.noticeText}>
-            The app only displays the Main Hub&apos;s authoritative Fusion result. It does not recompute sensor thresholds, override trained models, or directly force the camera. A disconnected hub therefore becomes Pending/Offline instead of being guessed as Safe.
+            The app only displays the Main Hub&apos;s authoritative Fusion result. It does not recompute sensor thresholds, override trained models, or directly force the camera. A disconnected hub therefore becomes Analyzing/Offline instead of being guessed as Safe.
           </Text>
           {lastUpdatedAt && (
             <Text style={styles.lastUpdatedText}>Last hub update: {new Date(lastUpdatedAt).toLocaleTimeString()}</Text>

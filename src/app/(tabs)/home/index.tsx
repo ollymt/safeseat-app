@@ -1,20 +1,22 @@
-import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
-import { useUserPreferences } from "@/hooks/user-preferences-context";
-import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Host, Icon } from "@expo/ui";
-import * as Haptics from "expo-haptics";
-import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-
-import lockOpenXml from "@expo/material-symbols/lock_open.xml";
-import shieldXml from "@expo/material-symbols/shield.xml";
-
 import Button from "@/components/button";
 import EmergencyModal from "@/components/emergency-modal";
 import SeatCard from "@/components/seat-card";
+import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
+import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { Host, Icon } from "@expo/ui";
+import { LinearGradient } from "expo-linear-gradient";
+
+import checkXml from "@expo/material-symbols/check.xml";
+import warningXml from "@expo/material-symbols/warning.xml";
+import sirenXml from "@expo/material-symbols/siren.xml";
+import circleXml from "@expo/material-symbols/circle.xml";
+import lockOpenXml from "@expo/material-symbols/lock_open.xml";
 
 export type SeatState = "empty" | "assigned" | "safe" | "warning" | "emergency" | "unknown";
 
@@ -33,22 +35,49 @@ const IS_LOCKED_IN_KEY = "isLockedIn";
 const HARDWARE_SEAT_KEY = "safeSeatHardwareSeatNo";
 
 const SEAT_ROLES: Record<number, string> = {
-  1: "driver",
-  2: "front passenger",
-  3: "left rear",
-  4: "center rear",
-  5: "right rear",
+  1: "Driver",
+  2: "Front Passenger",
+  3: "Rear Left",
+  4: "Rear Center",
+  5: "Rear Right",
 };
 
 const SEAT_NUMBERS = [1, 2, 3, 4, 5];
+
+const STATUS_COPY = {
+  safe: {
+    label: "SAFE",
+    headline: "No unusual signs detected",
+    detail: "Monitoring continues automatically.",
+    color: themes.green,
+  },
+  warning: {
+    label: "WARNING",
+    headline: "SafeSeat detected something unusual",
+    detail: "Check on the passenger.",
+    color: themes.lightOrange,
+  },
+  emergency: {
+    label: "EMERGENCY",
+    headline: "Passenger may need immediate help",
+    detail: "Check the passenger and follow emergency guidance.",
+    color: themes.warnBttn,
+  },
+  unknown: {
+    label: "ANALYZING",
+    headline: "SafeSeat is still checking",
+    detail: "",
+    color: themes.info,
+  },
+} as const;
+
+type OverallState = keyof typeof STATUS_COPY;
 
 export default function Home() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomPad = 88 + insets.bottom;
-
-  const { eventCameraVerification } = useUserPreferences();
-  const { connected: hubConnected, telemetryReady, seatState: hubSeatState, status: hubStatus } = useSafeSeatHub();
+  const { connected: hubConnected, telemetryReady, seatState: hubSeatState } = useSafeSeatHub();
 
   const [isLockedIn, setIsLockedIn] = useState(false);
   const [assignments, setAssignments] = useState<Record<number, Profile>>({});
@@ -65,22 +94,21 @@ export default function Home() {
 
       const parsedAssignments: Record<number, Profile> = rawAssignments ? JSON.parse(rawAssignments) : {};
       const parsedHardwareSeat = rawHardwareSeat ? Number(JSON.parse(rawHardwareSeat)) : null;
-
       setIsLockedIn(rawLockedIn ? JSON.parse(rawLockedIn) : false);
       setAssignments(parsedAssignments);
-      setHardwareSeatNo(parsedHardwareSeat && parsedAssignments[parsedHardwareSeat] ? parsedHardwareSeat : (Number(Object.keys(parsedAssignments)[0]) || null));
+      setHardwareSeatNo(
+        parsedHardwareSeat && parsedAssignments[parsedHardwareSeat]
+          ? parsedHardwareSeat
+          : (Number(Object.keys(parsedAssignments)[0]) || null),
+      );
     } catch (error) {
       console.error("Failed to load home state from device:", error);
     }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      void loadData();
-    }, [loadData]),
-  );
+  useFocusEffect(useCallback(() => { void loadData(); }, [loadData]));
 
-  const getSeatState = (seatNo: number): SeatState => {
+  const getSeatState = useCallback((seatNo: number): SeatState => {
     const profile = assignments[seatNo];
     if (!profile) return "empty";
     if (!isLockedIn) return "assigned";
@@ -89,10 +117,10 @@ export default function Home() {
       return hubConnected && telemetryReady ? hubSeatState : "unknown";
     }
 
-    // The current physical UAT prototype represents one seat. Never mirror
-    // its Fusion state onto the other conceptual cabin seats.
+    // The current UAT prototype represents one physical seat. Do not mirror
+    // one Main Hub's Fusion result across conceptual cabin positions.
     return "unknown";
-  };
+  }, [assignments, hardwareSeatNo, hubConnected, hubSeatState, isLockedIn, telemetryReady]);
 
   const getDisplayName = (profile?: Profile): string | undefined => {
     if (!profile) return undefined;
@@ -102,37 +130,60 @@ export default function Home() {
 
   const assignedSeatCount = SEAT_NUMBERS.filter((seatNo) => Boolean(assignments[seatNo])).length;
 
-  const hardwareSeatRole = hardwareSeatNo ? SEAT_ROLES[hardwareSeatNo] : undefined;
-  const fusionText = hubStatus?.system?.fusion_state ? String(hubStatus.system.fusion_state).toUpperCase() : "PENDING";
-  const hubBadgeText = hubConnected ? (telemetryReady ? "LIVE" : "WARMING") : "OFFLINE";
+  const overallState = useMemo<OverallState>(() => {
+    if (!isLockedIn || assignedSeatCount === 0) return "unknown";
+    const activeStates = SEAT_NUMBERS
+      .filter((seatNo) => Boolean(assignments[seatNo]))
+      .map((seatNo) => getSeatState(seatNo));
 
-  const stateSummary = useMemo(() => {
-    const summary = { safe: 0, warning: 0, emergency: 0, unknown: 0 };
-    if (!isLockedIn) return summary;
+    if (activeStates.includes("emergency")) return "emergency";
+    if (activeStates.includes("warning")) return "warning";
+    if (activeStates.includes("safe")) return "safe";
+    return "unknown";
+  }, [assignedSeatCount, assignments, getSeatState, isLockedIn]);
 
-    SEAT_NUMBERS.forEach((seatNo) => {
-      if (!assignments[seatNo]) return;
-      const state = getSeatState(seatNo);
-      if (state === "safe") summary.safe += 1;
-      else if (state === "warning") summary.warning += 1;
-      else if (state === "emergency") summary.emergency += 1;
-      else summary.unknown += 1;
-    });
+  const overallSeatNo = useMemo(() => {
+    if (overallState === "safe") return hardwareSeatNo ?? undefined;
+    return SEAT_NUMBERS.find((seatNo) => Boolean(assignments[seatNo]) && getSeatState(seatNo) === overallState);
+  }, [assignments, getSeatState, hardwareSeatNo, overallState]);
 
-    return summary;
-  }, [assignments, hardwareSeatNo, hubConnected, hubSeatState, isLockedIn, telemetryReady]);
+  const copy = STATUS_COPY[overallState];
+  const overallIcon = overallState === "safe"
+    ? Icon.select({ ios: "checkmark.circle.fill", android: checkXml })
+    : overallState === "warning"
+      ? Icon.select({ ios: "exclamationmark.triangle.fill", android: warningXml })
+      : overallState === "emergency"
+        ? Icon.select({ ios: "light.beacon.max.fill", android: sirenXml })
+        : Icon.select({ ios: "circle.dotted", android: circleXml });
+
+  const getProfilePhoto = (profile?: Profile): string | undefined =>
+    profile?.icon || profile?.photoURL;
+
+  const showSeatDetails = (seatNo: number) => {
+    const profile = assignments[seatNo];
+    if (!profile) return;
+
+    const state = getSeatState(seatNo);
+    const stateCopy = state === "safe" || state === "warning" || state === "emergency" || state === "unknown"
+      ? STATUS_COPY[state]
+      : STATUS_COPY.unknown;
+    const person = getDisplayName(profile);
+    const message = [
+      person,
+      stateCopy.headline,
+      stateCopy.detail || undefined,
+    ].filter(Boolean).join("\n\n");
+
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Alert.alert(`${SEAT_ROLES[seatNo]} · ${stateCopy.label}`, message);
+  };
 
   const emergencySeatNo = isLockedIn
     ? SEAT_NUMBERS.find(
-        (seatNo) =>
-          getSeatState(seatNo) === "emergency" &&
-          assignments[seatNo] &&
-          !dismissedSeats.has(seatNo),
+        (seatNo) => getSeatState(seatNo) === "emergency" && assignments[seatNo] && !dismissedSeats.has(seatNo),
       )
     : undefined;
-
-  const emergencyProfile =
-    emergencySeatNo !== undefined ? assignments[emergencySeatNo] : undefined;
+  const emergencyProfile = emergencySeatNo !== undefined ? assignments[emergencySeatNo] : undefined;
 
   useEffect(() => {
     if (!hardwareSeatNo || hubSeatState === "emergency") return;
@@ -153,443 +204,285 @@ export default function Home() {
           bounces
         >
           <View style={styles.container}>
-            {isLockedIn ? (
-              <>
-                <View style={styles.headerBlock}>
-                  <Text style={styles.eyebrow}>LIVE CABIN</Text>
-                  <Text style={styles.pageHeader}>Home</Text>
-                  <Text style={styles.pageSubhead}>
-                    A simple, non-diagnostic view of each occupied seat. Raw sensor values stay out of the driver interface.
+            <View style={styles.headerRow}>
+              <View>
+                <Text style={styles.eyebrow}>{isLockedIn ? "LIVE TRIP" : "SAFESEAT"}</Text>
+                <Text style={styles.pageHeader}>Home</Text>
+              </View>
+              {isLockedIn ? (
+                <View style={[styles.liveBadge, !hubConnected && styles.liveBadgeOffline]}>
+                  <View style={[styles.liveDot, !hubConnected && styles.liveDotOffline]} />
+                  <Text style={[styles.liveText, !hubConnected && styles.liveTextOffline]}>
+                    {hubConnected ? (telemetryReady ? "LIVE" : "CONNECTING") : "OFFLINE"}
                   </Text>
                 </View>
+              ) : null}
+            </View>
 
-                <View style={styles.monitoringCard}>
-                  <View style={styles.monitoringIcon}>
-                    <Host matchContents>
-                      <Icon
-                        name={Icon.select({
-                          ios: "checkmark.shield.fill",
-                          android: shieldXml,
-                        })}
-                        size={spacing.four}
-                        color={themes.primaryBttn}
-                      />
-                    </Host>
-                  </View>
-                  <View style={styles.monitoringCopy}>
-                    <Text style={styles.monitoringTitle}>{hubConnected ? "Main Hub connected" : "Waiting for Main Hub"}</Text>
-                    <Text style={styles.monitoringSubtitle}>
-                      {hardwareSeatRole ? `${hardwareSeatRole} linked · ` : ""}{assignedSeatCount} {assignedSeatCount === 1 ? "occupant" : "occupants"} in session
-                    </Text>
-                    <Text style={styles.monitoringHint}>
-                      {hubConnected
-                        ? telemetryReady
-                          ? `Authoritative Fusion: ${fusionText}. Live status comes directly from the Main Hub.`
-                          : "Main Hub is reachable and telemetry is still initializing."
-                        : "Connect this phone to the SafeSeat Wi-Fi network to receive authoritative live status."}
+            {isLockedIn ? (
+              <>
+                <LinearGradient
+                  colors={[`${copy.color}2B`, themes.backgroundElement, themes.surfaceSoft]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[styles.overallCard, { borderColor: `${copy.color}66` }]}
+                >
+                  <View style={[styles.statusGlow, { backgroundColor: copy.color }]} />
+
+                  <View style={styles.heroTopRow}>
+                    <View style={styles.heroSignal}>
+                      <View style={[styles.heroSignalDot, { backgroundColor: copy.color }]} />
+                      <Text style={styles.heroSignalText}>CABIN STATUS</Text>
+                    </View>
+                    <Text style={styles.heroCount}>
+                      {assignedSeatCount} {assignedSeatCount === 1 ? "OCCUPANT" : "OCCUPANTS"}
                     </Text>
                   </View>
-                  <View style={[styles.liveBadge, !hubConnected && styles.liveBadgeOffline]}>
-                    <View style={[styles.liveDot, !hubConnected && styles.liveDotOffline]} />
-                    <Text style={[styles.liveText, !hubConnected && styles.liveTextOffline]}>{hubBadgeText}</Text>
-                  </View>
-                </View>
 
-                <View style={styles.statusStrip}>
-                  <View style={styles.statusMetric}>
-                    <Text style={[styles.statusMetricValue, { color: themes.green }]}>{stateSummary.safe}</Text>
-                    <Text style={styles.statusMetricLabel}>Safe</Text>
+                  <View style={styles.heroMainRow}>
+                    <View style={[styles.overallIcon, { borderColor: `${copy.color}88`, backgroundColor: `${copy.color}13` }]}> 
+                      <Host matchContents>
+                        <Icon name={overallIcon} color={copy.color} size={38} />
+                      </Host>
+                    </View>
+                    <View style={styles.heroCopy}>
+                      <Text style={[styles.overallLabel, { color: copy.color }]}>{copy.label}</Text>
+                      <Text style={styles.overallHeadline}>{copy.headline}</Text>
+                    </View>
                   </View>
-                  <View style={styles.statusDivider} />
-                  <View style={styles.statusMetric}>
-                    <Text style={[styles.statusMetricValue, { color: themes.lightOrange }]}>{stateSummary.warning}</Text>
-                    <Text style={styles.statusMetricLabel}>Warning</Text>
+
+                  <View style={styles.heroFooter}>
+                    {copy.detail ? <Text style={styles.overallDetail}>{copy.detail}</Text> : <Text style={styles.overallDetail}>Monitoring continues while SafeSeat analyzes the available sensors.</Text>}
+                    {overallSeatNo && overallState !== "safe" ? (
+                      <View style={[styles.seatFocusPill, { borderColor: `${copy.color}55` }]}>
+                        <View style={[styles.seatFocusDot, { backgroundColor: copy.color }]} />
+                        <Text style={styles.seatFocusText}>{SEAT_ROLES[overallSeatNo]}</Text>
+                      </View>
+                    ) : null}
                   </View>
-                  <View style={styles.statusDivider} />
-                  <View style={styles.statusMetric}>
-                    <Text style={[styles.statusMetricValue, { color: themes.warnBttn }]}>{stateSummary.emergency}</Text>
-                    <Text style={styles.statusMetricLabel}>Emergency</Text>
-                  </View>
-                  <View style={styles.statusDivider} />
-                  <View style={styles.statusMetric}>
-                    <Text style={[styles.statusMetricValue, { color: themes.textSecondary }]}>{stateSummary.unknown}</Text>
-                    <Text style={styles.statusMetricLabel}>Pending</Text>
-                  </View>
-                </View>
+                </LinearGradient>
 
                 <View style={styles.section}>
                   <View style={styles.sectionHeadingRow}>
-                    <Text style={styles.sectionHeader}>Occupant Status</Text>
-                    <Text style={styles.sectionMeta}>
-                      {assignedSeatCount}/5 assigned{hardwareSeatNo ? ` · HUB S${hardwareSeatNo}` : ""}
-                    </Text>
-                  </View>
-                  {SEAT_NUMBERS.map((seatNo) => {
-                    const profile = assignments[seatNo];
-                    return (
-                      <SeatCard
-                        key={seatNo}
-                        seatNo={seatNo}
-                        role={SEAT_ROLES[seatNo]}
-                        name={getDisplayName(profile)}
-                        state={getSeatState(seatNo)}
-                        onPress={() => {
-                          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        }}
-                      />
-                    );
-                  })}
-                </View>
-
-                <View style={styles.privacyCard}>
-                  <View style={styles.privacyTopRow}>
-                    <View style={styles.privacyDot} />
-                    <Text style={styles.privacyTitle}>Privacy by default</Text>
-                  </View>
-                  <Text style={styles.privacyText}>
-                    {eventCameraVerification
-                      ? "Camera verification preference is enabled. The Main Hub remains the trigger authority and the camera stays verification-only."
-                      : "Camera verification is disabled in app preferences. The current Main Hub API is read-only, so this preference does not yet command the runtime."}
-                  </Text>
-                </View>
-              </>
-            ) : (
-              <View style={styles.unlockedContainer}>
-                <View style={styles.unlockedIconWrap}>
-                  <Host matchContents>
-                    <Icon
-                      name={Icon.select({
-                        ios: "lock.open.fill",
-                        android: lockOpenXml,
-                      })}
-                      size={96}
-                      color={themes.primaryBttn}
-                    />
-                  </Host>
-                </View>
-
-                <Text style={styles.eyebrow}>SAFESEAT</Text>
-                <Text style={styles.unlockedTitle}>Ready when your cabin is</Text>
-                <Text style={styles.unlockedSubtitle}>
-                  Build the session first. SafeSeat starts showing safety states only after the deployment is locked.
-                </Text>
-
-                <View style={styles.stepsCard}>
-                  {[
-                    ["1", "Assign occupants", "Choose a saved profile or a session-only guest."],
-                    ["2", "Lock Deployment", "Freeze seat assignments for the current trip."],
-                    ["3", "Monitor", "Home shows only Safe, Warning, Emergency, or Pending."],
-                  ].map(([number, title, detail], index) => (
-                    <View key={number} style={[styles.stepRow, index === 2 && styles.lastStep]}>
-                      <View style={styles.stepNumber}>
-                        <Text style={styles.stepNumberText}>{number}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.stepTitle}>{title}</Text>
-                        <Text style={styles.stepDetail}>{detail}</Text>
-                      </View>
+                    <View>
+                      <Text style={styles.sectionHeader}>Passengers</Text>
+                      <Text style={styles.sectionSubhead}>Tap a passenger for details</Text>
                     </View>
+                    <View style={styles.sectionCountPill}>
+                      <Text style={styles.sectionCountText}>{assignedSeatCount}</Text>
+                    </View>
+                  </View>
+
+                  {SEAT_NUMBERS.filter((seatNo) => Boolean(assignments[seatNo])).map((seatNo) => (
+                    <SeatCard
+                      key={seatNo}
+                      seatNo={seatNo}
+                      role={SEAT_ROLES[seatNo]}
+                      name={getDisplayName(assignments[seatNo])}
+                      photo={getProfilePhoto(assignments[seatNo])}
+                      state={getSeatState(seatNo)}
+                      onPress={() => showSeatDetails(seatNo)}
+                    />
                   ))}
                 </View>
 
-                <View style={styles.unlockedAction}>
-                  <Button
-                    label="Set Up Trip"
-                    onPress={() => router.push("/assign")}
-                    fullWidth
-                  />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="View seats and passengers"
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push("/assign");
+                  }}
+                  style={({ pressed }) => [styles.manageSeatsCard, pressed && styles.manageSeatsPressed]}
+                >
+                  <View style={styles.manageSeatsIcon}>
+                    <Host matchContents>
+                      <Icon name={Icon.select({ ios: "carseat.right.fill", android: lockOpenXml })} size={25} color={themes.primaryBttn} />
+                    </Host>
+                  </View>
+                  <View style={styles.manageSeatsCopy}>
+                    <Text style={styles.manageSeatsTitle}>Seats & passengers</Text>
+                    <Text style={styles.manageSeatsText}>View the cabin setup or end monitoring</Text>
+                  </View>
+                  <Text style={styles.manageSeatsChevron}>›</Text>
+                </Pressable>
+              </>
+            ) : (
+              <LinearGradient
+                colors={["rgba(52,209,127,0.16)", themes.backgroundElement, themes.surfaceSoft]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.setupHero}
+              >
+                <View style={styles.setupGlow} />
+                <View style={styles.setupIconWrap}>
+                  <Host matchContents>
+                    <Icon name={Icon.select({ ios: "carseat.right.fill", android: lockOpenXml })} size={58} color={themes.primaryBttn} />
+                  </Host>
                 </View>
-              </View>
+                <Text style={styles.setupEyebrow}>READY FOR A TRIP?</Text>
+                <Text style={styles.setupTitle}>Set up who is riding</Text>
+                <Text style={styles.setupSubtitle}>Choose the occupied seats, then start SafeSeat monitoring.</Text>
+
+                <View style={styles.cabinDots} accessibilityElementsHidden>
+                  {[1, 2, 3, 4, 5].map((dot) => (
+                    <View key={dot} style={[styles.cabinDot, dot <= 2 && styles.cabinDotFront]} />
+                  ))}
+                </View>
+
+                <View style={styles.setupAction}>
+                  <Button label="Set Up Seats" onPress={() => router.push("/assign")} fullWidth />
+                </View>
+              </LinearGradient>
             )}
           </View>
         </ScrollView>
 
-        {emergencySeatNo !== undefined && emergencyProfile && (
+        {emergencySeatNo !== undefined && emergencyProfile ? (
           <EmergencyModal
             seat={emergencySeatNo}
             visible
-            onClose={() =>
-              setDismissedSeats((prev) => new Set(prev).add(emergencySeatNo))
-            }
+            onClose={() => setDismissedSeats((prev) => new Set(prev).add(emergencySeatNo))}
             id={emergencyProfile.id}
             name={emergencyProfile.isAccountOwner ? "You" : emergencyProfile.name}
             icon={emergencyProfile.photoURL ?? emergencyProfile.icon}
             isAccountOwner={emergencyProfile.isAccountOwner}
           />
-        )}
+        ) : null}
       </SafeAreaView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: themes.background,
-  },
-  safeArea: {
-    flex: 1,
-    backgroundColor: themes.background,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingTop: spacing.one,
-  },
-  container: {
-    flex: 1,
-    width: "100%",
-    paddingHorizontal: spacing.two,
-    gap: spacing.two,
-  },
-  headerBlock: {
-    gap: spacing.half,
-    marginBottom: spacing.half,
-  },
-  eyebrow: {
-    color: themes.primaryBttn,
-    fontSize: 11,
-    letterSpacing: 1.5,
-    fontFamily: "Body-Bold",
-  },
-  pageHeader: {
-    fontSize: fontsize.pageHeader,
-    fontFamily: "Logo-Font",
-    color: themes.text,
-  },
-  pageSubhead: {
-    color: themes.textSecondary,
-    fontSize: 14,
-    lineHeight: 20,
-    fontFamily: "Body-Regular",
-  },
-  monitoringCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.one + 4,
-    padding: spacing.two,
-    borderRadius: 20,
-    backgroundColor: themes.backgroundElement,
-    borderWidth: 1,
-    borderColor: themes.divider,
-  },
-  monitoringIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: themes.primarySoft,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  monitoringCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  monitoringTitle: {
-    color: themes.text,
-    fontSize: 16,
-    fontFamily: "Body-Bold",
-  },
-  monitoringSubtitle: {
-    color: themes.textSecondary,
-    fontSize: fontsize.caption,
-    fontFamily: "Body-Medium",
-  },
-  monitoringHint: {
-    color: themes.textMuted,
-    fontSize: 10,
-    lineHeight: 14,
-    marginTop: 2,
-    fontFamily: "Body-Regular",
-  },
+  screen: { flex: 1, backgroundColor: themes.background },
+  safeArea: { flex: 1, backgroundColor: themes.background },
+  scrollContent: { flexGrow: 1, paddingTop: spacing.one },
+  container: { flex: 1, width: "100%", paddingHorizontal: spacing.two, gap: spacing.two },
+  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  eyebrow: { color: themes.primaryBttn, fontSize: 10, letterSpacing: 1.4, fontFamily: "Body-Bold" },
+  pageHeader: { fontSize: fontsize.pageHeader, fontFamily: "Logo-Font", color: themes.text, marginTop: 1 },
   liveBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.half,
-    paddingHorizontal: spacing.one,
-    paddingVertical: spacing.half,
+    paddingHorizontal: spacing.one + 3,
+    paddingVertical: 7,
     borderRadius: 999,
     backgroundColor: themes.primarySoft,
     borderWidth: 1,
     borderColor: themes.primaryBorder,
+    shadowColor: themes.primaryBttn,
+    shadowOpacity: 0.13,
+    shadowRadius: 8,
   },
-  liveBadgeOffline: {
-    backgroundColor: themes.surfaceSoft,
-    borderColor: themes.divider,
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 999,
-    backgroundColor: themes.primaryBttn,
-  },
-  liveDotOffline: {
-    backgroundColor: themes.textMuted,
-  },
-  liveText: {
-    color: themes.primaryBttn,
-    fontSize: 9,
-    letterSpacing: 0.7,
-    fontFamily: "Body-Bold",
-  },
-  liveTextOffline: {
-    color: themes.textMuted,
-  },
-  statusStrip: {
-    minHeight: 70,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: spacing.one,
-    borderRadius: 18,
-    backgroundColor: themes.surfaceSoft,
-    borderWidth: 1,
-    borderColor: themes.divider,
-  },
-  statusMetric: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  statusMetricValue: {
-    fontSize: 20,
-    fontFamily: "Body-Bold",
-  },
-  statusMetricLabel: {
-    color: themes.textSecondary,
-    fontSize: 9,
-    marginTop: 2,
-    fontFamily: "Body-Medium",
-  },
-  statusDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: themes.divider,
-  },
-  section: {
-    gap: spacing.one,
-  },
-  sectionHeadingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  sectionHeader: {
-    fontSize: 19,
-    fontFamily: "Heading-Font",
-    color: themes.text,
-  },
-  sectionMeta: {
-    color: themes.textMuted,
-    fontSize: fontsize.caption,
-    fontFamily: "Body-Medium",
-  },
-  privacyCard: {
-    padding: spacing.two,
-    borderRadius: 18,
-    backgroundColor: themes.surfaceSoft,
-    borderWidth: 1,
-    borderColor: themes.divider,
-  },
-  privacyTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.half,
-  },
-  privacyDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: themes.primaryBttn,
-  },
-  privacyTitle: {
-    color: themes.text,
-    fontSize: 13,
-    fontFamily: "Body-Bold",
-  },
-  privacyText: {
-    color: themes.textSecondary,
-    fontSize: fontsize.caption,
-    lineHeight: 18,
-    marginTop: spacing.half,
-    fontFamily: "Body-Regular",
-  },
-  unlockedContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: spacing.half,
-    paddingVertical: spacing.four,
-  },
-  unlockedIconWrap: {
-    marginBottom: spacing.two,
-    opacity: 0.95,
-  },
-  unlockedTitle: {
-    color: themes.text,
-    fontSize: 27,
-    lineHeight: 32,
-    fontFamily: "Body-Bold",
-    textAlign: "center",
-    marginTop: spacing.half,
-  },
-  unlockedSubtitle: {
-    color: themes.textSecondary,
-    fontSize: 14,
-    fontFamily: "Body-Regular",
-    textAlign: "center",
-    lineHeight: 21,
-    maxWidth: 420,
-    marginTop: spacing.one,
-  },
-  stepsCard: {
-    width: "100%",
-    marginTop: spacing.three,
-    borderRadius: 20,
+  liveBadgeOffline: { backgroundColor: themes.surfaceSoft, borderColor: themes.divider, shadowOpacity: 0 },
+  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: themes.primaryBttn },
+  liveDotOffline: { backgroundColor: themes.textMuted },
+  liveText: { color: themes.primaryBttn, fontSize: 9, letterSpacing: 0.7, fontFamily: "Body-Bold" },
+  liveTextOffline: { color: themes.textMuted },
+
+  overallCard: {
+    position: "relative",
     overflow: "hidden",
-    backgroundColor: themes.backgroundElement,
+    paddingHorizontal: spacing.two,
+    paddingVertical: spacing.two,
+    borderRadius: 28,
+    borderWidth: 1.2,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 5,
+  },
+  statusGlow: { position: "absolute", width: 230, height: 230, borderRadius: 115, opacity: 0.08, top: -150, right: -70 },
+  heroTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.two },
+  heroSignal: { flexDirection: "row", alignItems: "center", gap: 6 },
+  heroSignalDot: { width: 7, height: 7, borderRadius: 4 },
+  heroSignalText: { color: themes.textSecondary, fontSize: 8.5, letterSpacing: 1, fontFamily: "Body-Bold" },
+  heroCount: { color: themes.textMuted, fontSize: 8.5, letterSpacing: 0.75, fontFamily: "Body-Bold" },
+  heroMainRow: { flexDirection: "row", alignItems: "center", gap: spacing.one + 4 },
+  overallIcon: { width: 66, height: 66, borderRadius: 23, alignItems: "center", justifyContent: "center", borderWidth: 1.2 },
+  heroCopy: { flex: 1, minWidth: 0 },
+  overallLabel: { fontSize: 28, lineHeight: 31, letterSpacing: 1.4, fontFamily: "Body-Bold" },
+  overallHeadline: { color: themes.text, fontSize: 16.5, lineHeight: 21, fontFamily: "Body-Bold", marginTop: 4 },
+  heroFooter: { marginTop: spacing.two, paddingTop: spacing.one + 2, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.07)", gap: spacing.one },
+  overallDetail: { color: themes.textSecondary, fontSize: 11.5, lineHeight: 17, fontFamily: "Body-Regular" },
+  seatFocusPill: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: spacing.one + 3,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    borderWidth: 1,
+  },
+  seatFocusDot: { width: 6, height: 6, borderRadius: 3 },
+  seatFocusText: { color: themes.text, fontSize: 9.5, letterSpacing: 0.35, fontFamily: "Body-Bold" },
+
+  section: { gap: spacing.one },
+  sectionHeadingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 2 },
+  sectionHeader: { fontSize: 20, fontFamily: "Heading-Font", color: themes.text },
+  sectionSubhead: { color: themes.textMuted, fontSize: 9.5, marginTop: 2, fontFamily: "Body-Regular" },
+  sectionCountPill: {
+    minWidth: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: themes.surfaceSoft,
     borderWidth: 1,
     borderColor: themes.divider,
   },
-  stepRow: {
+  sectionCountText: { color: themes.textSecondary, fontSize: 11, fontFamily: "Body-Bold" },
+
+  manageSeatsCard: {
     minHeight: 72,
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.one,
-    padding: spacing.one + 4,
-    borderBottomWidth: 1,
-    borderBottomColor: themes.divider,
+    gap: spacing.one + 2,
+    paddingHorizontal: spacing.one + 4,
+    paddingVertical: spacing.one + 2,
+    borderRadius: 20,
+    backgroundColor: themes.surfaceSoft,
+    borderWidth: 1,
+    borderColor: themes.divider,
   },
-  lastStep: {
-    borderBottomWidth: 0,
-  },
-  stepNumber: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
+  manageSeatsPressed: { opacity: 0.78, transform: [{ scale: 0.99 }], borderColor: themes.primaryBorder },
+  manageSeatsIcon: { width: 42, height: 42, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: themes.primarySoft, borderWidth: 1, borderColor: themes.primaryBorder },
+  manageSeatsCopy: { flex: 1, minWidth: 0 },
+  manageSeatsTitle: { color: themes.text, fontSize: 13.5, fontFamily: "Body-Bold" },
+  manageSeatsText: { color: themes.textSecondary, fontSize: 9.5, marginTop: 3, fontFamily: "Body-Regular" },
+  manageSeatsChevron: { color: themes.primaryBttn, fontSize: 28, lineHeight: 28, fontFamily: "Body-Regular" },
+
+  setupHero: {
+    position: "relative",
+    overflow: "hidden",
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: themes.primarySoft,
+    marginTop: spacing.one,
+    paddingHorizontal: spacing.three,
+    paddingTop: spacing.four,
+    paddingBottom: spacing.three,
+    borderRadius: 30,
     borderWidth: 1,
     borderColor: themes.primaryBorder,
+    minHeight: 430,
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 5,
   },
-  stepNumberText: {
-    color: themes.primaryBttn,
-    fontSize: 13,
-    fontFamily: "Body-Bold",
-  },
-  stepTitle: {
-    color: themes.text,
-    fontSize: 14,
-    fontFamily: "Body-Bold",
-  },
-  stepDetail: {
-    color: themes.textSecondary,
-    fontSize: 11,
-    lineHeight: 16,
-    marginTop: 2,
-    fontFamily: "Body-Regular",
-  },
-  unlockedAction: {
-    width: "100%",
-    marginTop: spacing.two,
-  },
+  setupGlow: { position: "absolute", width: 280, height: 280, borderRadius: 140, backgroundColor: themes.primaryBttn, opacity: 0.055, top: -165, right: -80 },
+  setupIconWrap: { width: 96, height: 96, borderRadius: 31, alignItems: "center", justifyContent: "center", backgroundColor: themes.primarySoft, borderWidth: 1, borderColor: themes.primaryBorder, marginBottom: spacing.two },
+  setupEyebrow: { color: themes.primaryBttn, fontSize: 9, letterSpacing: 1.25, fontFamily: "Body-Bold" },
+  setupTitle: { color: themes.text, fontSize: 28, lineHeight: 33, fontFamily: "Body-Bold", textAlign: "center", marginTop: spacing.half },
+  setupSubtitle: { color: themes.textSecondary, fontSize: 13.5, lineHeight: 20, fontFamily: "Body-Regular", textAlign: "center", maxWidth: 310, marginTop: spacing.one },
+  cabinDots: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: spacing.three },
+  cabinDot: { width: 11, height: 11, borderRadius: 6, backgroundColor: themes.divider, borderWidth: 1, borderColor: "rgba(255,255,255,0.06)" },
+  cabinDotFront: { backgroundColor: themes.primarySoft, borderColor: themes.primaryBorder },
+  setupAction: { width: "100%", marginTop: spacing.three },
 });

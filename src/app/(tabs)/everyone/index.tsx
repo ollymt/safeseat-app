@@ -257,7 +257,7 @@ export default function Everyone() {
 						</Text>
 					</View>
 					<Text style={styles.pageSubhead}>
-						Saved occupants and the emergency contacts used by the driver. Temporary guests are created only from Assign and are not saved here.
+						People you can quickly assign to a seat, plus emergency contacts.
 					</Text>
 
 					<View style={{ paddingBottom: spacing.one }}>

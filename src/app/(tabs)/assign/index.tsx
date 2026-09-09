@@ -1,11 +1,11 @@
 import Button from "@/components/button";
 import AssignCard from "@/components/assign-card";
 import AssignSeatModal from "@/components/assign-seat-modal";
-import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
+import { Spacing as spacing, Themes as themes } from "@/constants/theme";
 import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   Alert,
@@ -45,8 +45,9 @@ const SEATS = [
 ];
 
 export default function Assign() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
-  const bottomPad = 88 + insets.bottom;
+  const bottomPad = 168 + insets.bottom;
   const { connected: hubConnected, telemetryReady, seatState: hubSeatState, refresh: refreshHub } = useSafeSeatHub();
 
   const [assignModalVisible, setAssignModalVisible] = useState(false);
@@ -125,20 +126,30 @@ export default function Assign() {
 
   const chooseHardwareSeat = () => {
     if (isLockedIn) {
-      Alert.alert("Deployment is locked", "End the monitoring session before changing the prototype seat link.");
+      Alert.alert("Monitoring is active", "End the session before changing the monitored seat.");
       return;
     }
 
     const assigned = SEATS.filter((seat) => Boolean(assignments[seat.seatNo]));
     if (assigned.length === 0) {
-      Alert.alert("Assign an occupant first", "The physical SafeSeat prototype can only be linked to an assigned seat.");
+      Alert.alert("Assign a seat first", "Choose who is sitting in a seat before linking the SafeSeat hardware.");
       return;
     }
 
-    const currentIndex = assigned.findIndex((seat) => seat.seatNo === hardwareSeatNo);
-    const nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % assigned.length;
-    void persistHardwareSeat(assigned[nextIndex].seatNo);
-    void Haptics.selectionAsync();
+    Alert.alert(
+      "Which seat is being monitored?",
+      "Choose the seat that has the SafeSeat hardware installed.",
+      [
+        ...assigned.map((seat) => ({
+          text: `${seat.seatNo === hardwareSeatNo ? "✓ " : ""}${getSeatLabel(seat.seatNo)}`,
+          onPress: () => {
+            void persistHardwareSeat(seat.seatNo);
+            void Haptics.selectionAsync();
+          },
+        })),
+        { text: "Cancel", style: "cancel" as const },
+      ],
+    );
   };
 
   const handleLockIn = async () => {
@@ -165,9 +176,10 @@ export default function Assign() {
         AsyncStorage.setItem(SEAT_STATUSES_KEY, JSON.stringify(initialStatuses)),
       ]);
       setIsLockedIn(true);
+      router.replace("/home");
     } catch (error) {
-      console.error("Failed to lock deployment:", error);
-      Alert.alert("Could not start session", "SafeSeat could not save the locked deployment state.");
+      console.error("Failed to start monitoring:", error);
+      Alert.alert("Could not start monitoring", "SafeSeat could not save the current seat setup. Please try again.");
     }
   };
 
@@ -233,8 +245,8 @@ export default function Assign() {
 
     if (isLockedIn) {
       Alert.alert(
-        "Deployment is locked",
-        "End the current monitoring session before changing seat assignments.",
+        "Monitoring is active",
+        "End the current session before changing seat assignments.",
       );
       return;
     }
@@ -268,58 +280,16 @@ export default function Assign() {
         <View style={styles.container}>
           <View style={styles.headerBlock}>
             <Text style={styles.eyebrow}>TRIP SETUP</Text>
-            <Text style={styles.pageHeader}>Assign</Text>
-            <Text style={styles.pageSubhead}>
-              Keep the seat map you know: tap a seat, assign an occupant, then lock the deployment for the trip.
-            </Text>
+            <View style={styles.titleRow}>
+              <Text style={styles.pageHeader}>Assign Seats</Text>
+              <View style={[styles.sessionPill, isLockedIn && styles.sessionPillLocked]}>
+                <Text style={[styles.sessionPillText, isLockedIn && styles.sessionPillTextLocked]}>
+                  {isLockedIn ? "MONITORING" : `${assignedSeatCount}/5 ASSIGNED`}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.pageSubhead}>{isLockedIn ? "Monitoring is active. End monitoring before changing seats." : "Choose a seat, then select who is sitting there."}</Text>
           </View>
-
-          <View style={styles.sessionSummary}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.sessionSummaryTitle}>
-                {isLockedIn ? "Deployment locked" : "Deployment editable"}
-              </Text>
-              <Text style={styles.sessionSummaryText}>
-                {assignedSeatCount}/5 seats assigned
-                {guestSeatCount > 0 ? ` · ${guestSeatCount} session-only guest${guestSeatCount === 1 ? "" : "s"}` : ""}
-              </Text>
-            </View>
-            <View style={[styles.sessionPill, isLockedIn && styles.sessionPillLocked]}>
-              <Text style={[styles.sessionPillText, isLockedIn && styles.sessionPillTextLocked]}>
-                {isLockedIn ? "LOCKED" : "EDIT"}
-              </Text>
-            </View>
-          </View>
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Choose the seat linked to the SafeSeat Main Hub"
-            onPress={chooseHardwareSeat}
-            style={({ pressed }) => [styles.hardwareLinkCard, pressed && !isLockedIn && styles.hardwareLinkPressed]}
-          >
-            <View
-              style={[
-                styles.hardwareLinkDot,
-                { backgroundColor: hubConnected ? themes.primaryBttn : themes.textMuted },
-              ]}
-            />
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.hardwareLinkTitle}>UAT prototype link</Text>
-              <Text style={styles.hardwareLinkText}>
-                {getSeatLabel(hardwareSeatNo)} · {hubConnected ? (telemetryReady ? "Main Hub live" : "Hub warming up") : "Hub offline"}
-              </Text>
-              <Text style={styles.hardwareLinkHint}>
-                {isLockedIn
-                  ? "End the session to change which physical seat is linked."
-                  : "Tap to cycle the physical one-seat prototype through the assigned cabin positions."}
-              </Text>
-            </View>
-            <View style={[styles.hardwareLinkPill, hubConnected && styles.hardwareLinkPillLive]}>
-              <Text style={[styles.hardwareLinkPillText, hubConnected && styles.hardwareLinkPillTextLive]}>
-                {hubConnected ? "LIVE" : "OFFLINE"}
-              </Text>
-            </View>
-          </Pressable>
 
           <ImageBackground
             source={require("../../../../assets/images/appImgs/car-cropped.png")}
@@ -359,38 +329,33 @@ export default function Assign() {
             </View>
           </ImageBackground>
 
-          {!isLockedIn && (
-            <View style={styles.guestNote}>
-              <View style={styles.guestNoteDot} />
-              <Text style={styles.guestNoteText}>
-                Unregistered passengers can use Guest on passenger seats. Guest assignment data is removed automatically when the session ends.
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Choose the seat linked to the SafeSeat sensor"
+            onPress={chooseHardwareSeat}
+            style={({ pressed }) => [styles.hardwareLinkCard, pressed && !isLockedIn && styles.hardwareLinkPressed]}
+          >
+            <View style={styles.sensorMark}>
+              <View
+                style={[
+                  styles.sensorDot,
+                  { backgroundColor: hubConnected ? themes.primaryBttn : themes.textMuted },
+                ]}
+              />
+            </View>
+            <View style={styles.hardwareLinkCopy}>
+              <Text style={styles.hardwareLinkEyebrow}>SAFESEAT SENSOR</Text>
+              <Text style={styles.hardwareLinkTitle}>{getSeatLabel(hardwareSeatNo)}</Text>
+              <Text style={styles.hardwareLinkText}>
+                {hubConnected ? (telemetryReady ? "Connected and ready" : "Connecting to Main Hub") : "Main Hub offline"}
               </Text>
             </View>
-          )}
-
-          <View style={styles.actionBlock}>
-            {isLockedIn ? (
-              <Button
-                label="End Session"
-                onPress={handleEndSession}
-                fullWidth
-                variant="secondary"
-              />
-            ) : (
-              <>
-                <Button
-                  label="Lock Deployment"
-                  onPress={() => void handleLockIn()}
-                  fullWidth
-                  variant="primary"
-                  enabled={hasAssignedSeats}
-                />
-                {!hasAssignedSeats && (
-                  <Text style={styles.actionHint}>Assign at least one occupant to start a monitoring session.</Text>
-                )}
-              </>
-            )}
-          </View>
+            <View style={[styles.changePill, isLockedIn && styles.changePillLocked]}>
+              <Text style={[styles.changePillText, isLockedIn && styles.changePillTextLocked]}>
+                {isLockedIn ? "LINKED" : "CHANGE"}
+              </Text>
+            </View>
+          </Pressable>
 
           <AssignSeatModal
             seat={selectedSeat}
@@ -400,6 +365,33 @@ export default function Assign() {
           />
         </View>
       </ScrollView>
+
+      <View style={[styles.stickyActionWrap, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+        <View style={styles.stickyActionInner}>
+          <View style={styles.stickyStatusRow}>
+            <View style={[styles.stickyStatusDot, { backgroundColor: isLockedIn ? themes.primaryBttn : hasAssignedSeats ? themes.primaryBttn : themes.textMuted }]} />
+            <Text style={styles.stickyActionTitle}>
+              {isLockedIn
+                ? `${assignedSeatCount} seat${assignedSeatCount === 1 ? "" : "s"} currently monitored`
+                : hasAssignedSeats
+                  ? `${assignedSeatCount} seat${assignedSeatCount === 1 ? "" : "s"} ready`
+                  : "Choose at least one seat above"}
+            </Text>
+          </View>
+          {isLockedIn ? (
+            <Button label="End Monitoring" onPress={handleEndSession} variant="secondary" fullWidth style={styles.stickyButton} />
+          ) : (
+            <Button
+              label="Start Monitoring"
+              onPress={() => void handleLockIn()}
+              variant="primary"
+              enabled={hasAssignedSeats}
+              fullWidth
+              style={styles.stickyButton}
+            />
+          )}
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
@@ -422,6 +414,12 @@ const styles = StyleSheet.create({
   headerBlock: {
     gap: spacing.half,
   },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.one,
+  },
   eyebrow: {
     color: themes.primaryBttn,
     fontSize: 11,
@@ -429,36 +427,14 @@ const styles = StyleSheet.create({
     fontFamily: "Body-Bold",
   },
   pageHeader: {
-    fontSize: fontsize.pageHeader,
+    fontSize: 30,
     fontFamily: "Logo-Font",
     color: themes.text,
   },
   pageSubhead: {
     color: themes.textSecondary,
-    fontSize: 14,
-    lineHeight: 20,
-    fontFamily: "Body-Regular",
-  },
-  sessionSummary: {
-    minHeight: 68,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.one,
-    padding: spacing.one + 4,
-    borderRadius: 18,
-    backgroundColor: themes.backgroundElement,
-    borderWidth: 1,
-    borderColor: themes.divider,
-  },
-  sessionSummaryTitle: {
-    color: themes.text,
-    fontSize: 15,
-    fontFamily: "Body-Bold",
-  },
-  sessionSummaryText: {
-    color: themes.textSecondary,
-    fontSize: fontsize.caption,
-    marginTop: 3,
+    fontSize: 13,
+    lineHeight: 18,
     fontFamily: "Body-Regular",
   },
   sessionPill: {
@@ -483,117 +459,102 @@ const styles = StyleSheet.create({
     color: themes.primaryBttn,
   },
   hardwareLinkCard: {
-    minHeight: 78,
+    minHeight: 70,
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.one,
-    padding: spacing.one + 4,
-    borderRadius: 18,
-    backgroundColor: themes.surfaceSoft,
-    borderWidth: 1,
-    borderColor: themes.divider,
-  },
-  hardwareLinkPressed: {
-    opacity: 0.76,
-    borderColor: themes.primaryBorder,
-  },
-  hardwareLinkDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  hardwareLinkTitle: {
-    color: themes.text,
-    fontSize: 14,
-    fontFamily: "Body-Bold",
-  },
-  hardwareLinkText: {
-    color: themes.textSecondary,
-    fontSize: fontsize.caption,
-    marginTop: 2,
-    fontFamily: "Body-Medium",
-  },
-  hardwareLinkHint: {
-    color: themes.textMuted,
-    fontSize: 10,
-    lineHeight: 14,
-    marginTop: 3,
-    fontFamily: "Body-Regular",
-  },
-  hardwareLinkPill: {
-    paddingHorizontal: spacing.one,
-    paddingVertical: 5,
-    borderRadius: 999,
+    gap: spacing.one + 2,
+    paddingHorizontal: spacing.one + 4,
+    paddingVertical: spacing.one + 2,
+    borderRadius: 20,
     backgroundColor: themes.backgroundElement,
     borderWidth: 1,
     borderColor: themes.divider,
   },
-  hardwareLinkPillLive: {
-    backgroundColor: themes.primarySoft,
+  hardwareLinkPressed: {
+    opacity: 0.78,
+    transform: [{ scale: 0.99 }],
     borderColor: themes.primaryBorder,
   },
-  hardwareLinkPillText: {
-    color: themes.textMuted,
-    fontSize: 9,
-    fontFamily: "Body-Bold",
-    letterSpacing: 0.7,
-  },
-  hardwareLinkPillTextLive: {
-    color: themes.primaryBttn,
-  },
-  carMap: {
-    height: 416,
-    marginTop: spacing.half,
-  },
-  carImage: {
-    opacity: 0.9,
-  },
-  frontRow: {
-    gap: spacing.three,
-    flexDirection: "row",
-    height: 128,
-    marginTop: spacing.ten,
-    paddingHorizontal: spacing.eight,
-  },
-  backRow: {
-    gap: spacing.one,
-    flexDirection: "row",
-    height: 128,
-    paddingHorizontal: spacing.four,
-    marginTop: spacing.two,
-  },
-  guestNote: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing.one,
-    padding: spacing.one + 4,
-    borderRadius: 16,
+  sensorMark: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: themes.surfaceSoft,
     borderWidth: 1,
     borderColor: themes.divider,
   },
-  guestNoteDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: themes.primaryBttn,
-    marginTop: 5,
+  sensorDot: { width: 11, height: 11, borderRadius: 6 },
+  hardwareLinkCopy: { flex: 1, minWidth: 0 },
+  hardwareLinkEyebrow: { color: themes.textMuted, fontSize: 8, letterSpacing: 0.9, fontFamily: "Body-Bold" },
+  hardwareLinkTitle: { color: themes.text, fontSize: 14, marginTop: 2, fontFamily: "Body-Bold" },
+  hardwareLinkText: { color: themes.textSecondary, fontSize: 10, marginTop: 2, fontFamily: "Body-Regular" },
+  changePill: {
+    paddingHorizontal: spacing.one + 2,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: themes.primarySoft,
+    borderWidth: 1,
+    borderColor: themes.primaryBorder,
   },
-  guestNoteText: {
-    flex: 1,
-    color: themes.textSecondary,
-    fontSize: fontsize.caption,
-    lineHeight: 18,
-    fontFamily: "Body-Regular",
+  changePillLocked: { backgroundColor: themes.surfaceSoft, borderColor: themes.divider },
+  changePillText: { color: themes.primaryBttn, fontSize: 8.5, letterSpacing: 0.6, fontFamily: "Body-Bold" },
+  changePillTextLocked: { color: themes.textMuted },
+  carMap: {
+    height: 350,
+    marginTop: 0,
+    borderRadius: 26,
+    overflow: "hidden",
+    backgroundColor: themes.surfaceSoft,
+    borderWidth: 1,
+    borderColor: "rgba(117,184,255,0.18)",
+    shadowColor: "#000",
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
   },
-  actionBlock: {
+  carImage: {
+    opacity: 1,
+    resizeMode: "cover",
+  },
+  frontRow: {
+    gap: spacing.two,
+    flexDirection: "row",
+    height: 94,
+    marginTop: 66,
+    paddingHorizontal: 58,
+  },
+  backRow: {
     gap: spacing.one,
-    marginTop: spacing.half,
+    flexDirection: "row",
+    height: 94,
+    paddingHorizontal: 30,
+    marginTop: 30,
   },
-  actionHint: {
-    color: themes.textMuted,
-    fontSize: fontsize.caption,
-    textAlign: "center",
-    fontFamily: "Body-Regular",
+  stickyActionWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: spacing.two,
+    paddingTop: 10,
+    backgroundColor: "rgba(11,18,32,0.97)",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(38,54,76,0.75)",
+    shadowColor: "#000",
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: -8 },
+    elevation: 12,
   },
+  stickyActionInner: {
+    gap: 8,
+    paddingTop: 2,
+  },
+  stickyStatusRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
+  stickyStatusDot: { width: 7, height: 7, borderRadius: 4 },
+  stickyActionTitle: { color: themes.textSecondary, fontSize: 10.5, fontFamily: "Body-Medium" },
+  stickyButton: { minHeight: 50, borderRadius: 16 },
 });

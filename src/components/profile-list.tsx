@@ -1,6 +1,5 @@
 import checkXml from "@expo/material-symbols/check.xml";
 import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
-import { useEffect, useState } from "react";
 import { View, Pressable, Text, Image, StyleSheet } from "react-native"
 import { Host, Icon } from "@expo/ui"
 
@@ -27,7 +26,13 @@ export default function ProfileList({
     onPress,
 }: ProfileListProps) {
     return (
-        <Pressable style={[styles.base, isLast && styles.isLast]} onPress={onPress}>
+        <Pressable
+            style={({ pressed }) => [styles.base, checked && styles.checked, isLast && styles.isLast, pressed && styles.pressed]}
+            onPress={onPress}
+            accessibilityRole="button"
+            accessibilityState={{ selected: checked }}
+            accessibilityLabel={`${name}${checked ? ", selected" : ""}`}
+        >
 
             {!pfp || pfp == "" ? (
                 <View style={styles.pfp}>
@@ -54,20 +59,30 @@ export default function ProfileList({
 const styles = StyleSheet.create({
     base: {
         width: "100%",
+        minHeight: 64,
         backgroundColor: themes.backgroundElement,
         flexDirection: "row",
-        padding: spacing.one,
+        padding: spacing.one + 2,
         gap: spacing.two,
         borderWidth: spacing.none,
-        borderColor: themes.text,
-        alignItems: "center"
+        borderColor: themes.divider,
+        alignItems: "center",
+        borderLeftWidth: 3,
+        borderLeftColor: "transparent",
+    },
+    checked: {
+        backgroundColor: themes.primarySoft,
+        borderLeftColor: themes.primaryBttn,
+    },
+    pressed: {
+        opacity: 0.78,
     },
     pfp: {
         width: spacing.seven,
         height: spacing.seven,
         backgroundColor: themes.secondaryBttn,
         borderWidth: spacing.quarter,
-        borderColor: themes.text,
+        borderColor: themes.divider,
         borderRadius: spacing.four,
         alignItems: "center",
         justifyContent: "center",

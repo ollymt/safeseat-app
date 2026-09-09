@@ -232,11 +232,9 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
       <View style={styles.backdrop}>
         <View style={styles.container}>
           <View style={styles.headerBlock}>
-            <Text style={styles.eyebrow}>SEAT {seat}</Text>
-            <Text style={styles.header}>{role}</Text>
-            <Text style={styles.subhead}>
-              Pick a saved occupant. Passenger seats can also use a guest profile that is erased when the session ends.
-            </Text>
+            <Text style={styles.eyebrow}>ASSIGN SEAT</Text>
+            <Text style={styles.header}>Who is in the {role} seat?</Text>
+            <Text style={styles.subhead}>Choose a person below. This person will appear on the {role} seat map.</Text>
           </View>
 
           {seat !== 1 && (
@@ -249,15 +247,15 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
                 <Text style={styles.guestIconText}>G</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.guestTitle}>Guest • session only</Text>
-                <Text style={styles.guestText}>No saved passenger profile or long-term assignment data.</Text>
+                <Text style={styles.guestTitle}>Guest passenger</Text>
+                <Text style={styles.guestText}>Use for this trip only. Nothing is saved after the session.</Text>
               </View>
-              <Text style={styles.guestAction}>USE</Text>
+              <Text style={styles.guestAction}>SELECT</Text>
             </Pressable>
           )}
 
           <View style={styles.savedHeaderRow}>
-            <Text style={styles.savedHeader}>SAVED PROFILES</Text>
+            <Text style={styles.savedHeader}>CHOOSE A PERSON</Text>
             <Text style={styles.savedCount}>{profiles.length}</Text>
           </View>
 
@@ -309,7 +307,7 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
             <View style={{ flex: 1 }}>
               <Button
                 variant="primary"
-                label="Assign"
+                label={`Assign to ${role}`}
                 onPress={() => void handleSave()}
                 enabled={!isFetchingProfiles && !isLoading && Boolean(selectedProfileId)}
                 fullWidth
@@ -333,7 +331,8 @@ const styles = StyleSheet.create({
   container: {
     width: "100%",
     maxWidth: 420,
-    backgroundColor: themes.backgroundElement,
+    maxHeight: "88%",
+    backgroundColor: themes.backgroundElevated,
     borderWidth: 1,
     borderColor: themes.divider,
     padding: spacing.two,
@@ -351,7 +350,8 @@ const styles = StyleSheet.create({
   },
   header: {
     color: themes.text,
-    fontSize: fontsize.header,
+    fontSize: 22,
+    lineHeight: 28,
     fontFamily: "Heading-Font",
   },
   subhead: {
@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
     fontFamily: "Body-Medium",
   },
   listWrap: {
-    maxHeight: 290,
+    maxHeight: 260,
     width: "100%",
     borderRadius: 16,
     overflow: "hidden",

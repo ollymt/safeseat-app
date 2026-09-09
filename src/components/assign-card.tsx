@@ -1,293 +1,175 @@
 import checkXml from "@expo/material-symbols/check.xml";
 import warningXml from "@expo/material-symbols/warning.xml";
 import sirenXml from "@expo/material-symbols/siren.xml";
-import questionXml from "@expo/material-symbols/question_mark.xml";
+import circleXml from "@expo/material-symbols/circle.xml";
 import addXml from "@expo/material-symbols/add.xml";
-// components/assign-card.tsx
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { Themes as themes } from "@/constants/theme";
 import { Host, Icon } from "@expo/ui";
-import {
-	Pressable,
-	StyleSheet,
-	Text,
-	View,
-	Image,
-} from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 type Profile = {
-	id: string;
-	name: string;
-	icon?: string;
-	isAccountOwner?: boolean;
+  id: string;
+  name: string;
+  icon?: string;
+  isAccountOwner?: boolean;
 };
 
 type AssignCardProps = {
-	seatNo: number;
-	seatCode: string;
-	assignedProfile?: Profile | null;
-	name?: string;
-	pfp?: string;
-	locked?: boolean;
-	hardwareLinked?: boolean;
-	state: string;
-	onPress: () => void;
+  seatNo: number;
+  seatCode: string;
+  assignedProfile?: Profile | null;
+  name?: string;
+  pfp?: string;
+  locked?: boolean;
+  hardwareLinked?: boolean;
+  state: string;
+  onPress: () => void;
 };
 
+const titleCase = (value: string) => value.replace(/\b\w/g, (letter) => letter.toUpperCase());
+
 export default function AssignCard({
-	seatNo,
-	seatCode,
-	assignedProfile,
-	name,
-	pfp,
-	state = "empty",
-	locked = true,
-	hardwareLinked = false,
-	onPress,
+  seatCode,
+  assignedProfile,
+  name,
+  pfp,
+  state = "empty",
+  locked = true,
+  hardwareLinked = false,
+  onPress,
 }: AssignCardProps) {
-	const displayName = assignedProfile?.name ?? name;
-	const rawIcon = assignedProfile?.icon ?? pfp;
+  const displayName = assignedProfile?.name ?? name;
+  const rawIcon = assignedProfile?.icon ?? pfp;
+  const seatLabel = titleCase(seatCode);
 
-	// Format raw base64 or Data URI string safely
-	const getFormattedImageUri = (img?: string) => {
-		if (!img || img === "Not Set" || img.trim() === "") return null;
-		if (img.startsWith("http") || img.startsWith("data:")) return img;
-		return `data:image/jpeg;base64,${img}`;
-	};
+  const getFormattedImageUri = (img?: string) => {
+    if (!img || img === "Not Set" || img.trim() === "") return null;
+    if (img.startsWith("http") || img.startsWith("data:")) return img;
+    return `data:image/jpeg;base64,${img}`;
+  };
 
-	const imageUri = getFormattedImageUri(rawIcon);
+  const imageUri = getFormattedImageUri(rawIcon);
+  const stateColor = state === "safe"
+    ? themes.green
+    : state === "warning"
+      ? themes.lightOrange
+      : state === "emergency"
+        ? themes.warnBttn
+        : state === "unknown"
+          ? themes.info
+          : hardwareLinked
+            ? themes.primaryBttn
+            : "#A8B8C8";
 
-	return (
-		<Pressable
-			onPress={onPress}
-			accessibilityRole="button"
-			accessibilityLabel={`${seatCode}: ${displayName ?? "empty"}`}
-			style={({ pressed }) => [
-				assigncard.baseCard,
-				{
-					backgroundColor: themes.backgroundElement,
-					borderColor: state == "safe"
-						? themes.green
-						: state == "warning"
-							? themes.lightOrange
-							: state == "emergency"
-								? themes.warnBttn
-								: themes.text,
-					opacity: pressed ? 0.72 : 0.94,
-					borderStyle: displayName ? "solid" : "dashed",
-				},
-			]}
-		>
-			{hardwareLinked && (
-				<View style={assigncard.hubBadge} pointerEvents="none">
-					<View style={assigncard.hubDot} />
-					<Text style={assigncard.hubBadgeText}>HUB</Text>
-				</View>
-			)}
-			{displayName ? (
-				<View style={[assigncard.profileContainer]}>
-					{imageUri ? (
-						<Image
-							key={imageUri} // Forces clean re-render when Base64 string updates
-							source={{ uri: imageUri }}
-							style={[
-								assigncard.avatar,
-								{
-									borderColor: state == "safe"
-										? themes.green
-										: state == "warning"
-											? themes.lightOrange
-											: state == "emergency"
-												? themes.warnBttn
-												: themes.text,
+  const stateLabel = state === "safe" ? "SAFE"
+    : state === "warning" ? "WARNING"
+      : state === "emergency" ? "EMERGENCY"
+        : state === "unknown" ? "ANALYZING"
+          : displayName ? "ASSIGNED" : "";
 
-									borderWidth: spacing.quarter,
-									aspectRatio: 1,
-								},
-							]}
-						/>
-					) : (
-						<View
-							style={[
-								assigncard.avatarFallback,
-								{
-									backgroundColor: themes.backgroundElement,
-									borderColor: state == "safe"
-										? themes.green
-										: state == "warning"
-											? themes.lightOrange
-											: state == "emergency"
-												? themes.warnBttn
-												: themes.text,
+  const stateIcon = state === "safe"
+    ? Icon.select({ ios: "checkmark.circle.fill", android: checkXml })
+    : state === "warning"
+      ? Icon.select({ ios: "exclamationmark.triangle.fill", android: warningXml })
+      : state === "emergency"
+        ? Icon.select({ ios: "light.beacon.max.fill", android: sirenXml })
+        : Icon.select({ ios: "circle.dotted", android: circleXml });
 
-									borderWidth: spacing.quarter,
-									aspectRatio: 1,
-								},
-							]}
-						>
-							<Text style={[assigncard.monogram, { color: themes.text }]}>
-								{displayName.charAt(0).toUpperCase()}
-							</Text>
-						</View>
-					)}
-
-					<View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.half }}>
-						{state === "safe" ? (
-							<Host matchContents style={{ width: spacing.two, height: spacing.two, justifyContent: 'center', alignItems: 'center' }}>
-								<Icon
-									name={Icon.select({
-										ios: "checkmark.circle.fill",
-										android: checkXml,
-									})}
-									color={themes.green}
-									size={spacing.two}
-								/>
-							</Host>
-						) : state === "warning" ? (
-							<Host matchContents style={{ width: spacing.two, height: spacing.two, justifyContent: 'center', alignItems: 'center' }}>
-								<Icon
-									name={Icon.select({
-										ios: "exclamationmark.triangle.fill",
-										android: warningXml,
-									})}
-									color={themes.lightOrange}
-									size={spacing.two}
-								/>
-							</Host>
-						) : state === "emergency" ? (
-							<Host matchContents style={{ width: spacing.two, height: spacing.two, justifyContent: 'center', alignItems: 'center' }}>
-								<Icon
-									name={Icon.select({
-										ios: "light.beacon.max.fill",
-										android: sirenXml,
-									})}
-									color={themes.warnBttn}
-									size={spacing.two}
-								/>
-							</Host>
-						) : state === "unknown" ? (
-							<Host matchContents style={{ width: spacing.two, height: spacing.two, justifyContent: 'center', alignItems: 'center' }}>
-								<Icon
-									name={Icon.select({
-										ios: "questionmark",
-										android: questionXml,
-									})}
-									color={themes.text}
-									size={spacing.two}
-								/>
-							</Host>
-						) : null}
-						<Text
-							numberOfLines={1}
-							style={[assigncard.profileName, {
-								color: state == "safe"
-									? themes.green
-									: state == "warning"
-										? themes.lightOrange
-										: state == "emergency"
-											? themes.warnBttn
-											: themes.text,
-							}]}
-						>
-							{displayName}
-						</Text>
-					</View>
-				</View>
-			) : (
-				<View style={assigncard.iconContainer}>
-					{!locked &&
-						<Host matchContents>
-							<Icon
-								name={Icon.select({
-									ios: "plus",
-									android: addXml,
-								})}
-								color={themes.text}
-							/>
-						</Host>
-					}
-					<Text style={[assigncard.seatCode, { color: themes.text }]}>
-						{locked ? "EMPTY" : "ASSIGN"}
-					</Text>
-				</View>
-			)}
-		</Pressable>
-	);
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${seatLabel}: ${displayName ?? "assign a person"}`}
+      android_ripple={{ color: "rgba(255,255,255,0.08)" }}
+      style={({ pressed }) => [
+        styles.baseCard,
+        displayName ? styles.assignedCard : styles.emptyCard,
+        hardwareLinked && styles.hardwareCard,
+        {
+          borderColor: hardwareLinked ? themes.primaryBttn : stateColor,
+          opacity: pressed ? 0.9 : 1,
+          transform: [{ scale: pressed ? 0.965 : 1 }],
+        },
+      ]}
+    >
+      {displayName ? (
+        <View style={styles.profileContainer}>
+          {imageUri ? (
+            <Image source={{ uri: imageUri }} style={[styles.avatar, { borderColor: stateColor }]} />
+          ) : (
+            <View style={[styles.avatarFallback, { borderColor: stateColor }]}> 
+              <Text style={styles.monogram}>{displayName.charAt(0).toUpperCase()}</Text>
+            </View>
+          )}
+          <Text style={styles.seatLabel} numberOfLines={1}>{seatLabel}</Text>
+          <Text style={styles.profileName} numberOfLines={1}>{displayName}</Text>
+          {locked && stateLabel ? (
+            <View style={styles.compactState}>
+              <Host matchContents><Icon name={stateIcon} color={stateColor} size={14} /></Host>
+              <Text style={[styles.compactStateText, { color: stateColor }]}>{stateLabel}</Text>
+            </View>
+          ) : (
+            <Text style={styles.assignedText}>Assigned</Text>
+          )}
+        </View>
+      ) : (
+        <View style={styles.emptyContent}>
+          {!locked ? (
+            <View style={styles.plusCircle}>
+              <Host matchContents>
+                <Icon name={Icon.select({ ios: "plus", android: addXml })} color={themes.text} size={18} />
+              </Host>
+            </View>
+          ) : null}
+          <Text style={[styles.seatLabel, styles.emptySeatLabel]} numberOfLines={2}>{seatLabel}</Text>
+          <View style={styles.actionPill}>
+            <Text style={styles.actionText}>{locked ? "EMPTY" : "ASSIGN PERSON"}</Text>
+          </View>
+        </View>
+      )}
+    </Pressable>
+  );
 }
 
-const assigncard = StyleSheet.create({
-	baseCard: {
-		flex: 1,
-		position: "relative",
-		borderRadius: spacing.edge,
-		borderWidth: spacing.quarter,
-		justifyContent: "center",
-		alignItems: "center",
-		overflow: "hidden",
-		padding: spacing.one,
-	},
-
-	hubBadge: {
-		position: "absolute",
-		top: 7,
-		right: 7,
-		zIndex: 2,
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 4,
-		paddingHorizontal: 7,
-		paddingVertical: 4,
-		borderRadius: 999,
-		backgroundColor: themes.primarySoft,
-		borderWidth: 1,
-		borderColor: themes.primaryBorder,
-	},
-	hubDot: {
-		width: 6,
-		height: 6,
-		borderRadius: 3,
-		backgroundColor: themes.primaryBttn,
-	},
-	hubBadgeText: {
-		color: themes.primaryBttn,
-		fontSize: 9,
-		fontFamily: "Body-Bold",
-		letterSpacing: 0.7,
-	},
-	profileContainer: {
-		alignItems: "center",
-		justifyContent: "center",
-		gap: spacing.one,
-		width: "100%",
-	},
-	avatar: {
-		width: spacing.eight,
-		height: spacing.eight,
-		borderRadius: spacing.four,
-		resizeMode: "cover",
-	},
-	avatarFallback: {
-		width: spacing.eight,
-		height: spacing.eight,
-		borderRadius: spacing.four,
-		justifyContent: "center",
-		alignItems: "center",
-	},
-	monogram: {
-		fontSize: fontsize.header,
-		fontWeight: "600",
-	},
-	profileName: {
-		fontSize: fontsize.body,
-		fontWeight: "600",
-		textAlign: "center",
-		paddingHorizontal: spacing.half,
-	},
-	iconContainer: {
-		justifyContent: "center",
-		alignItems: "center",
-		gap: spacing.one,
-	},
-	seatCode: {
-		fontSize: fontsize.caption,
-	},
+const styles = StyleSheet.create({
+  baseCard: {
+    flex: 1,
+    position: "relative",
+    borderRadius: 18,
+    borderWidth: 1.25,
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+    padding: 6,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  emptyCard: {
+    backgroundColor: "rgba(6,14,24,0.34)",
+    borderColor: "rgba(255,255,255,0.38)",
+  },
+  assignedCard: {
+    backgroundColor: "rgba(8,18,30,0.66)",
+  },
+  hardwareCard: {
+    shadowOpacity: 0.28,
+    elevation: 5,
+  },
+  profileContainer: { alignItems: "center", justifyContent: "center", width: "100%", gap: 2 },
+  avatar: { width: 38, height: 38, borderRadius: 19, resizeMode: "cover", borderWidth: 2 },
+  avatarFallback: { width: 38, height: 38, borderRadius: 19, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(18,31,46,0.94)", borderWidth: 2 },
+  monogram: { fontSize: 16, fontFamily: "Body-Bold", color: themes.text },
+  seatLabel: { fontSize: 8.5, lineHeight: 10.5, letterSpacing: 0.28, color: themes.textSecondary, fontFamily: "Body-Bold", textAlign: "center" },
+  emptySeatLabel: { color: themes.text, fontSize: 9.5, lineHeight: 12, textShadowColor: "rgba(0,0,0,0.78)", textShadowRadius: 4 },
+  profileName: { fontSize: 11, lineHeight: 13, color: themes.text, fontFamily: "Body-Bold", textAlign: "center", maxWidth: "100%" },
+  assignedText: { fontSize: 8, color: themes.textSecondary, fontFamily: "Body-Medium" },
+  compactState: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 1 },
+  compactStateText: { fontSize: 7.5, letterSpacing: 0.35, fontFamily: "Body-Bold" },
+  emptyContent: { justifyContent: "center", alignItems: "center", gap: 4, width: "100%" },
+  plusCircle: { width: 29, height: 29, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(6,14,24,0.58)", borderWidth: 1, borderColor: "rgba(255,255,255,0.58)" },
+  actionPill: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 999, backgroundColor: "rgba(6,14,24,0.56)", borderWidth: 1, borderColor: "rgba(255,255,255,0.16)" },
+  actionText: { fontSize: 6.8, color: themes.textSecondary, fontFamily: "Body-Bold", textAlign: "center", letterSpacing: 0.35 },
 });
