@@ -6,8 +6,8 @@ import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Host, Icon } from "@expo/ui";
 import { LinearGradient } from "expo-linear-gradient";
@@ -84,6 +84,13 @@ export default function Home() {
   const [hardwareSeatNo, setHardwareSeatNo] = useState<number | null>(null);
   const [dismissedSeats, setDismissedSeats] = useState<Set<number>>(new Set());
 
+  // Home motion is intentionally subtle: it communicates that monitoring is live
+  // without creating distracting movement for a driver.
+  const heroEntrance = useRef(new Animated.Value(0)).current;
+  const ambientPulse = useRef(new Animated.Value(0)).current;
+  const livePulse = useRef(new Animated.Value(0)).current;
+  const passengerEntrance = useRef(SEAT_NUMBERS.map(() => new Animated.Value(0))).current;
+
   const loadData = useCallback(async () => {
     try {
       const [rawLockedIn, rawAssignments, rawHardwareSeat] = await Promise.all([
@@ -107,6 +114,64 @@ export default function Home() {
   }, []);
 
   useFocusEffect(useCallback(() => { void loadData(); }, [loadData]));
+
+  useEffect(() => {
+    const ambientLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(ambientPulse, {
+          toValue: 1,
+          duration: 2200,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(ambientPulse, {
+          toValue: 0,
+          duration: 2200,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    ambientLoop.start();
+    return () => ambientLoop.stop();
+  }, [ambientPulse]);
+
+  useEffect(() => {
+    const liveLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(livePulse, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(livePulse, {
+          toValue: 0,
+          duration: 900,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    if (isLockedIn && hubConnected) liveLoop.start();
+    return () => liveLoop.stop();
+  }, [hubConnected, isLockedIn, livePulse]);
+
+  useEffect(() => {
+    const assigned = SEAT_NUMBERS.filter((seatNo) => Boolean(assignments[seatNo]));
+    passengerEntrance.forEach((value) => value.setValue(0));
+    if (!isLockedIn || assigned.length === 0) return;
+
+    Animated.stagger(80, assigned.map((seatNo) =>
+      Animated.spring(passengerEntrance[seatNo - 1], {
+        toValue: 1,
+        damping: 18,
+        stiffness: 155,
+        mass: 0.75,
+        useNativeDriver: true,
+      })
+    )).start();
+  }, [assignments, isLockedIn, passengerEntrance]);
 
   const getSeatState = useCallback((seatNo: number): SeatState => {
     const profile = assignments[seatNo];
@@ -141,6 +206,17 @@ export default function Home() {
     if (activeStates.includes("safe")) return "safe";
     return "unknown";
   }, [assignedSeatCount, assignments, getSeatState, isLockedIn]);
+
+  useEffect(() => {
+    heroEntrance.setValue(0);
+    Animated.spring(heroEntrance, {
+      toValue: 1,
+      damping: 17,
+      stiffness: 145,
+      mass: 0.8,
+      useNativeDriver: true,
+    }).start();
+  }, [heroEntrance, isLockedIn, overallState]);
 
   const overallSeatNo = useMemo(() => {
     if (overallState === "safe") return hardwareSeatNo ?? undefined;
@@ -195,8 +271,21 @@ export default function Home() {
     });
   }, [hardwareSeatNo, hubSeatState]);
 
+  const heroTranslateY = heroEntrance.interpolate({ inputRange: [0, 1], outputRange: [14, 0] });
+  const heroScale = heroEntrance.interpolate({ inputRange: [0, 1], outputRange: [0.985, 1] });
+  const auraScale = ambientPulse.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.12] });
+  const auraOpacity = ambientPulse.interpolate({ inputRange: [0, 1], outputRange: [0.055, 0.13] });
+  const ringScale = ambientPulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.16] });
+  const ringOpacity = ambientPulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.05] });
+  const liveRingScale = livePulse.interpolate({ inputRange: [0, 1], outputRange: [1, 2.3] });
+  const liveRingOpacity = livePulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] });
+
   return (
     <View style={styles.screen}>
+      <View pointerEvents="none" style={styles.backgroundArt}>
+        <Animated.View style={[styles.backgroundGlowTop, { opacity: auraOpacity, transform: [{ scale: auraScale }] }]} />
+        <View style={styles.backgroundGlowBottom} />
+      </View>
       <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
         <ScrollView
           contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
@@ -211,7 +300,12 @@ export default function Home() {
               </View>
               {isLockedIn ? (
                 <View style={[styles.liveBadge, !hubConnected && styles.liveBadgeOffline]}>
-                  <View style={[styles.liveDot, !hubConnected && styles.liveDotOffline]} />
+                  <View style={styles.liveDotWrap}>
+                    {hubConnected ? (
+                      <Animated.View style={[styles.livePulseRing, { opacity: liveRingOpacity, transform: [{ scale: liveRingScale }] }]} />
+                    ) : null}
+                    <View style={[styles.liveDot, !hubConnected && styles.liveDotOffline]} />
+                  </View>
                   <Text style={[styles.liveText, !hubConnected && styles.liveTextOffline]}>
                     {hubConnected ? (telemetryReady ? "LIVE" : "CONNECTING") : "OFFLINE"}
                   </Text>
@@ -221,13 +315,16 @@ export default function Home() {
 
             {isLockedIn ? (
               <>
+                <Animated.View style={{ opacity: heroEntrance, transform: [{ translateY: heroTranslateY }, { scale: heroScale }] }}>
                 <LinearGradient
-                  colors={[`${copy.color}2B`, themes.backgroundElement, themes.surfaceSoft]}
+                  colors={["#12283A", "#0F2130", themes.backgroundElement]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
-                  style={[styles.overallCard, { borderColor: `${copy.color}66` }]}
+                  style={[styles.overallCard, { borderColor: `${copy.color}55` }]}
                 >
-                  <View style={[styles.statusGlow, { backgroundColor: copy.color }]} />
+                  <View style={styles.brandEdge} />
+                  <Animated.View style={[styles.statusGlow, { backgroundColor: copy.color, opacity: auraOpacity, transform: [{ scale: auraScale }] }]} />
+                  <View style={styles.brandGlow} />
 
                   <View style={styles.heroTopRow}>
                     <View style={styles.heroSignal}>
@@ -240,7 +337,8 @@ export default function Home() {
                   </View>
 
                   <View style={styles.heroMainRow}>
-                    <View style={[styles.overallIcon, { borderColor: `${copy.color}88`, backgroundColor: `${copy.color}13` }]}> 
+                    <View style={[styles.overallIcon, { borderColor: `${copy.color}88`, backgroundColor: `${copy.color}13` }]}>
+                      <Animated.View style={[styles.iconPulseRing, { borderColor: copy.color, opacity: ringOpacity, transform: [{ scale: ringScale }] }]} />
                       <Host matchContents>
                         <Icon name={overallIcon} color={copy.color} size={38} />
                       </Host>
@@ -261,6 +359,7 @@ export default function Home() {
                     ) : null}
                   </View>
                 </LinearGradient>
+                </Animated.View>
 
                 <View style={styles.section}>
                   <View style={styles.sectionHeadingRow}>
@@ -273,17 +372,22 @@ export default function Home() {
                     </View>
                   </View>
 
-                  {SEAT_NUMBERS.filter((seatNo) => Boolean(assignments[seatNo])).map((seatNo) => (
-                    <SeatCard
-                      key={seatNo}
-                      seatNo={seatNo}
-                      role={SEAT_ROLES[seatNo]}
-                      name={getDisplayName(assignments[seatNo])}
-                      photo={getProfilePhoto(assignments[seatNo])}
-                      state={getSeatState(seatNo)}
-                      onPress={() => showSeatDetails(seatNo)}
-                    />
-                  ))}
+                  {SEAT_NUMBERS.filter((seatNo) => Boolean(assignments[seatNo])).map((seatNo) => {
+                    const entry = passengerEntrance[seatNo - 1];
+                    const entryY = entry.interpolate({ inputRange: [0, 1], outputRange: [12, 0] });
+                    return (
+                      <Animated.View key={seatNo} style={{ opacity: entry, transform: [{ translateY: entryY }] }}>
+                        <SeatCard
+                          seatNo={seatNo}
+                          role={SEAT_ROLES[seatNo]}
+                          name={getDisplayName(assignments[seatNo])}
+                          photo={getProfilePhoto(assignments[seatNo])}
+                          state={getSeatState(seatNo)}
+                          onPress={() => showSeatDetails(seatNo)}
+                        />
+                      </Animated.View>
+                    );
+                  })}
                 </View>
 
                 <Pressable
@@ -308,13 +412,14 @@ export default function Home() {
                 </Pressable>
               </>
             ) : (
+              <Animated.View style={{ opacity: heroEntrance, transform: [{ translateY: heroTranslateY }, { scale: heroScale }] }}>
               <LinearGradient
-                colors={["rgba(52,209,127,0.16)", themes.backgroundElement, themes.surfaceSoft]}
+                colors={["rgba(52,209,127,0.18)", "#102638", themes.backgroundElement]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.setupHero}
               >
-                <View style={styles.setupGlow} />
+                <Animated.View style={[styles.setupGlow, { opacity: auraOpacity, transform: [{ scale: auraScale }] }]} />
                 <View style={styles.setupIconWrap}>
                   <Host matchContents>
                     <Icon name={Icon.select({ ios: "carseat.right.fill", android: lockOpenXml })} size={58} color={themes.primaryBttn} />
@@ -334,6 +439,7 @@ export default function Home() {
                   <Button label="Set Up Seats" onPress={() => router.push("/assign")} fullWidth />
                 </View>
               </LinearGradient>
+              </Animated.View>
             )}
           </View>
         </ScrollView>
@@ -355,8 +461,11 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: themes.background },
-  safeArea: { flex: 1, backgroundColor: themes.background },
+  screen: { flex: 1, backgroundColor: themes.background, position: "relative", overflow: "hidden" },
+  backgroundArt: { ...StyleSheet.absoluteFillObject, overflow: "hidden" },
+  backgroundGlowTop: { position: "absolute", width: 330, height: 330, borderRadius: 165, backgroundColor: themes.primaryBttn, top: -190, right: -150 },
+  backgroundGlowBottom: { position: "absolute", width: 260, height: 260, borderRadius: 130, backgroundColor: "#163A4C", opacity: 0.12, bottom: 40, left: -180 },
+  safeArea: { flex: 1, backgroundColor: "transparent" },
   scrollContent: { flexGrow: 1, paddingTop: spacing.one },
   container: { flex: 1, width: "100%", paddingHorizontal: spacing.two, gap: spacing.two },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -377,6 +486,8 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   liveBadgeOffline: { backgroundColor: themes.surfaceSoft, borderColor: themes.divider, shadowOpacity: 0 },
+  liveDotWrap: { width: 10, height: 10, alignItems: "center", justifyContent: "center" },
+  livePulseRing: { position: "absolute", width: 8, height: 8, borderRadius: 4, backgroundColor: themes.primaryBttn },
   liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: themes.primaryBttn },
   liveDotOffline: { backgroundColor: themes.textMuted },
   liveText: { color: themes.primaryBttn, fontSize: 9, letterSpacing: 0.7, fontFamily: "Body-Bold" },
@@ -389,20 +500,23 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.two,
     borderRadius: 28,
     borderWidth: 1.2,
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 18,
+    shadowColor: themes.primaryBttn,
+    shadowOpacity: 0.09,
+    shadowRadius: 22,
     shadowOffset: { width: 0, height: 10 },
     elevation: 5,
   },
-  statusGlow: { position: "absolute", width: 230, height: 230, borderRadius: 115, opacity: 0.08, top: -150, right: -70 },
+  brandEdge: { position: "absolute", left: 0, top: 30, bottom: 30, width: 3, borderTopRightRadius: 3, borderBottomRightRadius: 3, backgroundColor: themes.primaryBttn, opacity: 0.9 },
+  brandGlow: { position: "absolute", width: 170, height: 170, borderRadius: 85, backgroundColor: themes.primaryBttn, opacity: 0.045, bottom: -115, left: -45 },
+  statusGlow: { position: "absolute", width: 250, height: 250, borderRadius: 125, top: -155, right: -72 },
   heroTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.two },
   heroSignal: { flexDirection: "row", alignItems: "center", gap: 6 },
   heroSignalDot: { width: 7, height: 7, borderRadius: 4 },
   heroSignalText: { color: themes.textSecondary, fontSize: 8.5, letterSpacing: 1, fontFamily: "Body-Bold" },
   heroCount: { color: themes.textMuted, fontSize: 8.5, letterSpacing: 0.75, fontFamily: "Body-Bold" },
   heroMainRow: { flexDirection: "row", alignItems: "center", gap: spacing.one + 4 },
-  overallIcon: { width: 66, height: 66, borderRadius: 23, alignItems: "center", justifyContent: "center", borderWidth: 1.2 },
+  overallIcon: { width: 68, height: 68, borderRadius: 24, alignItems: "center", justifyContent: "center", borderWidth: 1.2, position: "relative", shadowColor: themes.primaryBttn, shadowOpacity: 0.1, shadowRadius: 12 },
+  iconPulseRing: { position: "absolute", width: 58, height: 58, borderRadius: 21, borderWidth: 1.2 },
   heroCopy: { flex: 1, minWidth: 0 },
   overallLabel: { fontSize: 28, lineHeight: 31, letterSpacing: 1.4, fontFamily: "Body-Bold" },
   overallHeadline: { color: themes.text, fontSize: 16.5, lineHeight: 21, fontFamily: "Body-Bold", marginTop: 4 },
@@ -476,7 +590,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 5,
   },
-  setupGlow: { position: "absolute", width: 280, height: 280, borderRadius: 140, backgroundColor: themes.primaryBttn, opacity: 0.055, top: -165, right: -80 },
+  setupGlow: { position: "absolute", width: 300, height: 300, borderRadius: 150, backgroundColor: themes.primaryBttn, top: -175, right: -88 },
   setupIconWrap: { width: 96, height: 96, borderRadius: 31, alignItems: "center", justifyContent: "center", backgroundColor: themes.primarySoft, borderWidth: 1, borderColor: themes.primaryBorder, marginBottom: spacing.two },
   setupEyebrow: { color: themes.primaryBttn, fontSize: 9, letterSpacing: 1.25, fontFamily: "Body-Bold" },
   setupTitle: { color: themes.text, fontSize: 28, lineHeight: 33, fontFamily: "Body-Bold", textAlign: "center", marginTop: spacing.half },

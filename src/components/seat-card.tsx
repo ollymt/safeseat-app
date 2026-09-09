@@ -62,6 +62,9 @@ export default function SeatCard({
         { borderColor: `${meta.color}55` },
       ]}
     >
+      <View pointerEvents="none" style={[styles.stateRail, { backgroundColor: meta.color }]} />
+      <View pointerEvents="none" style={[styles.cardGlow, { backgroundColor: meta.color }]} />
+
       <View style={[styles.avatarShell, { borderColor: meta.color, backgroundColor: `${meta.color}14` }]}>
         {imageUri ? (
           <Image source={{ uri: imageUri }} style={styles.avatar} />
@@ -94,21 +97,25 @@ export default function SeatCard({
 const styles = StyleSheet.create({
   baseCard: {
     width: "100%",
-    minHeight: 76,
+    minHeight: 80,
+    position: "relative",
+    overflow: "hidden",
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.one + 2,
-    borderRadius: 20,
-    backgroundColor: themes.backgroundElement,
+    borderRadius: 21,
+    backgroundColor: "#101D2B",
     borderWidth: 1,
     paddingHorizontal: spacing.one + 4,
     paddingVertical: spacing.one,
-    shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
+    shadowColor: themes.primaryBttn,
+    shadowOpacity: 0.055,
+    shadowRadius: 14,
     shadowOffset: { width: 0, height: 5 },
     elevation: 2,
   },
+  stateRail: { position: "absolute", left: 0, top: 18, bottom: 18, width: 3, borderTopRightRadius: 3, borderBottomRightRadius: 3, opacity: 0.85 },
+  cardGlow: { position: "absolute", width: 120, height: 120, borderRadius: 60, right: -74, top: -30, opacity: 0.035 },
   avatarShell: {
     width: 46,
     height: 46,
@@ -118,15 +125,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     position: "relative",
     overflow: "visible",
+    shadowColor: themes.primaryBttn,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
   avatar: { width: 40, height: 40, borderRadius: 20, resizeMode: "cover" },
   monogram: { color: themes.text, fontSize: 17, fontFamily: "Body-Bold" },
   statusDot: { position: "absolute", right: -1, bottom: -1, width: 11, height: 11, borderRadius: 6, borderWidth: 2, borderColor: themes.backgroundElement },
   copy: { flex: 1, minWidth: 0 },
-  role: { color: themes.textSecondary, fontSize: 9.5, letterSpacing: 0.75, fontFamily: "Body-Bold" },
+  role: { color: themes.textSecondary, fontSize: 9.5, letterSpacing: 0.8, fontFamily: "Body-Bold" },
   name: { color: themes.text, fontSize: 17, fontFamily: "Body-Bold", marginTop: 2 },
   rightSide: { flexDirection: "row", alignItems: "center", gap: 7 },
-  statePill: { paddingHorizontal: spacing.one, paddingVertical: 7, borderRadius: 999, borderWidth: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.half },
+  statePill: { paddingHorizontal: spacing.one + 1, paddingVertical: 7, borderRadius: 999, borderWidth: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.half },
   stateName: { fontSize: 9.5, letterSpacing: 0.45, fontFamily: "Body-Bold" },
   chevron: { color: themes.textMuted, fontSize: 25, lineHeight: 25, fontFamily: "Body-Regular", marginTop: -2 },
   emptySeat: { opacity: 0.86 },
