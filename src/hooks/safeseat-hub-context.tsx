@@ -5,6 +5,9 @@ import {
   SafeSeatHubConnectionState,
   SafeSeatStatusPayload,
 } from "@/services/safeseat-hub";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { setAudioModeAsync, useAudioPlayer } from "expo-audio";
+import * as Haptics from "expo-haptics";
 import {
   AppState,
   AppStateStatus,
@@ -20,13 +23,41 @@ import {
   useState,
 } from "react";
 
+export type SafeSeatSeatState = "safe" | "warning" | "emergency" | "unknown";
+export type SafeSeatDecisiveState = Exclude<SafeSeatSeatState, "unknown">;
+export type SafeSeatSimulationState = "off" | SafeSeatSeatState;
+
 type SafeSeatHubContextValue = {
   hubUrl: string;
   connectionState: SafeSeatHubConnectionState;
   connected: boolean;
   telemetryReady: boolean;
   status: SafeSeatStatusPayload | null;
-  seatState: "safe" | "warning" | "emergency" | "unknown";
+
+  // rawSeatState mirrors the Main Hub exactly. WATCH/insufficient evidence maps
+  // to "unknown" here.
+  rawSeatState: SafeSeatSeatState;
+
+  // seatState is the driver-facing state. Once a decisive state has been seen
+  // during a session, a temporary WATCH/unknown does not erase it. Monitoring
+  // continues in the background until a new decisive result arrives.
+  seatState: SafeSeatSeatState;
+  lastDecisiveSeatState: SafeSeatDecisiveState | null;
+  resetDecisionLatch: () => void;
+
+  // Local-only UAT visualization. This never sends a command to the Main Hub.
+  simulationState: SafeSeatSimulationState;
+  simulationActive: boolean;
+  setSimulationState: (state: SafeSeatSimulationState) => void;
+  armUatWarning: (delayMs: number) => void;
+  cancelUatWarning: () => void;
+
+  // App-side alert feedback. Emergency acknowledgement silences the repeating
+  // cue only; it never clears or downgrades the Fusion state.
+  emergencyAlertAcknowledged: boolean;
+  acknowledgeEmergencyAlert: () => void;
+  silenceAlertFeedback: () => void;
+
   lastUpdatedAt: number | null;
   lastError: string | null;
   refresh: () => Promise<SafeSeatStatusPayload | null>;
@@ -36,6 +67,11 @@ const SafeSeatHubContext = createContext<SafeSeatHubContextValue | undefined>(un
 
 const CONNECTED_POLL_MS = 1000;
 const DISCONNECTED_POLL_MS = 3000;
+const UAT_WARNING_HOLD_MS = 10_000;
+const IS_LOCKED_IN_KEY = "isLockedIn";
+const WARNING_ALERT_INTERVAL_MS = 3_000;
+const WARNING_ALERT_DURATION_MS = 10_000;
+const EMERGENCY_ALERT_INTERVAL_MS = 4_000;
 
 function getErrorText(error: unknown): string {
   if (error instanceof Error) {
@@ -51,11 +87,83 @@ export function SafeSeatHubProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SafeSeatStatusPayload | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [lastDecisiveSeatState, setLastDecisiveSeatState] = useState<SafeSeatDecisiveState | null>(null);
+  const [simulationState, setSimulationStateValue] = useState<SafeSeatSimulationState>("off");
+  const [emergencyAlertAcknowledged, setEmergencyAlertAcknowledged] = useState(false);
+
+  const warningPlayer = useAudioPlayer(require("../../assets/sounds/warning-chime.wav"));
+  const emergencyPlayer = useAudioPlayer(require("../../assets/sounds/emergency-alert.wav"));
 
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const mountedRef = useRef(true);
   const activeRequestRef = useRef<Promise<SafeSeatStatusPayload | null> | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const uatWarningDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const uatWarningHoldRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const liveReadinessRef = useRef({ connected: false, telemetryReady: false });
+  const warningAlertIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const warningAlertStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const emergencyAlertIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    void setAudioModeAsync({
+      playsInSilentMode: true,
+      interruptionMode: "duckOthers",
+    }).catch((error) => {
+      console.warn("SafeSeat alert audio mode could not be configured:", error);
+    });
+  }, []);
+
+  const replayWarningCue = useCallback(() => {
+    try {
+      warningPlayer.seekTo(0);
+      warningPlayer.play();
+    } catch (error) {
+      console.warn("SafeSeat warning chime could not play:", error);
+    }
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
+  }, [warningPlayer]);
+
+  const replayEmergencyCue = useCallback(() => {
+    try {
+      emergencyPlayer.seekTo(0);
+      emergencyPlayer.play();
+    } catch (error) {
+      console.warn("SafeSeat emergency chime could not play:", error);
+    }
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
+  }, [emergencyPlayer]);
+
+  const clearAlertFeedbackTimers = useCallback(() => {
+    if (warningAlertIntervalRef.current) {
+      clearInterval(warningAlertIntervalRef.current);
+      warningAlertIntervalRef.current = null;
+    }
+    if (warningAlertStopRef.current) {
+      clearTimeout(warningAlertStopRef.current);
+      warningAlertStopRef.current = null;
+    }
+    if (emergencyAlertIntervalRef.current) {
+      clearInterval(emergencyAlertIntervalRef.current);
+      emergencyAlertIntervalRef.current = null;
+    }
+  }, []);
+
+  const silenceAlertFeedback = useCallback(() => {
+    clearAlertFeedbackTimers();
+    try { warningPlayer.pause(); } catch {}
+    try { emergencyPlayer.pause(); } catch {}
+  }, [clearAlertFeedbackTimers, emergencyPlayer, warningPlayer]);
+
+  const acknowledgeEmergencyAlert = useCallback(() => {
+    setEmergencyAlertAcknowledged(true);
+    if (emergencyAlertIntervalRef.current) {
+      clearInterval(emergencyAlertIntervalRef.current);
+      emergencyAlertIntervalRef.current = null;
+    }
+    try { emergencyPlayer.pause(); } catch {}
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
+  }, [emergencyPlayer]);
 
   const refresh = useCallback((): Promise<SafeSeatStatusPayload | null> => {
     if (activeRequestRef.current) return activeRequestRef.current;
@@ -135,20 +243,175 @@ export function SafeSeatHubProvider({ children }: { children: ReactNode }) {
     };
   }, [refresh]);
 
-  const value = useMemo<SafeSeatHubContextValue>(() => {
-    const connected = connectionState === "connected";
-    return {
-      hubUrl,
-      connectionState,
+  const connected = connectionState === "connected";
+  const rawSeatState = useMemo<SafeSeatSeatState>(
+    () => (connected ? fusionStateToSeatState(status) : "unknown"),
+    [connected, status],
+  );
+
+  useEffect(() => {
+    // Only real Main Hub decisive results update the latch. Local simulation is
+    // intentionally excluded so returning to LIVE can restore the last real
+    // trusted state.
+    if (rawSeatState === "safe" || rawSeatState === "warning" || rawSeatState === "emergency") {
+      setLastDecisiveSeatState(rawSeatState);
+    }
+  }, [rawSeatState]);
+
+  useEffect(() => {
+    liveReadinessRef.current = {
       connected,
       telemetryReady: Boolean(connected && status?.telemetry_ready),
-      status,
-      seatState: connected ? fusionStateToSeatState(status) : "unknown",
-      lastUpdatedAt,
-      lastError,
-      refresh,
     };
-  }, [connectionState, hubUrl, lastError, lastUpdatedAt, refresh, status]);
+  }, [connected, status?.telemetry_ready]);
+
+  const clearUatWarningTimers = useCallback(() => {
+    if (uatWarningDelayRef.current) {
+      clearTimeout(uatWarningDelayRef.current);
+      uatWarningDelayRef.current = null;
+    }
+    if (uatWarningHoldRef.current) {
+      clearTimeout(uatWarningHoldRef.current);
+      uatWarningHoldRef.current = null;
+    }
+  }, []);
+
+  const cancelUatWarning = useCallback(() => {
+    clearUatWarningTimers();
+    setSimulationStateValue("off");
+  }, [clearUatWarningTimers]);
+
+  const armUatWarning = useCallback((delayMs: number) => {
+    clearUatWarningTimers();
+    setSimulationStateValue("off");
+
+    const tryTrigger = () => {
+      const readiness = liveReadinessRef.current;
+      if (!readiness.connected || !readiness.telemetryReady) {
+        uatWarningDelayRef.current = setTimeout(tryTrigger, 2000);
+        return;
+      }
+
+      setSimulationStateValue("warning");
+      uatWarningHoldRef.current = setTimeout(() => {
+        setSimulationStateValue("off");
+        uatWarningHoldRef.current = null;
+      }, UAT_WARNING_HOLD_MS);
+    };
+
+    uatWarningDelayRef.current = setTimeout(tryTrigger, Math.max(0, delayMs));
+  }, [clearUatWarningTimers]);
+
+  useEffect(() => () => clearUatWarningTimers(), [clearUatWarningTimers]);
+
+  const resetDecisionLatch = useCallback(() => {
+    setLastDecisiveSeatState(null);
+  }, []);
+
+  const setSimulationState = useCallback((next: SafeSeatSimulationState) => {
+    setSimulationStateValue(next);
+  }, []);
+
+  const simulationActive = simulationState !== "off";
+
+  const driverFacingSeatState = useMemo<SafeSeatSeatState>(() => {
+    // Hidden UAT Warning must never mask a real Main Hub EMERGENCY.
+    if (rawSeatState === "emergency" || lastDecisiveSeatState === "emergency") return "emergency";
+    if (simulationState !== "off") return simulationState;
+    if (rawSeatState !== "unknown") return rawSeatState;
+    return lastDecisiveSeatState ?? "unknown";
+  }, [lastDecisiveSeatState, rawSeatState, simulationState]);
+
+  useEffect(() => {
+    let cancelled = false;
+    clearAlertFeedbackTimers();
+
+    if (driverFacingSeatState !== "emergency") {
+      setEmergencyAlertAcknowledged(false);
+    }
+
+    if (driverFacingSeatState !== "warning" && driverFacingSeatState !== "emergency") {
+      return () => { cancelled = true; clearAlertFeedbackTimers(); };
+    }
+
+    const startFeedback = async () => {
+      try {
+        const rawLocked = await AsyncStorage.getItem(IS_LOCKED_IN_KEY);
+        const monitoringActive = rawLocked ? Boolean(JSON.parse(rawLocked)) : false;
+        if (cancelled || !monitoringActive) return;
+
+        if (driverFacingSeatState === "warning") {
+          replayWarningCue();
+          warningAlertIntervalRef.current = setInterval(replayWarningCue, WARNING_ALERT_INTERVAL_MS);
+          warningAlertStopRef.current = setTimeout(() => {
+            if (warningAlertIntervalRef.current) {
+              clearInterval(warningAlertIntervalRef.current);
+              warningAlertIntervalRef.current = null;
+            }
+            warningAlertStopRef.current = null;
+          }, WARNING_ALERT_DURATION_MS);
+          return;
+        }
+
+        setEmergencyAlertAcknowledged(false);
+        replayEmergencyCue();
+        emergencyAlertIntervalRef.current = setInterval(replayEmergencyCue, EMERGENCY_ALERT_INTERVAL_MS);
+      } catch (error) {
+        console.warn("SafeSeat alert feedback could not verify session state:", error);
+      }
+    };
+
+    void startFeedback();
+    return () => {
+      cancelled = true;
+      clearAlertFeedbackTimers();
+    };
+  }, [clearAlertFeedbackTimers, driverFacingSeatState, replayEmergencyCue, replayWarningCue]);
+
+  useEffect(() => () => silenceAlertFeedback(), [silenceAlertFeedback]);
+
+  const value = useMemo<SafeSeatHubContextValue>(() => ({
+    hubUrl,
+    connectionState,
+    connected,
+    telemetryReady: Boolean(connected && status?.telemetry_ready),
+    status,
+    rawSeatState,
+    seatState: driverFacingSeatState,
+    lastDecisiveSeatState,
+    resetDecisionLatch,
+    simulationState,
+    simulationActive,
+    setSimulationState,
+    armUatWarning,
+    cancelUatWarning,
+    emergencyAlertAcknowledged,
+    acknowledgeEmergencyAlert,
+    silenceAlertFeedback,
+    lastUpdatedAt,
+    lastError,
+    refresh,
+  }), [
+    acknowledgeEmergencyAlert,
+    armUatWarning,
+    cancelUatWarning,
+    connected,
+    connectionState,
+    emergencyAlertAcknowledged,
+    driverFacingSeatState,
+    hubUrl,
+    lastDecisiveSeatState,
+    lastError,
+    lastUpdatedAt,
+    rawSeatState,
+    refresh,
+    resetDecisionLatch,
+    setSimulationState,
+    silenceAlertFeedback,
+    simulationActive,
+    simulationState,
+    status,
+  ]);
 
   return <SafeSeatHubContext.Provider value={value}>{children}</SafeSeatHubContext.Provider>;
 }

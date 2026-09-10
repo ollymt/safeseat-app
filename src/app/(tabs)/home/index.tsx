@@ -1,5 +1,5 @@
 import EmergencyModal from "@/components/emergency-modal";
-import SeatCard from "@/components/seat-card";
+import SeatCard, { SeatVitals } from "@/components/seat-card";
 import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
 import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -109,7 +109,20 @@ export default function Home() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomPad = 88 + insets.bottom;
-  const { connected: hubConnected, telemetryReady, seatState: hubSeatState } = useSafeSeatHub();
+  const {
+    connected: hubConnected,
+    telemetryReady,
+    status: hubStatus,
+    seatState: hubSeatState,
+    simulationActive,
+    resetDecisionLatch,
+    setSimulationState,
+    armUatWarning,
+    cancelUatWarning,
+    emergencyAlertAcknowledged,
+    acknowledgeEmergencyAlert,
+    silenceAlertFeedback,
+  } = useSafeSeatHub();
 
   const [isLockedIn, setIsLockedIn] = useState(false);
   const [assignments, setAssignments] = useState<Record<number, Profile>>({});
@@ -120,6 +133,7 @@ export default function Home() {
   const [endingSession, setEndingSession] = useState(false);
   const [screenFocused, setScreenFocused] = useState(true);
   const [animationCycle, setAnimationCycle] = useState(0);
+  const [uatControlVisible, setUatControlVisible] = useState(false);
 
   const heroEntrance = useRef(new Animated.Value(0)).current;
   const ambientPulse = useRef(new Animated.Value(0)).current;
@@ -233,11 +247,18 @@ export default function Home() {
     // Only the physically linked prototype seat may enter ANALYZING or a
     // Fusion state. Other conceptual cabin positions remain visibly offline.
     if (seatNo !== hardwareSeatNo) return "offline";
-    if (!hubConnected || !telemetryReady) return "offline";
 
-    if (!isLockedIn) return "ready";
+    if (!isLockedIn) {
+      if (!hubConnected || !telemetryReady) return "offline";
+      return "ready";
+    }
+
+    // OFFLINE always wins. The hidden UAT Warning is display-only and is
+    // allowed only while real telemetry is still connected and ready.
+    if (!hubConnected || !telemetryReady) return "offline";
+    if (simulationActive) return hubSeatState;
     return hubSeatState;
-  }, [assignments, consents, hardwareSeatNo, hubConnected, hubSeatState, isLockedIn, telemetryReady]);
+  }, [assignments, consents, hardwareSeatNo, hubConnected, hubSeatState, isLockedIn, simulationActive, telemetryReady]);
 
   const getDisplayName = (profile?: Profile): string | undefined => {
     if (!profile) return undefined;
@@ -250,6 +271,35 @@ export default function Home() {
     const profile = assignments[seatNo];
     return Boolean(profile?.isGuest || profile?.sessionOnly);
   }).length;
+
+  const vitalSigns = useMemo<SeatVitals>(() => {
+    const c1001 = hubStatus?.sensors?.c1001;
+    const qualityTrusted = Boolean(
+      hubConnected &&
+      telemetryReady &&
+      c1001?.connected &&
+      !c1001?.stale &&
+      c1001?.trusted_vitals
+    );
+
+    const heartRateBpm = qualityTrusted && typeof c1001?.heart_rate_bpm === "number" && Number.isFinite(c1001.heart_rate_bpm)
+      ? Math.round(c1001.heart_rate_bpm)
+      : null;
+    const respirationRateBpm = qualityTrusted && typeof c1001?.respiration_rate_bpm === "number" && Number.isFinite(c1001.respiration_rate_bpm)
+      ? Math.round(c1001.respiration_rate_bpm * 10) / 10
+      : null;
+
+    return {
+      trusted: qualityTrusted && heartRateBpm !== null && respirationRateBpm !== null,
+      heartRateBpm,
+      respirationRateBpm,
+      statusLabel: !c1001?.connected
+        ? "UNAVAILABLE"
+        : qualityTrusted
+          ? "LIVE"
+          : "REACQUIRING",
+    };
+  }, [hubConnected, hubStatus?.sensors?.c1001, telemetryReady]);
 
   const overallState = useMemo<OverallState>(() => {
     if (!isLockedIn || assignedSeatCount === 0) return "unknown";
@@ -402,6 +452,10 @@ export default function Home() {
       await Promise.all(writes);
 
       setIsLockedIn(false);
+      cancelUatWarning();
+      silenceAlertFeedback();
+      resetDecisionLatch();
+      setSimulationState("off");
       setAssignments(persistentAssignments);
       setConsents({});
       setHardwareSeatNo(nextHardwareSeat);
@@ -416,6 +470,18 @@ export default function Home() {
     }
   };
 
+  const openUatControl = () => {
+    if (!isLockedIn) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setUatControlVisible(true);
+  };
+
+  const armWarning = (delayMs: number) => {
+    armUatWarning(delayMs);
+    setUatControlVisible(false);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
   const emergencySeatNo = isLockedIn
     ? SEAT_NUMBERS.find(
         (seatNo) => getSeatState(seatNo) === "emergency" && assignments[seatNo] && !dismissedSeats.has(seatNo),
@@ -423,15 +489,17 @@ export default function Home() {
     : undefined;
   const emergencyProfile = emergencySeatNo !== undefined ? assignments[emergencySeatNo] : undefined;
 
+  const linkedDisplayState = hardwareSeatNo ? getSeatState(hardwareSeatNo) : null;
+
   useEffect(() => {
-    if (!hardwareSeatNo || hubSeatState === "emergency") return;
+    if (!hardwareSeatNo || linkedDisplayState === "emergency") return;
     setDismissedSeats((previous) => {
       if (!previous.has(hardwareSeatNo)) return previous;
       const next = new Set(previous);
       next.delete(hardwareSeatNo);
       return next;
     });
-  }, [hardwareSeatNo, hubSeatState]);
+  }, [hardwareSeatNo, linkedDisplayState]);
 
   const heroTranslateY = heroEntrance.interpolate({ inputRange: [0, 1], outputRange: [14, 0] });
   const heroScale = heroEntrance.interpolate({ inputRange: [0, 1], outputRange: [0.985, 1] });
@@ -506,7 +574,14 @@ export default function Home() {
           <View style={styles.activeContainer}>
             <View style={styles.headerRow}>
               <View>
-                <Text style={styles.eyebrow}>SAFESEAT ACTIVE</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="SafeSeat"
+                  delayLongPress={1800}
+                  onLongPress={openUatControl}
+                >
+                  <Text style={styles.eyebrow}>SAFESEAT ACTIVE</Text>
+                </Pressable>
                 <Text style={styles.pageHeader}>Home</Text>
               </View>
 
@@ -535,6 +610,7 @@ export default function Home() {
                     state={assignments[seatNo] ? getSeatState(seatNo) : "empty"}
                     animationActive={screenFocused}
                     animationCycle={animationCycle}
+                    vitals={seatNo === hardwareSeatNo ? vitalSigns : undefined}
                     onPress={() => assignments[seatNo] ? showSeatDetails(seatNo) : router.push("/assign")}
                   />
                 </View>
@@ -633,6 +709,53 @@ export default function Home() {
         )}
 
         <Modal
+          visible={uatControlVisible}
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+          onRequestClose={() => setUatControlVisible(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={() => setUatControlVisible(false)}
+              accessibilityLabel="Close UAT control"
+            />
+            <View style={styles.uatModalCard}>
+              <View style={styles.endModalHandle} />
+              <Text style={styles.uatModalEyebrow}>RESEARCHER CONTROL</Text>
+              <Text style={styles.uatModalTitle}>Schedule Warning</Text>
+              <Text style={styles.uatModalText}>The linked monitored seat will show Warning once, then return to live monitoring.</Text>
+
+              <View style={styles.uatDelayRow}>
+                <Pressable onPress={() => armWarning(10_000)} style={({ pressed }) => [styles.uatDelayButton, pressed && styles.modalButtonPressed]}>
+                  <Text style={styles.uatDelayTime}>10s</Text>
+                  <Text style={styles.uatDelayLabel}>Warning</Text>
+                </Pressable>
+                <Pressable onPress={() => armWarning(30_000)} style={({ pressed }) => [styles.uatDelayButton, pressed && styles.modalButtonPressed]}>
+                  <Text style={styles.uatDelayTime}>30s</Text>
+                  <Text style={styles.uatDelayLabel}>Warning</Text>
+                </Pressable>
+                <Pressable onPress={() => armWarning(60_000)} style={({ pressed }) => [styles.uatDelayButton, pressed && styles.modalButtonPressed]}>
+                  <Text style={styles.uatDelayTime}>60s</Text>
+                  <Text style={styles.uatDelayLabel}>Warning</Text>
+                </Pressable>
+              </View>
+
+              <Pressable
+                onPress={() => { cancelUatWarning(); setUatControlVisible(false); void Haptics.selectionAsync(); }}
+                style={({ pressed }) => [styles.uatCancelButton, pressed && styles.modalButtonPressed]}
+              >
+                <Text style={styles.uatCancelText}>Cancel Armed Warning</Text>
+              </Pressable>
+              <Pressable onPress={() => setUatControlVisible(false)} style={({ pressed }) => [styles.uatCloseButton, pressed && styles.modalButtonPressed]}>
+                <Text style={styles.uatCloseText}>Close</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
           visible={endSessionVisible}
           transparent
           animationType="fade"
@@ -695,6 +818,9 @@ export default function Home() {
             name={emergencyProfile.isAccountOwner ? "You" : emergencyProfile.name}
             icon={emergencyProfile.photoURL ?? emergencyProfile.icon}
             isAccountOwner={emergencyProfile.isAccountOwner}
+            vitals={vitalSigns}
+            alertAcknowledged={emergencyAlertAcknowledged}
+            onAcknowledgeAlert={acknowledgeEmergencyAlert}
           />
         ) : null}
       </SafeAreaView>
@@ -1161,6 +1287,46 @@ const styles = StyleSheet.create({
   setupPrimaryText: { color: "rgba(5,22,14,0.72)", fontSize: 9, marginTop: 2, fontFamily: "Body-Bold" },
   setupPrimaryChevron: { color: themes.primaryBttnText, fontSize: 28, lineHeight: 28, fontFamily: "Body-Regular" },
 
+  uatModalCard: {
+    width: "88%",
+    maxWidth: 430,
+    alignSelf: "center",
+    borderRadius: 24,
+    padding: spacing.two,
+    backgroundColor: themes.backgroundElement,
+    borderWidth: 1,
+    borderColor: themes.primaryBorder,
+    gap: spacing.one,
+  },
+  uatModalEyebrow: { color: themes.primaryBttn, fontSize: 9, letterSpacing: 1.2, fontFamily: "Body-Bold", marginTop: 4 },
+  uatModalTitle: { color: themes.text, fontSize: 23, fontFamily: "Body-Bold" },
+  uatModalText: { color: themes.textMuted, fontSize: 12.5, lineHeight: 18, fontFamily: "Body-Regular" },
+  uatDelayRow: { flexDirection: "row", gap: 8, marginTop: 4 },
+  uatDelayButton: {
+    flex: 1,
+    minHeight: 74,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(52,209,127,0.09)",
+    borderWidth: 1,
+    borderColor: themes.primaryBorder,
+  },
+  uatDelayTime: { color: themes.text, fontSize: 20, fontFamily: "Body-Bold" },
+  uatDelayLabel: { color: themes.primaryBttn, fontSize: 10, marginTop: 3, fontFamily: "Body-Bold", letterSpacing: 0.5 },
+  uatCancelButton: {
+    minHeight: 46,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: themes.divider,
+    backgroundColor: themes.surfaceSoft,
+    marginTop: 4,
+  },
+  uatCancelText: { color: themes.lightOrange, fontSize: 12, fontFamily: "Body-Bold" },
+  uatCloseButton: { minHeight: 42, alignItems: "center", justifyContent: "center" },
+  uatCloseText: { color: themes.textMuted, fontSize: 12, fontFamily: "Body-Bold" },
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(3,8,15,0.78)",

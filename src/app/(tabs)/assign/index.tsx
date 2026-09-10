@@ -67,7 +67,15 @@ export default function Assign() {
   const compactViewport = viewportHeight < 760;
   const carMapHeight = compactViewport ? 282 : 318;
   const bottomPad = 138 + insets.bottom;
-  const { connected: hubConnected, telemetryReady, seatState: hubSeatState, refresh: refreshHub } = useSafeSeatHub();
+  const {
+    connected: hubConnected,
+    telemetryReady,
+    refresh: refreshHub,
+    resetDecisionLatch,
+    setSimulationState,
+    cancelUatWarning,
+    silenceAlertFeedback,
+  } = useSafeSeatHub();
 
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [selectedSeat, setSelectedSeat] = useState(1);
@@ -246,6 +254,14 @@ export default function Assign() {
     });
 
     try {
+      // A new monitoring session must begin from ANALYZING until the Main Hub
+      // produces its first decisive SAFE/WARNING/EMERGENCY result. Clear any
+      // previous trip latch and any local UAT simulation before starting.
+      cancelUatWarning();
+      silenceAlertFeedback();
+      resetDecisionLatch();
+      setSimulationState("off");
+
       await Promise.all([
         AsyncStorage.setItem(IS_LOCKED_IN_KEY, JSON.stringify(true)),
         AsyncStorage.setItem(SEAT_STATUSES_KEY, JSON.stringify(initialStatuses)),
@@ -288,6 +304,10 @@ export default function Assign() {
               ]);
 
               setIsLockedIn(false);
+              cancelUatWarning();
+              silenceAlertFeedback();
+              resetDecisionLatch();
+              setSimulationState("off");
               setAssignments(persistentAssignments);
               setConsents({});
               if (hardwareSeatNo && !persistentAssignments[hardwareSeatNo]) {

@@ -7,6 +7,13 @@ import { Host, Icon } from "@expo/ui";
 import { useEffect, useRef } from "react";
 import { Animated, Easing, Image, Pressable, StyleSheet, Text, View } from "react-native";
 
+export type SeatVitals = {
+  trusted: boolean;
+  heartRateBpm: number | null;
+  respirationRateBpm: number | null;
+  statusLabel: "LIVE" | "REACQUIRING" | "UNAVAILABLE";
+};
+
 type SeatCardProps = {
   seatNo: number;
   name?: string;
@@ -18,6 +25,7 @@ type SeatCardProps = {
   home?: boolean;
   animationActive?: boolean;
   animationCycle?: number;
+  vitals?: SeatVitals;
 };
 
 const stateMeta = {
@@ -65,6 +73,7 @@ export default function SeatCard({
   home = false,
   animationActive = true,
   animationCycle = 0,
+  vitals,
 }: SeatCardProps) {
   const meta = stateMeta[state];
   const imageUri = getFormattedImageUri(photo);
@@ -154,6 +163,23 @@ export default function SeatCard({
         {role ? <Text style={[styles.role, compact && styles.compactRole, home && styles.homeRole]}>{role.toUpperCase()}</Text> : null}
         <Text style={[styles.name, compact && styles.compactName, home && styles.homeName, state === "empty" && styles.emptyName]} numberOfLines={1}>{displayName}</Text>
         {home ? <Text style={[styles.description, { color: state === "empty" ? themes.textMuted : themes.textSecondary }]} numberOfLines={1}>{stateDescription[state]}</Text> : null}
+        {home && (state === "warning" || state === "emergency") ? (
+          <View style={styles.vitalsLine}>
+            {vitals?.trusted ? (
+              <>
+                <Text style={styles.vitalsLabel}>VITALS</Text>
+                <Text style={styles.vitalValue}>HR {vitals.heartRateBpm ?? "—"} bpm</Text>
+                <View style={styles.vitalDivider} />
+                <Text style={styles.vitalValue}>RR {vitals.respirationRateBpm ?? "—"}/min</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.vitalsLabel}>VITALS</Text>
+                <Text style={styles.vitalsPending}>{vitals?.statusLabel === "UNAVAILABLE" ? "Unavailable" : "Reacquiring signal"}</Text>
+              </>
+            )}
+          </View>
+        ) : null}
       </View>
 
       <View style={[styles.rightSide, compact && styles.compactRightSide, home && styles.homeRightSide]}>
@@ -247,6 +273,11 @@ const styles = StyleSheet.create({
   stateName: { fontSize: 9.5, letterSpacing: 0.45, fontFamily: "Body-Bold" },
   chevron: { color: themes.textMuted, fontSize: 25, lineHeight: 25, fontFamily: "Body-Regular", marginTop: -2 },
   description: { fontSize: 10.5, lineHeight: 14, fontFamily: "Body-Regular", marginTop: 3 },
+  vitalsLine: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3, minHeight: 13 },
+  vitalsLabel: { color: themes.textMuted, fontSize: 7.5, letterSpacing: 0.7, fontFamily: "Body-Bold" },
+  vitalValue: { color: themes.text, fontSize: 9, fontFamily: "Body-Bold" },
+  vitalDivider: { width: 2, height: 2, borderRadius: 1, backgroundColor: themes.textMuted, opacity: 0.7 },
+  vitalsPending: { color: themes.textSecondary, fontSize: 9, fontFamily: "Body-Medium" },
   homeCard: {
     height: "100%",
     minHeight: 0,

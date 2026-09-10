@@ -1,3 +1,4 @@
+import type { SeatVitals } from "@/components/seat-card";
 import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
 import { useUserPreferences } from "@/hooks/user-preferences-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -36,6 +37,9 @@ type Props = {
   name: string;
   icon?: string;
   isAccountOwner?: boolean;
+  vitals?: SeatVitals;
+  alertAcknowledged?: boolean;
+  onAcknowledgeAlert?: () => void;
 };
 
 const LOCAL_EMERGENCY_CONTACTS_KEY = "app_emergency_contacts";
@@ -62,6 +66,9 @@ export default function EmergencyModal({
   icon,
   onClose,
   isAccountOwner = false,
+  vitals,
+  alertAcknowledged = false,
+  onAcknowledgeAlert,
 }: Props) {
   const {
     emergencyEscalation,
@@ -94,7 +101,6 @@ export default function EmergencyModal({
     setSecondsLeft(escalationWindowSeconds);
     setWindowElapsed(false);
     setHoldingCancel(false);
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
   }, [visible, seat, escalationWindowSeconds]);
 
   useEffect(() => {
@@ -283,6 +289,11 @@ export default function EmergencyModal({
       >
         <View style={styles.backdrop}>
           <View style={styles.card}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+              contentContainerStyle={styles.cardContent}
+            >
             <View style={styles.topRow}>
               <View style={styles.alertPill}>
                 <Ionicons name="warning" color={themes.warnBttn} size={15} />
@@ -307,6 +318,33 @@ export default function EmergencyModal({
                 <Text style={styles.titleText}>{title}</Text>
                 <Text style={styles.subtitleText}>{role} · sustained abnormal pattern</Text>
               </View>
+            </View>
+
+            <View style={styles.vitalsBox}>
+              <View style={styles.vitalsHeader}>
+                <Text style={styles.vitalsTitle}>VITAL SIGNS</Text>
+                <View style={[styles.vitalsStatus, vitals?.trusted && styles.vitalsStatusLive]}>
+                  <Text style={[styles.vitalsStatusText, vitals?.trusted && styles.vitalsStatusTextLive]}>
+                    {vitals?.trusted ? "LIVE" : vitals?.statusLabel === "UNAVAILABLE" ? "UNAVAILABLE" : "REACQUIRING"}
+                  </Text>
+                </View>
+              </View>
+              {vitals?.trusted ? (
+                <View style={styles.vitalsValues}>
+                  <View style={styles.vitalTile}>
+                    <Text style={styles.vitalAbbr}>HR</Text>
+                    <Text style={styles.vitalNumber}>{vitals.heartRateBpm ?? "—"}</Text>
+                    <Text style={styles.vitalUnit}>bpm</Text>
+                  </View>
+                  <View style={styles.vitalTile}>
+                    <Text style={styles.vitalAbbr}>RR</Text>
+                    <Text style={styles.vitalNumber}>{vitals.respirationRateBpm ?? "—"}</Text>
+                    <Text style={styles.vitalUnit}>/min</Text>
+                  </View>
+                </View>
+              ) : (
+                <Text style={styles.vitalsUnavailable}>SafeSeat is reacquiring a trustworthy heart-rate and breathing signal.</Text>
+              )}
             </View>
 
             <View style={styles.summaryBox}>
@@ -363,6 +401,28 @@ export default function EmergencyModal({
 
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="Acknowledge emergency alert sound"
+              disabled={alertAcknowledged}
+              onPress={onAcknowledgeAlert}
+              style={({ pressed }) => [
+                styles.acknowledgeButton,
+                alertAcknowledged && styles.acknowledgeButtonDone,
+                pressed && !alertAcknowledged && styles.pressed,
+              ]}
+            >
+              <Ionicons name={alertAcknowledged ? "checkmark-circle" : "volume-high"} color={alertAcknowledged ? themes.green : themes.text} size={21} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.acknowledgeTitle, alertAcknowledged && { color: themes.green }]}>
+                  {alertAcknowledged ? "Alert acknowledged" : "Acknowledge Alert"}
+                </Text>
+                <Text style={styles.acknowledgeHint}>
+                  {alertAcknowledged ? "Sound stopped. Emergency monitoring continues." : "Stops the repeating sound only. Emergency monitoring stays active."}
+                </Text>
+              </View>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
               accessibilityLabel="Hold for two seconds to cancel emergency"
               onPressIn={beginCancelHold}
               onPressOut={endCancelHold}
@@ -396,6 +456,7 @@ export default function EmergencyModal({
                 </Text>
               </View>
             </Pressable>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -472,13 +533,17 @@ const styles = StyleSheet.create({
   card: {
     width: "100%",
     maxWidth: 520,
+    maxHeight: "92%",
     alignSelf: "center",
-    gap: spacing.two,
     borderRadius: 26,
-    padding: spacing.two,
     backgroundColor: themes.backgroundElement,
     borderWidth: 1,
     borderColor: "#5A2C35",
+    overflow: "hidden",
+  },
+  cardContent: {
+    gap: spacing.two,
+    padding: spacing.two,
   },
   topRow: {
     flexDirection: "row",
@@ -560,6 +625,26 @@ const styles = StyleSheet.create({
     fontSize: fontsize.caption,
     fontFamily: "Body-Regular",
   },
+  vitalsBox: {
+    padding: spacing.one + 4,
+    borderRadius: 18,
+    backgroundColor: "rgba(52, 209, 127, 0.055)",
+    borderWidth: 1,
+    borderColor: "rgba(52, 209, 127, 0.20)",
+    gap: spacing.one,
+  },
+  vitalsHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  vitalsTitle: { color: themes.textSecondary, fontSize: 10, letterSpacing: 1.1, fontFamily: "Body-Bold" },
+  vitalsStatus: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: themes.surfaceSoft, borderWidth: 1, borderColor: themes.divider },
+  vitalsStatusLive: { backgroundColor: "rgba(52, 209, 127, 0.10)", borderColor: themes.primaryBorder },
+  vitalsStatusText: { color: themes.textMuted, fontSize: 8, letterSpacing: 0.7, fontFamily: "Body-Bold" },
+  vitalsStatusTextLive: { color: themes.green },
+  vitalsValues: { flexDirection: "row", gap: spacing.one },
+  vitalTile: { flex: 1, minHeight: 66, borderRadius: 15, paddingHorizontal: spacing.one, alignItems: "center", justifyContent: "center", backgroundColor: themes.backgroundElevated, borderWidth: 1, borderColor: themes.divider },
+  vitalAbbr: { color: themes.textMuted, fontSize: 9, letterSpacing: 0.8, fontFamily: "Body-Bold" },
+  vitalNumber: { color: themes.text, fontSize: 23, lineHeight: 27, fontFamily: "Body-Bold", marginTop: 1 },
+  vitalUnit: { color: themes.textSecondary, fontSize: 9, fontFamily: "Body-Medium" },
+  vitalsUnavailable: { color: themes.textSecondary, fontSize: fontsize.caption, lineHeight: 17, fontFamily: "Body-Regular" },
   summaryBox: {
     padding: spacing.two,
     borderRadius: 18,
@@ -639,6 +724,21 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontFamily: "Body-Bold",
   },
+  acknowledgeButton: {
+    minHeight: 62,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.one,
+    paddingHorizontal: spacing.one + 4,
+    paddingVertical: spacing.one,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    borderWidth: 1,
+    borderColor: themes.divider,
+  },
+  acknowledgeButtonDone: { backgroundColor: "rgba(52, 209, 127, 0.06)", borderColor: themes.primaryBorder },
+  acknowledgeTitle: { color: themes.text, fontSize: 14, fontFamily: "Body-Bold" },
+  acknowledgeHint: { color: themes.textSecondary, fontSize: 9.5, lineHeight: 13, marginTop: 2, fontFamily: "Body-Regular" },
   cancelHold: {
     minHeight: 70,
     flexDirection: "row",
