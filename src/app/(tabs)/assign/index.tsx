@@ -3,6 +3,7 @@ import AssignCard from "@/components/assign-card";
 import AssignSeatModal from "@/components/assign-seat-modal";
 import { Spacing as spacing, Themes as themes } from "@/constants/theme";
 import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
+import { useDriverGuide } from "@/hooks/driver-guide-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -67,6 +68,7 @@ export default function Assign() {
   const compactViewport = viewportHeight < 760;
   const carMapHeight = compactViewport ? 282 : 318;
   const bottomPad = 138 + insets.bottom;
+  const { isStep } = useDriverGuide();
   const {
     connected: hubConnected,
     telemetryReady,
@@ -124,13 +126,24 @@ export default function Assign() {
     }, [loadState]),
   );
 
-  const getCardState = (seatNo: number): SeatState => {
-    const hasProfile = Boolean(assignments[seatNo]);
-    if (!hasProfile) return "empty";
+  const isAccountOwnerDriver = (seatNo: number) =>
+    seatNo === 1 && Boolean(assignments[seatNo]?.isAccountOwner);
 
-    const consent = consents[seatNo];
-    if (consent === "declined") return "declined";
-    if (consent !== "confirmed") return "consent";
+  const hasEffectiveConsent = (seatNo: number) =>
+    isAccountOwnerDriver(seatNo) || consents[seatNo] === "confirmed";
+
+  const getCardState = (seatNo: number): SeatState => {
+    const profile = assignments[seatNo];
+    if (!profile) return "empty";
+
+    // The authenticated account owner is actively operating SafeSeat when
+    // assigned to Driver, so there is no redundant second consent prompt.
+    // Any other person in Driver is still treated like a passenger.
+    if (!isAccountOwnerDriver(seatNo)) {
+      const consent = consents[seatNo];
+      if (consent === "declined") return "declined";
+      if (consent !== "confirmed") return "consent";
+    }
 
     // This UAT build has one physical SafeSeat sensor assembly. Assigned
     // conceptual seats that are not linked must never look like they are
@@ -167,7 +180,7 @@ export default function Assign() {
   };
 
   const openConsentForSeat = (seatNo: number) => {
-    if (!assignments[seatNo]) return;
+    if (!assignments[seatNo] || isAccountOwnerDriver(seatNo)) return;
     setConsentSeatNo(seatNo);
     setConsentModalVisible(true);
   };
@@ -226,7 +239,7 @@ export default function Assign() {
 
     if (!linkedSeat) return;
 
-    if (consents[linkedSeat] !== "confirmed") {
+    if (!hasEffectiveConsent(linkedSeat)) {
       openConsentForSeat(linkedSeat);
       return;
     }
@@ -247,8 +260,8 @@ export default function Assign() {
     const initialStatuses: Record<number, SeatState> = {};
     Object.keys(assignments).forEach((seatStr) => {
       const seatNum = Number(seatStr);
-      if (consents[seatNum] === "declined") initialStatuses[seatNum] = "declined";
-      else if (consents[seatNum] !== "confirmed") initialStatuses[seatNum] = "consent";
+      if (!isAccountOwnerDriver(seatNum) && consents[seatNum] === "declined") initialStatuses[seatNum] = "declined";
+      else if (!hasEffectiveConsent(seatNum)) initialStatuses[seatNum] = "consent";
       else if (seatNum === linkedSeat) initialStatuses[seatNum] = "unknown";
       else initialStatuses[seatNum] = "offline";
     });
@@ -331,11 +344,19 @@ export default function Assign() {
     else delete updated[seatNumber];
     setAssignments(updated);
 
+    const nextConsents = { ...consents };
     if (!profile || previousProfile?.id !== profile.id) {
-      const nextConsents = { ...consents };
       delete nextConsents[seatNumber];
-      void persistConsents(nextConsents);
     }
+
+    // Assigning the authenticated account owner to Driver is itself the
+    // driver's active setup action. Store it as confirmed for consistency,
+    // but every readiness check also treats it as confirmed even if an older
+    // saved assignment has no consent entry.
+    if (profile && seatNumber === 1 && profile.isAccountOwner) {
+      nextConsents[seatNumber] = "confirmed";
+    }
+    void persistConsents(nextConsents);
 
     if (profile && hardwareSeatNo === null) {
       void persistHardwareSeat(seatNumber);
@@ -344,7 +365,7 @@ export default function Assign() {
       void persistHardwareSeat(nextSeat);
     }
 
-    if (profile) {
+    if (profile && !(seatNumber === 1 && profile.isAccountOwner)) {
       setConsentSeatNo(seatNumber);
       setTimeout(() => setConsentModalVisible(true), 180);
     }
@@ -362,7 +383,14 @@ export default function Assign() {
     }
 
     if (assignments[seatNo]) {
-      openConsentForSeat(seatNo);
+      if (isAccountOwnerDriver(seatNo)) {
+        // Driver does not need a consent dialog. Tapping the card lets the
+        // driver change the person directly.
+        setSelectedSeat(seatNo);
+        setAssignModalVisible(true);
+      } else {
+        openConsentForSeat(seatNo);
+      }
       return;
     }
 
@@ -385,12 +413,11 @@ export default function Assign() {
     };
   };
 
-  const linkedSeatConsent = hardwareSeatNo ? consents[hardwareSeatNo] : undefined;
   const startReadiness = !hasAssignedSeats
     ? "empty"
     : !hardwareSeatNo || !assignments[hardwareSeatNo]
       ? "offline"
-      : linkedSeatConsent !== "confirmed"
+      : !hasEffectiveConsent(hardwareSeatNo)
         ? "consent"
         : !hubConnected || !telemetryReady
           ? "offline"
@@ -422,7 +449,11 @@ export default function Assign() {
 
           <ImageBackground
             source={require("../../../../assets/images/appImgs/car-cropped.png")}
-            style={[styles.carMap, { height: carMapHeight }]}
+            style={[
+              styles.carMap,
+              { height: carMapHeight },
+              (isStep("seats") || isStep("consent")) && styles.guideTarget,
+            ]}
             imageStyle={styles.carImage}
           >
             <View style={styles.frontRow}>
@@ -462,7 +493,11 @@ export default function Assign() {
             accessibilityRole="button"
             accessibilityLabel="Choose the seat linked to the SafeSeat sensor"
             onPress={chooseHardwareSeat}
-            style={({ pressed }) => [styles.hardwareLinkCard, pressed && !isLockedIn && styles.hardwareLinkPressed]}
+            style={({ pressed }) => [
+              styles.hardwareLinkCard,
+              isStep("sensor") && styles.guideTarget,
+              pressed && !isLockedIn && styles.hardwareLinkPressed,
+            ]}
           >
             <View style={styles.sensorMark}>
               <View
@@ -551,7 +586,11 @@ export default function Assign() {
         </View>
       </ScrollView>
 
-      <View style={[styles.stickyActionWrap, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      <View style={[
+        styles.stickyActionWrap,
+        isStep("start") && styles.guideStickyTarget,
+        { paddingBottom: Math.max(insets.bottom, 8) },
+      ]}>
         <View style={styles.stickyActionInner}>
           <View style={styles.stickyStatusRow}>
             <View style={[styles.stickyStatusDot, { backgroundColor: isLockedIn ? themes.primaryBttn : hasAssignedSeats ? themes.primaryBttn : themes.textMuted }]} />
@@ -802,4 +841,22 @@ const styles = StyleSheet.create({
   changePersonButton: { alignItems: "center", justifyContent: "center", paddingVertical: 8 },
   changePersonText: { color: themes.textSecondary, fontSize: 12, fontFamily: "Body-Bold" },
   consentPressed: { opacity: 0.72, transform: [{ scale: 0.99 }] },
+  guideTarget: {
+    borderWidth: 2,
+    borderColor: themes.primaryBttn,
+    shadowColor: themes.primaryBttn,
+    shadowOpacity: 0.32,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
+  },
+  guideStickyTarget: {
+    borderTopWidth: 2,
+    borderTopColor: themes.primaryBttn,
+    shadowColor: themes.primaryBttn,
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -2 },
+    elevation: 10,
+  },
 });

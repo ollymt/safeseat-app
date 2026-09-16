@@ -1,6 +1,7 @@
 import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
 import { useUserPreferences } from "@/hooks/user-preferences-context";
 import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
+import { useDriverGuide } from "@/hooks/driver-guide-context";
 import { clearSession } from "@/utils/securitySession";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Icon } from "@expo/ui";
@@ -46,6 +47,7 @@ export default function Settings() {
   const insets = useSafeAreaInsets();
   const bottomPad = 88 + insets.bottom;
   const { connected: hubConnected, telemetryReady } = useSafeSeatHub();
+  const { startGuide } = useDriverGuide();
 
   const [currentTab, setCurrentTab] = useState(0);
   const [userEmail, setUserEmail] = useState("Not set");
@@ -348,6 +350,29 @@ export default function Settings() {
 
               <Text style={styles.sectionTitle}>APP</Text>
               <View style={styles.settingGroup}>
+                <SettingPageItem
+                  name="SafeSeat Guide"
+                  iconName={Icon.select({ ios: "questionmark.circle.fill", android: settingsXml })}
+                  value={isLockedIn ? "After session" : "Replay"}
+                  onPress={() => {
+                    if (isLockedIn) {
+                      Alert.alert(
+                        "Guide unavailable during monitoring",
+                        "End the current monitoring session before replaying the SafeSeat Guide.",
+                        [{ text: "OK" }],
+                      );
+                      return;
+                    }
+                    startGuide();
+                  }}
+                  showChevron
+                />
+                <SettingPageItem
+                  name="Quick Help"
+                  iconName={Icon.select({ ios: "book.closed.fill", android: settingsXml })}
+                  onPress={() => router.push("/(tabs)/settings/help" as any)}
+                  showChevron
+                />
                 <SettingSwitch
                   name="Use Metric Units"
                   iconName={Icon.select({ ios: "ruler.fill", android: rulerXml })}

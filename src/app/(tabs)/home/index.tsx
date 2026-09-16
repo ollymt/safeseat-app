@@ -2,6 +2,7 @@ import EmergencyModal from "@/components/emergency-modal";
 import SeatCard, { SeatVitals } from "@/components/seat-card";
 import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
 import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
+import { useDriverGuide } from "@/hooks/driver-guide-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Host, Icon } from "@expo/ui";
 import * as Haptics from "expo-haptics";
@@ -107,6 +108,7 @@ const getHeroColors = (state: OverallState): [string, string, string] => {
 
 export default function Home() {
   const router = useRouter();
+  const { isStep } = useDriverGuide();
   const insets = useSafeAreaInsets();
   const bottomPad = 88 + insets.bottom;
   const {
@@ -240,9 +242,12 @@ export default function Home() {
     const profile = assignments[seatNo];
     if (!profile) return "empty";
 
-    const consent = consents[seatNo];
-    if (consent === "declined") return "declined";
-    if (consent !== "confirmed") return "consent";
+    const accountOwnerDriver = seatNo === 1 && Boolean(profile.isAccountOwner);
+    if (!accountOwnerDriver) {
+      const consent = consents[seatNo];
+      if (consent === "declined") return "declined";
+      if (consent !== "confirmed") return "consent";
+    }
 
     // Only the physically linked prototype seat may enter ANALYZING or a
     // Fusion state. Other conceptual cabin positions remain visibly offline.
@@ -598,7 +603,7 @@ export default function Home() {
               </View>
             </View>
 
-            <View style={styles.activeSeatList}>
+            <View style={[styles.activeSeatList, isStep("alerts") && styles.guideTarget]}>
               {SEAT_NUMBERS.map((seatNo) => (
                 <View key={seatNo} style={styles.homeSeatRowActive}>
                   <SeatCard
@@ -687,7 +692,7 @@ export default function Home() {
                 </Pressable>
               </View>
 
-              <View style={styles.homeSeatList}>
+              <View style={[styles.homeSeatList, isStep("dashboard") && styles.guideTarget]}>
                 {SEAT_NUMBERS.map((seatNo) => (
                   <View key={seatNo} style={styles.homeSeatRow}>
                     <SeatCard
@@ -1391,4 +1396,15 @@ const styles = StyleSheet.create({
   confirmEndText: { color: themes.warnBttn, fontSize: 13, fontFamily: "Body-Bold" },
   modalButtonPressed: { opacity: 0.76, transform: [{ scale: 0.99 }] },
   disabledButton: { opacity: 0.55 },
+  guideTarget: {
+    borderWidth: 2,
+    borderColor: themes.primaryBttn,
+    borderRadius: 20,
+    padding: 4,
+    shadowColor: themes.primaryBttn,
+    shadowOpacity: 0.3,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
+  },
 });

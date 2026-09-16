@@ -15,6 +15,7 @@ export default function SettingsLayout() {
     >
       <Stack.Screen name="index" options={{ title: "Settings" }} />
       <Stack.Screen name="diagnostics" options={{ title: "System Self-Diagnostic" }} />
+      <Stack.Screen name="help" options={{ title: "Quick Help" }} />
     </Stack>
   );
 }

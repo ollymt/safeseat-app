@@ -9,6 +9,8 @@ import Banner from "@/components/banner";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { UserPreferencesProvider } from "@/hooks/user-preferences-context";
 import { SafeSeatHubProvider } from "@/hooks/safeseat-hub-context";
+import { DriverGuideProvider } from "@/hooks/driver-guide-context";
+import DriverGuideOverlay from "@/components/driver-guide-overlay";
 
 import homeXml from "@expo/material-symbols/home.xml";
 import seatXml from "@expo/material-symbols/airline_seat_recline_extra.xml";
@@ -106,6 +108,7 @@ export default function TabLayout() {
   return (
     <UserPreferencesProvider>
       <SafeSeatHubProvider>
+        <DriverGuideProvider>
       <SafeAreaView style={styles.safeArea} edges={["left", "right", "top"]}>
         <View style={styles.root}>
           <View style={styles.bannerContainer}>
@@ -200,8 +203,10 @@ export default function TabLayout() {
               }}
             />
           </Tabs>
+          <DriverGuideOverlay />
         </View>
       </SafeAreaView>
+        </DriverGuideProvider>
       </SafeSeatHubProvider>
     </UserPreferencesProvider>
   );
