@@ -1,4 +1,5 @@
 import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
+import { useDriverGuide } from "@/hooks/driver-guide-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store";
@@ -17,6 +18,7 @@ import {
 
 import { auth, db } from "../firebase";
 import Button from "./button";
+import GuidePulseOverlay from "./guide-pulse-overlay";
 import ProfileList from "./profile-list";
 
 export type Profile = {
@@ -46,6 +48,8 @@ const ROLE_LABELS: Record<number, string> = {
 };
 
 export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: Props) {
+  const { isStep, selectedSeatNo, recordAssignmentSaved } = useDriverGuide();
+  const guideActiveForSeat = isStep("assign") && selectedSeatNo === seat;
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingProfiles, setIsFetchingProfiles] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -160,6 +164,9 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
 
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     onSuccess?.(seat, profile);
+    if (guideActiveForSeat) {
+      recordAssignmentSaved(seat, !(seat === 1 && profile.isAccountOwner));
+    }
     resetAndClose();
   };
 
@@ -231,6 +238,15 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
     <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={styles.container}>
+          {guideActiveForSeat ? (
+            <View style={styles.guideCompact}>
+              <View style={styles.guideCompactDot} />
+              <Text style={styles.guideCompactText}>
+                {selectedProfileId ? "Now tap Assign below" : "Tap a person to select them"}
+              </Text>
+            </View>
+          ) : null}
+
           <View style={styles.headerBlock}>
             <Text style={styles.eyebrow}>ASSIGN SEAT</Text>
             <Text style={styles.header}>Who is in the {role} seat?</Text>
@@ -260,6 +276,13 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
           </View>
 
           <View style={styles.listWrap}>
+            <GuidePulseOverlay
+              active={guideActiveForSeat && !selectedProfileId && !isFetchingProfiles}
+              label="CHOOSE PERSON"
+              borderRadius={16}
+              inset={-3}
+              beaconPosition="top"
+            />
             {isFetchingProfiles ? (
               <ActivityIndicator size="large" color={themes.primaryBttn} style={styles.loader} />
             ) : (
@@ -304,13 +327,20 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
               onPress={resetAndClose}
               enabled={!isLoading}
             />
-            <View style={{ flex: 1 }}>
+            <View style={styles.assignButtonWrap}>
               <Button
                 variant="primary"
                 label={`Assign to ${role}`}
                 onPress={() => void handleSave()}
                 enabled={!isFetchingProfiles && !isLoading && Boolean(selectedProfileId)}
                 fullWidth
+              />
+              <GuidePulseOverlay
+                active={guideActiveForSeat && Boolean(selectedProfileId)}
+                label="ASSIGN"
+                borderRadius={16}
+                inset={-3}
+                beaconPosition="top"
               />
             </View>
           </View>
@@ -339,6 +369,20 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     gap: spacing.two,
   },
+  guideCompact: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(31,210,149,0.09)",
+    borderWidth: 1,
+    borderColor: "rgba(31,210,149,0.28)",
+  },
+  guideCompactDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: themes.primaryBttn },
+  guideCompactText: { color: themes.primaryBttn, fontSize: 10, fontFamily: "Body-Bold" },
   headerBlock: {
     gap: spacing.half,
   },
@@ -422,6 +466,8 @@ const styles = StyleSheet.create({
     fontFamily: "Body-Medium",
   },
   listWrap: {
+    position: "relative",
+    overflow: "visible",
     maxHeight: 260,
     width: "100%",
     borderRadius: 16,
@@ -449,6 +495,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.half,
     fontFamily: "Body-Regular",
   },
+  assignButtonWrap: { flex: 1, position: "relative", overflow: "visible" },
   actionRow: {
     flexDirection: "row",
     alignItems: "center",

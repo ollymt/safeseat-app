@@ -9,8 +9,9 @@ import Banner from "@/components/banner";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { UserPreferencesProvider } from "@/hooks/user-preferences-context";
 import { SafeSeatHubProvider } from "@/hooks/safeseat-hub-context";
-import { DriverGuideProvider } from "@/hooks/driver-guide-context";
+import { DriverGuideProvider, useDriverGuide } from "@/hooks/driver-guide-context";
 import DriverGuideOverlay from "@/components/driver-guide-overlay";
+import GuidePulseOverlay from "@/components/guide-pulse-overlay";
 
 import homeXml from "@expo/material-symbols/home.xml";
 import seatXml from "@expo/material-symbols/airline_seat_recline_extra.xml";
@@ -28,6 +29,8 @@ const TAB_ROOTS: Record<string, string> = {
 };
 
 function MyCustomTabBar({ state, descriptors, navigation, pathname }: any) {
+  const { active: guideActive, stepId: guideStepId, recordTabOpened } = useDriverGuide();
+
   return (
     <View style={styles.tabContainer}>
       <View style={styles.tabDrawer}>
@@ -39,6 +42,7 @@ function MyCustomTabBar({ state, descriptors, navigation, pathname }: any) {
 
           const handlePress = () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
+            recordTabOpened(route.name);
 
             // React Navigation's default focused-tab behavior emits a
             // POP_TO_TOP. At an already-rooted tab there is nothing to pop,
@@ -82,6 +86,7 @@ function MyCustomTabBar({ state, descriptors, navigation, pathname }: any) {
               style={({ pressed }) => [
                 styles.tabButton,
                 isFocused && styles.activeTabButton,
+                guideActive && guideStepId === "dashboard" && route.name === "assign" && styles.guideTabButton,
                 pressed && styles.pressedTabButton,
               ]}
             >
@@ -93,6 +98,13 @@ function MyCustomTabBar({ state, descriptors, navigation, pathname }: any) {
               <Text style={[styles.label, isFocused && styles.activeLabel]}>
                 {label}
               </Text>
+              <GuidePulseOverlay
+                active={guideActive && guideStepId === "dashboard" && route.name === "assign"}
+                label="TAP SEATS"
+                borderRadius={16}
+                inset={-2}
+                beaconPosition="top"
+              />
             </Pressable>
           );
         })}
@@ -244,6 +256,8 @@ const styles = StyleSheet.create({
   },
   tabButton: {
     flex: 1,
+    position: "relative",
+    overflow: "visible",
     minHeight: 54,
     alignItems: "center",
     justifyContent: "center",
@@ -255,6 +269,11 @@ const styles = StyleSheet.create({
     backgroundColor: themes.primarySoft,
     borderWidth: 1,
     borderColor: themes.primaryBorder,
+  },
+  guideTabButton: {
+    borderWidth: 1,
+    borderColor: themes.primaryBttn,
+    backgroundColor: "rgba(31,210,149,0.12)",
   },
   pressedTabButton: {
     opacity: 0.72,

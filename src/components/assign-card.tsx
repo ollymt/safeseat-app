@@ -4,6 +4,7 @@ import sirenXml from "@expo/material-symbols/siren.xml";
 import circleXml from "@expo/material-symbols/circle.xml";
 import addXml from "@expo/material-symbols/add.xml";
 import { Themes as themes } from "@/constants/theme";
+import GuidePulseOverlay from "./guide-pulse-overlay";
 import { Host, Icon } from "@expo/ui";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -22,6 +23,7 @@ type AssignCardProps = {
   pfp?: string;
   locked?: boolean;
   hardwareLinked?: boolean;
+  guideActive?: boolean;
   state: string;
   onPress: () => void;
 };
@@ -36,6 +38,7 @@ export default function AssignCard({
   state = "empty",
   locked = true,
   hardwareLinked = false,
+  guideActive = false,
   onPress,
 }: AssignCardProps) {
   const displayName = assignedProfile?.name ?? name;
@@ -134,6 +137,13 @@ export default function AssignCard({
           </View>
         </View>
       )}
+      <GuidePulseOverlay
+        active={guideActive}
+        label="TAP SEAT"
+        borderRadius={18}
+        inset={-3}
+        beaconPosition="bottom"
+      />
     </Pressable>
   );
 }
@@ -146,7 +156,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.25,
     justifyContent: "center",
     alignItems: "center",
-    overflow: "hidden",
+    overflow: "visible",
     padding: 6,
     shadowColor: "#000",
     shadowOpacity: 0.18,

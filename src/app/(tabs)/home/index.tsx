@@ -1,5 +1,6 @@
 import EmergencyModal from "@/components/emergency-modal";
 import SeatCard, { SeatVitals } from "@/components/seat-card";
+import GuidePulseOverlay from "@/components/guide-pulse-overlay";
 import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
 import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
 import { useDriverGuide } from "@/hooks/driver-guide-context";
@@ -108,7 +109,7 @@ const getHeroColors = (state: OverallState): [string, string, string] => {
 
 export default function Home() {
   const router = useRouter();
-  const { isStep } = useDriverGuide();
+  const { isStep, recordLiveSeatOpened } = useDriverGuide();
   const insets = useSafeAreaInsets();
   const bottomPad = 88 + insets.bottom;
   const {
@@ -416,6 +417,7 @@ export default function Home() {
     const message = [person, stateCopy.headline, stateCopy.detail].filter(Boolean).join("\n\n");
 
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    recordLiveSeatOpened(seatNo);
     Alert.alert(`${SEAT_ROLES[seatNo]} · ${stateCopy.label}`, message);
   };
 
@@ -603,7 +605,7 @@ export default function Home() {
               </View>
             </View>
 
-            <View style={[styles.activeSeatList, isStep("alerts") && styles.guideTarget]}>
+            <View style={styles.activeSeatList}>
               {SEAT_NUMBERS.map((seatNo) => (
                 <View key={seatNo} style={styles.homeSeatRowActive}>
                   <SeatCard
@@ -617,6 +619,13 @@ export default function Home() {
                     animationCycle={animationCycle}
                     vitals={seatNo === hardwareSeatNo ? vitalSigns : undefined}
                     onPress={() => assignments[seatNo] ? showSeatDetails(seatNo) : router.push("/assign")}
+                  />
+                  <GuidePulseOverlay
+                    active={isStep("alerts") && seatNo === (hardwareSeatNo ?? SEAT_NUMBERS.find((n) => Boolean(assignments[n])) ?? 1)}
+                    label="TAP STATUS"
+                    borderRadius={21}
+                    inset={-3}
+                    beaconPosition="top"
                   />
                 </View>
               ))}
@@ -692,7 +701,7 @@ export default function Home() {
                 </Pressable>
               </View>
 
-              <View style={[styles.homeSeatList, isStep("dashboard") && styles.guideTarget]}>
+              <View style={styles.homeSeatList}>
                 {SEAT_NUMBERS.map((seatNo) => (
                   <View key={seatNo} style={styles.homeSeatRow}>
                     <SeatCard
@@ -873,7 +882,7 @@ const styles = StyleSheet.create({
     minHeight: 0,
   },
   activeSeatList: { flex: 1, minHeight: 0, gap: 7 },
-  homeSeatRowActive: { flex: 1, minHeight: 0, width: "100%" },
+  homeSeatRowActive: { flex: 1, minHeight: 0, width: "100%", position: "relative", overflow: "visible" },
 
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   eyebrow: { color: themes.primaryBttn, fontSize: 9.5, letterSpacing: 1.35, fontFamily: "Body-Bold" },

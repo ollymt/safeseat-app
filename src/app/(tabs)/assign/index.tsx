@@ -1,6 +1,7 @@
 import Button from "@/components/button";
 import AssignCard from "@/components/assign-card";
 import AssignSeatModal from "@/components/assign-seat-modal";
+import GuidePulseOverlay from "@/components/guide-pulse-overlay";
 import { Spacing as spacing, Themes as themes } from "@/constants/theme";
 import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
 import { useDriverGuide } from "@/hooks/driver-guide-context";
@@ -68,7 +69,15 @@ export default function Assign() {
   const compactViewport = viewportHeight < 760;
   const carMapHeight = compactViewport ? 282 : 318;
   const bottomPad = 138 + insets.bottom;
-  const { isStep } = useDriverGuide();
+  const {
+    isStep,
+    stepId: guideStepId,
+    selectedSeatNo: guideSeatNo,
+    recordSeatTapped,
+    recordConsentConfirmed,
+    recordSensorSelected,
+    recordMonitoringStarted,
+  } = useDriverGuide();
   const {
     connected: hubConnected,
     telemetryReady,
@@ -165,6 +174,7 @@ export default function Assign() {
     setHardwareSeatNo(seatNo);
     if (seatNo) {
       await AsyncStorage.setItem(HARDWARE_SEAT_KEY, JSON.stringify(seatNo));
+      recordSensorSelected(seatNo);
     } else {
       await AsyncStorage.removeItem(HARDWARE_SEAT_KEY);
     }
@@ -190,6 +200,9 @@ export default function Assign() {
     if (value) next[seatNo] = value;
     else delete next[seatNo];
     await persistConsents(next);
+    if (value === "confirmed") {
+      recordConsentConfirmed(seatNo);
+    }
     void Haptics.notificationAsync(
       value === "confirmed"
         ? Haptics.NotificationFeedbackType.Success
@@ -280,6 +293,7 @@ export default function Assign() {
         AsyncStorage.setItem(SEAT_STATUSES_KEY, JSON.stringify(initialStatuses)),
       ]);
       setIsLockedIn(true);
+      recordMonitoringStarted();
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace("/home");
     } catch (error) {
@@ -374,6 +388,22 @@ export default function Assign() {
   const handleCardPress = (seatNo: number) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
+    if (guideStepId === "seats") {
+      const profile = assignments[seatNo];
+      if (!profile) {
+        recordSeatTapped(seatNo, "assign");
+      } else if (!hasEffectiveConsent(seatNo)) {
+        recordSeatTapped(seatNo, "consent");
+        openConsentForSeat(seatNo);
+        return;
+      } else {
+        // Replay adapts to an already-configured seat instead of forcing the
+        // user to reassign or reconfirm something that is already valid.
+        recordSeatTapped(seatNo, "sensor");
+        return;
+      }
+    }
+
     if (isLockedIn) {
       Alert.alert(
         "Monitoring is active",
@@ -452,7 +482,6 @@ export default function Assign() {
             style={[
               styles.carMap,
               { height: carMapHeight },
-              (isStep("seats") || isStep("consent")) && styles.guideTarget,
             ]}
             imageStyle={styles.carImage}
           >
@@ -468,6 +497,7 @@ export default function Assign() {
                   seatCode={seat.seatCode}
                   locked={isLockedIn}
                   hardwareLinked={seat.seatNo === hardwareSeatNo}
+                  guideActive={isStep("seats") && seat.seatNo === (guideSeatNo ?? 2)}
                 />
               ))}
             </View>
@@ -484,6 +514,7 @@ export default function Assign() {
                   seatCode={seat.seatCode}
                   locked={isLockedIn}
                   hardwareLinked={seat.seatNo === hardwareSeatNo}
+                  guideActive={isStep("seats") && seat.seatNo === (guideSeatNo ?? 2)}
                 />
               ))}
             </View>
@@ -495,7 +526,6 @@ export default function Assign() {
             onPress={chooseHardwareSeat}
             style={({ pressed }) => [
               styles.hardwareLinkCard,
-              isStep("sensor") && styles.guideTarget,
               pressed && !isLockedIn && styles.hardwareLinkPressed,
             ]}
           >
@@ -519,6 +549,13 @@ export default function Assign() {
                 {isLockedIn ? "LINKED" : "CHANGE"}
               </Text>
             </View>
+            <GuidePulseOverlay
+              active={isStep("sensor")}
+              label="TAP SENSOR"
+              borderRadius={18}
+              inset={-3}
+              beaconPosition="top"
+            />
           </Pressable>
 
           <AssignSeatModal
@@ -543,16 +580,31 @@ export default function Assign() {
               />
               <View style={styles.consentCard}>
                 <View style={styles.consentHandle} />
+                {isStep("consent") && guideSeatNo === consentSeatNo ? (
+                  <View style={styles.consentGuideCompact}>
+                    <View style={styles.consentGuideDot} />
+                    <Text style={styles.consentGuideCompactText}>Guide: tap Confirm Consent to continue</Text>
+                  </View>
+                ) : null}
                 <Text style={styles.consentEyebrow}>MONITORING CONSENT</Text>
                 <Text style={styles.consentTitle}>Has {consentSeatNo ? getDisplayProfile(assignments[consentSeatNo])?.name ?? "this person" : "this person"} agreed?</Text>
                 <Text style={styles.consentText}>Confirm whether they agreed to SafeSeat monitoring for this trip.</Text>
 
-                <Button
-                  label="Confirm Consent"
-                  variant="primary"
-                  fullWidth
-                  onPress={() => consentSeatNo && void setSeatConsent(consentSeatNo, "confirmed")}
-                />
+                <View style={styles.guideButtonWrap}>
+                  <Button
+                    label="Confirm Consent"
+                    variant="primary"
+                    fullWidth
+                    onPress={() => consentSeatNo && void setSeatConsent(consentSeatNo, "confirmed")}
+                  />
+                  <GuidePulseOverlay
+                    active={isStep("consent") && guideSeatNo === consentSeatNo}
+                    label="CONFIRM"
+                    borderRadius={16}
+                    inset={-3}
+                    beaconPosition="top"
+                  />
+                </View>
                 <Button
                   label="Not Yet"
                   variant="secondary"
@@ -588,10 +640,16 @@ export default function Assign() {
 
       <View style={[
         styles.stickyActionWrap,
-        isStep("start") && styles.guideStickyTarget,
         { paddingBottom: Math.max(insets.bottom, 8) },
       ]}>
         <View style={styles.stickyActionInner}>
+          <GuidePulseOverlay
+            active={isStep("start")}
+            label="START HERE"
+            borderRadius={20}
+            inset={-4}
+            beaconPosition="top"
+          />
           <View style={styles.stickyStatusRow}>
             <View style={[styles.stickyStatusDot, { backgroundColor: isLockedIn ? themes.primaryBttn : hasAssignedSeats ? themes.primaryBttn : themes.textMuted }]} />
             <Text style={styles.stickyActionTitle}>
@@ -696,6 +754,8 @@ const styles = StyleSheet.create({
     color: themes.primaryBttn,
   },
   hardwareLinkCard: {
+    position: "relative",
+    overflow: "visible",
     minHeight: 62,
     flexDirection: "row",
     alignItems: "center",
@@ -791,6 +851,8 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   stickyActionInner: {
+    position: "relative",
+    overflow: "visible",
     gap: 8,
     paddingTop: 2,
   },
@@ -804,6 +866,18 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(2,7,13,0.72)",
     padding: spacing.two,
   },
+  consentGuideCallout: {
+    padding: 11,
+    borderRadius: 14,
+    backgroundColor: "rgba(31,210,149,0.09)",
+    borderWidth: 1,
+    borderColor: "rgba(31,210,149,0.32)",
+    gap: 3,
+    marginBottom: 8,
+  },
+  consentGuideEyebrow: { color: themes.primaryBttn, fontSize: 9, letterSpacing: 0.9, fontFamily: "Body-Bold" },
+  consentGuideTitle: { color: themes.text, fontSize: 12.5, lineHeight: 17, fontFamily: "Body-Bold" },
+  consentGuideText: { color: themes.textSecondary, fontSize: 11, lineHeight: 15, fontFamily: "Body-Regular" },
   consentCard: {
     borderRadius: 28,
     backgroundColor: "#101D2B",
@@ -859,4 +933,20 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -2 },
     elevation: 10,
   },
+
+  consentGuideCompact: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(31,210,149,0.09)",
+    borderWidth: 1,
+    borderColor: "rgba(31,210,149,0.28)",
+  },
+  consentGuideDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: themes.primaryBttn },
+  consentGuideCompactText: { color: themes.primaryBttn, fontSize: 10, fontFamily: "Body-Bold" },
+  guideButtonWrap: { position: "relative", overflow: "visible" },
 });
