@@ -1,10 +1,9 @@
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { type ThemePalette, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { Host, Icon } from "@expo/ui";
 import {
-    Pressable,
     StyleSheet,
     Text,
-    useColorScheme,
     View,
 } from "react-native";
 
@@ -21,6 +20,8 @@ export default function InfoCard({
     bigText = "big text",
     icon,
 }: InfoCardProps) {
+    const themes = useTheme();
+    const seatcard = createStyles(themes);
     return (
         <View
             style={[
@@ -69,7 +70,7 @@ export default function InfoCard({
     );
 }
 
-const seatcard = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
     baseCard: {
         width: "100%",
         borderWidth: spacing.quarter,

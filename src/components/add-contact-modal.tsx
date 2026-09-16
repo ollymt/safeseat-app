@@ -1,4 +1,5 @@
-import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
+import { FontSize as fontsize, Spacing as spacing, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import * as Haptics from "expo-haptics";
 import { addDoc, collection } from "firebase/firestore";
 import { useEffect, useState } from "react";
@@ -34,7 +35,9 @@ type Props = {
 };
 
 export default function AddContactModal({ visible, onClose, onSuccess }: Props) {
-  const [isLoading, setIsLoading] = useState(false);
+
+  const themes = useTheme();
+  const styles = createStyles(themes);  const [isLoading, setIsLoading] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [priority, setPriority] = useState(0);
@@ -168,7 +171,7 @@ export default function AddContactModal({ visible, onClose, onSuccess }: Props) 
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(3,7,15,0.86)", justifyContent: "center", alignItems: "center", paddingHorizontal: spacing.two },
   keyboardWrap: { width: "100%", maxWidth: 420 },
   container: { width: "100%", backgroundColor: themes.backgroundElevated, borderWidth: 1, borderColor: themes.divider, padding: spacing.two, borderRadius: 26, gap: spacing.two, shadowColor: "#000", shadowOpacity: 0.32, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 8 },

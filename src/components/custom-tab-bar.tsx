@@ -1,8 +1,10 @@
+import ThemedHost from "@/components/themed-host";
 import circleXml from "@expo/material-symbols/circle.xml";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { Host, Icon } from "@expo/ui";
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { type ThemePalette, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 
 // Import Android Material Symbol XMLs at top level to avoid re-render layout shifts
 import homeXml from "@expo/material-symbols/home.xml";
@@ -11,6 +13,8 @@ import groupXml from "@expo/material-symbols/group.xml";
 import settingsXml from "@expo/material-symbols/settings.xml";
 
 export default function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+    const themes = useTheme();
+    const styles = createStyles(themes);
     const getTabIcon = (routeName: string, isFocused: boolean) => {
         switch (routeName) {
             case "home":
@@ -76,21 +80,21 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
                             onPress={onPress}
                             style={[styles.tabButton]}
                         >
-                            <Host>
+                            <ThemedHost>
                                 <Icon name={iconSource} color={isFocused ? themes.primaryBttn : themes.textSecondary} />
-                            </Host>
+                            </ThemedHost>
 
                             <Text style={[styles.label, isFocused && styles.activeLabel]}>
                                 {typeof label === "string" ? label : route.name}
                             </Text>
 
                             { isFocused &&
-                                <Host>
+                                <ThemedHost>
                                     <Icon name={Icon.select({
                                         ios: "circle.fill",
                                         android: circleXml
                                     })} size={spacing.one} color={themes.primaryBttn} />
-                                </Host>
+                                </ThemedHost>
                             }
                         </Pressable>
                     );
@@ -100,7 +104,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
     tabContainer: {
         flexDirection: "row",
         position: "absolute",

@@ -1,4 +1,5 @@
-import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
+import { FontSize as fontsize, Spacing as spacing, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
@@ -26,7 +27,9 @@ export default function ProfileCard({
   enabled = true,
   onPress,
 }: ProfileCardProps) {
-  const [avatarUri, setAvatarUri] = useState(normalizeImage(img));
+
+  const themes = useTheme();
+  const styles = createStyles(themes);  const [avatarUri, setAvatarUri] = useState(normalizeImage(img));
 
   useEffect(() => {
     const provided = normalizeImage(img);
@@ -87,7 +90,7 @@ export default function ProfileCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
   baseCard: {
     width: "100%",
     minHeight: 68,
@@ -130,7 +133,7 @@ const styles = StyleSheet.create({
   profileMeta: {
     color: themes.textMuted,
     fontFamily: "Body-Regular",
-    fontSize: 10,
+    fontSize: 10.5,
     marginTop: 2,
   },
   chevron: { color: themes.textMuted, fontSize: 24, lineHeight: 24, fontFamily: "Body-Regular" },

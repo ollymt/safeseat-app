@@ -1,21 +1,3 @@
 import { Stack } from "expo-router";
-import { Themes as themes } from "@/constants/theme";
-
-export default function SettingsLayout() {
-  return (
-    <Stack
-      screenOptions={{
-        headerShown: true,
-        headerTransparent: true,
-        headerTitle: "",
-        headerTintColor: themes.text,
-        headerShadowVisible: false,
-        animation: "slide_from_right",
-      }}
-    >
-      <Stack.Screen name="index" options={{ title: "Settings" }} />
-      <Stack.Screen name="diagnostics" options={{ title: "System Self-Diagnostic" }} />
-      <Stack.Screen name="help" options={{ title: "Quick Help" }} />
-    </Stack>
-  );
-}
+import { useTheme } from "@/hooks/use-theme";
+export default function SettingsLayout(){const themes=useTheme();return <Stack screenOptions={{headerShown:true,headerTransparent:true,headerTitle:"",headerTintColor:themes.text,headerShadowVisible:false,animation:"slide_from_right",contentStyle:{backgroundColor:themes.background}}}><Stack.Screen name="index" options={{title:"Settings"}}/><Stack.Screen name="diagnostics" options={{title:"System Diagnostic"}}/><Stack.Screen name="help" options={{title:"Quick Help"}}/></Stack>}

@@ -1,5 +1,6 @@
 import addXml from "@expo/material-symbols/add.xml";
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { Spacing as spacing, FontSize as fontsize, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { Host, Icon } from "@expo/ui";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
@@ -60,7 +61,9 @@ interface ProfileSection {
 }
 
 export default function Everyone() {
-	const router = useRouter();
+
+  const themes = useTheme();
+  const styles = createStyles(themes);	const router = useRouter();
 	const insets = useSafeAreaInsets();
 
 	const [userName, setUserName] = useState<string>("Guest");
@@ -444,7 +447,7 @@ export default function Everyone() {
 	);
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
 	safeArea: {
 		flex: 1,
 		backgroundColor: themes.background,

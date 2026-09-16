@@ -1,4 +1,5 @@
-import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
+import { FontSize as fontsize, Spacing as spacing, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { useDriverGuide } from "@/hooks/driver-guide-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
@@ -33,8 +34,9 @@ export type Profile = {
 type Props = {
   visible: boolean;
   seat: number;
+  assignments?: Record<number, Profile>;
   onClose: () => void;
-  onSuccess?: (seat: number, profile: Profile | null) => void;
+  onSuccess?: (seat: number, profile: Profile | null) => void | Promise<void>;
 };
 
 const SEAT_ASSIGNMENTS_KEY = "seatAssignments";
@@ -47,7 +49,9 @@ const ROLE_LABELS: Record<number, string> = {
   5: "Right Rear",
 };
 
-export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: Props) {
+export default function AssignSeatModal({ visible, onClose, onSuccess, seat, assignments: liveAssignments }: Props) {
+  const themes = useTheme();
+  const styles = createStyles(themes);
   const { isStep, selectedSeatNo, recordAssignmentSaved } = useDriverGuide();
   const guideActiveForSeat = isStep("assign") && selectedSeatNo === seat;
   const [isLoading, setIsLoading] = useState(false);
@@ -111,8 +115,8 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
           }),
         );
 
-        const raw = await AsyncStorage.getItem(SEAT_ASSIGNMENTS_KEY);
-        const assignments: Record<number, Profile> = raw ? JSON.parse(raw) : {};
+        const raw = liveAssignments ? null : await AsyncStorage.getItem(SEAT_ASSIGNMENTS_KEY);
+        const assignments: Record<number, Profile> = liveAssignments ?? (raw ? JSON.parse(raw) : {});
         const assignedSeatProfile = assignments[seat];
 
         setIsCurrentlyAssigned(Boolean(assignedSeatProfile));
@@ -149,7 +153,7 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
     return () => {
       cancelled = true;
     };
-  }, [visible, seat]);
+  }, [visible, seat, liveAssignments]);
 
   const resetAndClose = () => {
     setSelectedProfileId(null);
@@ -157,13 +161,13 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
   };
 
   const persistAssignment = async (profile: Profile) => {
-    const raw = await AsyncStorage.getItem(SEAT_ASSIGNMENTS_KEY);
-    const assignments: Record<number, Profile> = raw ? JSON.parse(raw) : {};
+    const raw = liveAssignments ? null : await AsyncStorage.getItem(SEAT_ASSIGNMENTS_KEY);
+    const assignments: Record<number, Profile> = { ...(liveAssignments ?? (raw ? JSON.parse(raw) : {})) };
     assignments[seat] = profile;
     await AsyncStorage.setItem(SEAT_ASSIGNMENTS_KEY, JSON.stringify(assignments));
 
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    onSuccess?.(seat, profile);
+    await onSuccess?.(seat, profile);
     if (guideActiveForSeat) {
       recordAssignmentSaved(seat, !(seat === 1 && profile.isAccountOwner));
     }
@@ -215,13 +219,17 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
   const handleUnassign = async () => {
     setIsLoading(true);
     try {
-      const raw = await AsyncStorage.getItem(SEAT_ASSIGNMENTS_KEY);
-      const assignments: Record<number, Profile> = raw ? JSON.parse(raw) : {};
+      const raw = liveAssignments ? null : await AsyncStorage.getItem(SEAT_ASSIGNMENTS_KEY);
+      const assignments: Record<number, Profile> = { ...(liveAssignments ?? (raw ? JSON.parse(raw) : {})) };
       delete assignments[seat];
-      await AsyncStorage.setItem(SEAT_ASSIGNMENTS_KEY, JSON.stringify(assignments));
+      if (Object.keys(assignments).length > 0) {
+        await AsyncStorage.setItem(SEAT_ASSIGNMENTS_KEY, JSON.stringify(assignments));
+      } else {
+        await AsyncStorage.removeItem(SEAT_ASSIGNMENTS_KEY);
+      }
 
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      onSuccess?.(seat, null);
+      await onSuccess?.(seat, null);
       resetAndClose();
     } catch (error) {
       console.error("Error unassigning seat:", error);
@@ -350,10 +358,10 @@ export default function AssignSeatModal({ visible, onClose, onSuccess, seat }: P
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(3, 7, 15, 0.82)",
+    backgroundColor: themes.overlay,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: spacing.two,
@@ -382,7 +390,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(31,210,149,0.28)",
   },
   guideCompactDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: themes.primaryBttn },
-  guideCompactText: { color: themes.primaryBttn, fontSize: 10, fontFamily: "Body-Bold" },
+  guideCompactText: { color: themes.primaryBttn, fontSize: 11.5, fontFamily: "Body-Bold" },
   headerBlock: {
     gap: spacing.half,
   },
@@ -394,14 +402,14 @@ const styles = StyleSheet.create({
   },
   header: {
     color: themes.text,
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 25,
+    lineHeight: 31,
     fontFamily: "Heading-Font",
   },
   subhead: {
     color: themes.textSecondary,
-    fontSize: fontsize.caption,
-    lineHeight: 18,
+    fontSize: 14.5,
+    lineHeight: 20,
     fontFamily: "Body-Regular",
   },
   guestCard: {

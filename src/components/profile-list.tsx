@@ -1,5 +1,7 @@
+import ThemedHost from "@/components/themed-host";
 import checkXml from "@expo/material-symbols/check.xml";
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { Spacing as spacing, FontSize as fontsize, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { View, Pressable, Text, Image, StyleSheet } from "react-native"
 import { Host, Icon } from "@expo/ui"
 
@@ -25,7 +27,9 @@ export default function ProfileList({
     isLast = false,
     onPress,
 }: ProfileListProps) {
-    return (
+
+  const themes = useTheme();
+  const styles = createStyles(themes);    return (
         <Pressable
             style={({ pressed }) => [styles.base, checked && styles.checked, isLast && styles.isLast, pressed && styles.pressed]}
             onPress={onPress}
@@ -45,18 +49,18 @@ export default function ProfileList({
             <Text style={styles.name}>{name}</Text>
 
             {checked && (
-                <Host matchContents>
+                <ThemedHost matchContents>
                     <Icon name={Icon.select({
                         ios: "checkmark",
                         android: checkXml
                     })} color={themes.primaryBttn} />
-                </Host>
+                </ThemedHost>
             )}
         </Pressable>
     )
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
     base: {
         width: "100%",
         minHeight: 64,

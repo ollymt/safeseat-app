@@ -1,5 +1,6 @@
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
-import { Text, useColorScheme, StyleSheet, TouchableOpacity, Alert } from "react-native";
+import { Spacing as spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
+import { Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import * as Clipboard from "expo-clipboard"; // 🛠️ Import Expo Clipboard
 import * as Haptics from "expo-haptics"; // 🛠️ Optional: for nice tap feedback
 
@@ -10,6 +11,7 @@ type TextBlockProps = {
 };
 
 export default function TextBlock({ text, copyable = false, label }: TextBlockProps) {
+	const themes = useTheme();
 	// 🛠️ Copy Action Handler
 	const handlePress = async () => {
 		if (!copyable || text === "Not Set") return;

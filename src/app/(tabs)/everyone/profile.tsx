@@ -1,4 +1,5 @@
-import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
+import { FontSize as fontsize, Spacing as spacing, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { useUserPreferences } from "@/hooks/user-preferences-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -23,7 +24,6 @@ import * as Haptics from "expo-haptics";
 import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
 
 import Button from "@/components/button";
-import SettingSwitch from "@/components/setting-switch";
 import TextInput from "@/components/text-input";
 import { Dropdown } from "react-native-element-dropdown";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
@@ -127,7 +127,9 @@ const extractBirthdayParts = (data: any): { year: number; month: number; day: nu
 import * as ImagePicker from "expo-image-picker";
 
 export default function Profile() {
-	const router = useRouter();
+
+  const themes = useTheme();
+  const styles = createStyles(themes);	const router = useRouter();
 
 	const { profileId } = useLocalSearchParams<{ profileId?: string }>();
 	const isSubProfile = !!profileId;
@@ -159,25 +161,7 @@ export default function Profile() {
 	const [tempLbs, setTempLbs] = useState<string>("");
 
 	// Unit preference is shared across the entire app.
-	const {
-		useMetric: isMetric,
-		consent,
-		setConsent,
-		behavioralMonitoring,
-		setBehavioralMonitoring,
-		physiologicalMonitoring,
-		setPhysiologicalMonitoring,
-		emergencyEscalation,
-		setEmergencyEscalation,
-	} = useUserPreferences();
-
-	const healthMonitoringEnabled = behavioralMonitoring && physiologicalMonitoring;
-	const setHealthMonitoring = async (value: boolean) => {
-		await Promise.all([
-			setBehavioralMonitoring(value),
-			setPhysiologicalMonitoring(value),
-		]);
-	};
+	const { useMetric: isMetric } = useUserPreferences();
 
 	// 4. UI Interaction State
 	const [editMode, setEditMode] = useState(false);
@@ -756,86 +740,41 @@ export default function Profile() {
 		>
 			<TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
 				<KeyboardAwareScrollView contentContainerStyle={[{ flexGrow: 1 }, { marginTop: spacing.one, paddingBottom: bottomPad }]} showsVerticalScrollIndicator={true} bounces={true} extraScrollHeight={spacing.ten}>
-					<View style={[styles.container, { marginTop: -spacing.two }]}>
-						<View style={{
-							flexDirection: "column",
-							alignItems: "center",
-							marginBottom: spacing.none,
-							gap: spacing.two,
-						}}>
+					<View style={styles.container}>
+						<View style={styles.profileHero}>
 							<Pressable
 								disabled={!editMode}
 								onPress={handlePickImage}
-								style={{
-									backgroundColor: editMode ? "rgba(0, 0, 0, 0.5)" : "transparent",
-									borderWidth: spacing.half,
-									borderColor: themes.text,
-									borderRadius: spacing.eight,
-									overflow: "hidden",
-								}}
+								style={styles.avatarButton}
 							>
-									{!userIcon || userIcon === "Not Set" || userIcon === "" ? (
-										<View style={{ width: 120, height: 120, alignItems: "center", justifyContent: "center", backgroundColor: themes.primarySoft, opacity: editMode ? 0.5 : 1 }}>
-											<Text style={{ color: themes.primaryBttn, fontSize: 40, fontFamily: "Body-Bold" }}>
-												{userName.trim().charAt(0).toUpperCase() || "?"}
-											</Text>
-										</View>
-									) : (
-										<Image source={{ uri: userIcon }} style={{ width: 120, height: 120, opacity: editMode ? 0.5 : 1 }} />
-									)}
-								{editMode &&
-									<Text style={{
-										fontSize: fontsize.button,
-										color: themes.text,
-										fontFamily: "Body-Medium",
-										opacity: 1,
-										position: "absolute",
-										top: 48,
-										left: 46,
-									}}>edit</Text>
-								}
+								{!userIcon || userIcon === "Not Set" || userIcon === "" ? (
+									<View style={styles.avatarFallback}>
+										<Text style={styles.avatarInitial}>{userName.trim().charAt(0).toUpperCase() || "?"}</Text>
+									</View>
+								) : (
+									<Image source={{ uri: userIcon }} style={styles.avatarImage} />
+								)}
+								{editMode ? (
+									<View style={styles.editPhotoBadge}><Text style={styles.editPhotoText}>EDIT</Text></View>
+								) : null}
 							</Pressable>
-							<Text style={[styles.pageHeader, { color: themes.text, flex: 1 }]}>
-								{userName.split(" ")[0]}
-							</Text>
+							<View style={styles.heroCopy}>
+								<Text style={styles.heroEyebrow}>{isSubProfile ? "SAVED PERSON" : "MY DRIVER PROFILE"}</Text>
+								<Text style={styles.pageHeader} numberOfLines={2}>{userName}</Text>
+								<Text style={styles.heroSubhead}>{editMode ? "Edit the fields below, then save your changes." : isSubProfile ? "Reusable passenger profile" : "Used when you assign yourself to the Driver seat."}</Text>
+							</View>
 						</View>
 
-						<View style={{ gap: spacing.three }}>
+						{!isSubProfile ? (
+							<Button
+								variant="secondary"
+								label="Emergency Contacts"
+								onPress={() => router.push("/(tabs)/everyone" as any)}
+								fullWidth
+							/>
+						) : null}
 
-							{!isSubProfile && (
-								<View style={{ gap: spacing.one }}>
-									<Text style={{ fontFamily: "Heading-Font", color: themes.text, fontSize: fontsize.header, marginTop: spacing.one }}>
-										Privacy & Consent
-									</Text>
-									<View style={{ borderRadius: spacing.edge, overflow: "hidden", borderWidth: 1, borderColor: themes.divider }}>
-										<SettingSwitch
-											name="Data Sharing Consent"
-											value={consent}
-											onValueChange={(value) => void setConsent(value)}
-										/>
-										<SettingSwitch
-											name="Health Monitoring"
-											value={healthMonitoringEnabled}
-											onValueChange={(value) => void setHealthMonitoring(value)}
-										/>
-										<SettingSwitch
-											name="Automated SMS Escalation"
-											value={emergencyEscalation}
-											onValueChange={(value) => void setEmergencyEscalation(value)}
-											isLast
-										/>
-									</View>
-									<Text style={{ color: themes.textSecondary, fontSize: fontsize.caption, lineHeight: 18, paddingHorizontal: spacing.half }}>
-										Consent is revocable. Automated escalation is SMS only and is intended for the confirmed driver-alone emergency path; SafeSeat never places an automated voice call.
-									</Text>
-									<Button
-										variant="secondary"
-										label="Manage Emergency Contacts"
-										onPress={() => router.push("/(tabs)/everyone" as any)}
-										fullWidth
-									/>
-								</View>
-							)}
+						<View style={{ gap: spacing.three }}>
 
 							<View style={{ gap: spacing.one }}>
 								<Text style={{
@@ -847,7 +786,7 @@ export default function Profile() {
 									Basic Information
 								</Text>
 
-								<View style={{ borderRadius: spacing.edge, overflow: "hidden" }}>
+								<View style={styles.fieldGroup}>
 
 									<View style={[styles.fixedFieldContainer, !editMode && styles.notLast, { backgroundColor: editMode ? themes.background : themes.backgroundElement }]}>
 										<Text style={[styles.fixedInfoLabel, { color: themes.primaryBttn }]}>
@@ -941,7 +880,7 @@ export default function Profile() {
 									Health Information
 								</Text>
 
-								<View style={{ borderRadius: spacing.edge, overflow: "hidden" }}>
+								<View style={styles.fieldGroup}>
 
 									<View style={[styles.fixedFieldContainer, !editMode && styles.notLast, { backgroundColor: editMode ? themes.background : themes.backgroundElement }]}>
 										<Text style={[styles.fixedInfoLabel, { color: themes.primaryBttn }]}>
@@ -1149,26 +1088,50 @@ export default function Profile() {
 	);
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
 	container: {
 		flex: 1,
 		width: "100%",
-		paddingLeft: spacing.two,
-		paddingRight: spacing.two,
-		borderWidth: spacing.none,
-		borderColor: "#fff",
-		gap: spacing.three,
-		paddingTop: spacing.three
+		paddingHorizontal: spacing.two,
+		gap: spacing.two,
+		paddingTop: spacing.two,
 	},
+	profileHero: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.two,
+		padding: spacing.two,
+		borderRadius: 20,
+		backgroundColor: themes.backgroundElement,
+		borderWidth: 1,
+		borderColor: themes.divider,
+	},
+	avatarButton: { width: 86, height: 86, borderRadius: 25, overflow: "hidden", borderWidth: 1.5, borderColor: themes.primaryBorder, backgroundColor: themes.primarySoft },
+	avatarFallback: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: themes.primarySoft },
+	avatarInitial: { color: themes.primaryBttn, fontSize: 31, fontFamily: "Body-Bold" },
+	avatarImage: { width: "100%", height: "100%", resizeMode: "cover" },
+	editPhotoBadge: { position: "absolute", left: 7, right: 7, bottom: 7, paddingVertical: 4, borderRadius: 999, alignItems: "center", backgroundColor: themes.overlay },
+	editPhotoText: { color: "#FFFFFF", fontSize: 9.5, letterSpacing: 0.7, fontFamily: "Body-Bold" },
+	heroCopy: { flex: 1, minWidth: 0, gap: 3 },
+	heroEyebrow: { color: themes.primaryBttn, fontSize: 10.5, letterSpacing: 1, fontFamily: "Body-Bold" },
+	heroSubhead: { color: themes.textSecondary, fontSize: 12.5, lineHeight: 18, fontFamily: "Body-Regular" },
 	fieldContainer: {
 		gap: 4,
 		width: "100%",
 	},
 	pageHeader: {
-		fontSize: fontsize.title,
+		fontSize: 24,
+		lineHeight: 29,
 		fontFamily: "Body-Bold",
 		color: themes.text,
-		margin: spacing.none
+		margin: spacing.none,
+	},
+	fieldGroup: {
+		borderRadius: spacing.edge,
+		overflow: "hidden",
+		borderWidth: 1,
+		borderColor: themes.divider,
+		backgroundColor: themes.backgroundElement,
 	},
 	infoLabel: {
 		fontFamily: "Condensed-Bold",

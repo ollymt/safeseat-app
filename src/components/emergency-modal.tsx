@@ -1,5 +1,6 @@
 import type { SeatVitals } from "@/components/seat-card";
-import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
+import { FontSize as fontsize, Spacing as spacing, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { useUserPreferences } from "@/hooks/user-preferences-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
@@ -70,10 +71,12 @@ export default function EmergencyModal({
   alertAcknowledged = false,
   onAcknowledgeAlert,
 }: Props) {
+  const themes = useTheme();
+  const styles = createStyles(themes);
+  const isDriverSeat = seat === 1;
   const {
     emergencyEscalation,
     escalationWindowSeconds,
-    gpsSharing,
   } = useUserPreferences();
 
   const [contactMenuVisible, setContactMenuVisible] = useState(false);
@@ -104,7 +107,7 @@ export default function EmergencyModal({
   }, [visible, seat, escalationWindowSeconds]);
 
   useEffect(() => {
-    if (!visible || windowElapsed) return;
+    if (!visible || windowElapsed || !isDriverSeat || !emergencyEscalation) return;
 
     const timer = setInterval(() => {
       setSecondsLeft((previous) => {
@@ -119,7 +122,7 @@ export default function EmergencyModal({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [visible, windowElapsed]);
+  }, [visible, windowElapsed, isDriverSeat, emergencyEscalation]);
 
   useEffect(() => () => clearHoldTimer(), []);
 
@@ -268,15 +271,15 @@ export default function EmergencyModal({
     0,
     Math.min(100, (secondsLeft / escalationWindowSeconds) * 100),
   );
-  const driverOnlySmsEligible = seat === 1 && isAccountOwner;
+  const driverOnlySmsEligible = isDriverSeat;
 
-  const escalationMessage = !emergencyEscalation
-    ? "Automated SMS escalation is disabled in Settings."
-    : driverOnlySmsEligible
-      ? windowElapsed
-        ? "Escalation window elapsed. The later Main Hub/Twilio integration will send the configured automated SMS only after the driver-alone emergency rule is confirmed."
-        : "If the driver-alone emergency remains confirmed when this timer reaches zero, the configured backend may send one automated SMS to the primary emergency contact."
-      : "Passenger emergencies remain driver-first. SafeSeat does not automatically SMS emergency contacts for a passenger alert.";
+  const escalationMessage = !driverOnlySmsEligible
+    ? "Passenger emergency: alert the driver. SafeSeat sound/haptics and this emergency screen remain active, but automated SMS is not triggered."
+    : !emergencyEscalation
+      ? "Driver Emergency SMS is turned off in Settings."
+      : windowElapsed
+        ? "Driver-seat escalation window elapsed. Automated SMS is now eligible for the primary emergency contact when the configured backend is connected."
+        : "If the Driver-seat emergency remains confirmed when this timer reaches zero, automated SMS becomes eligible for the primary emergency contact.";
 
   return (
     <>
@@ -299,12 +302,14 @@ export default function EmergencyModal({
                 <Ionicons name="warning" color={themes.warnBttn} size={15} />
                 <Text style={styles.alertPillText}>EMERGENCY</Text>
               </View>
-              <Text style={styles.timerValue}>{windowElapsed ? "00" : String(secondsLeft).padStart(2, "0")}s</Text>
+              {driverOnlySmsEligible && emergencyEscalation ? <Text style={styles.timerValue}>{windowElapsed ? "00" : String(secondsLeft).padStart(2, "0")}s</Text> : <Text style={styles.passengerAlertText}>{driverOnlySmsEligible ? "SMS OFF" : "DRIVER ALERT"}</Text>}
             </View>
 
-            <View style={styles.timerTrack}>
-              <View style={[styles.timerFill, { width: `${countdownPercent}%` }]} />
-            </View>
+            {driverOnlySmsEligible && emergencyEscalation ? (
+              <View style={styles.timerTrack}>
+                <View style={[styles.timerFill, { width: `${countdownPercent}%` }]} />
+              </View>
+            ) : null}
 
             <View style={styles.headerRow}>
               {imageUri ? (
@@ -362,12 +367,9 @@ export default function EmergencyModal({
                   color={themes.primaryBttn}
                   size={18}
                 />
-                <Text style={styles.escalationTitle}>Automated SMS</Text>
+                <Text style={styles.escalationTitle}>{driverOnlySmsEligible ? "Driver Emergency SMS" : "Driver Alert"}</Text>
               </View>
               <Text style={styles.escalationText}>{escalationMessage}</Text>
-              <Text style={styles.locationText}>
-                GPS sharing: {gpsSharing ? "enabled for emergency context" : "disabled"}
-              </Text>
             </View>
 
             <View style={styles.quickActions}>
@@ -449,7 +451,7 @@ export default function EmergencyModal({
                 <Text
                   style={[
                     styles.cancelHoldHint,
-                    holdingCancel && { color: "#12301F" },
+                    holdingCancel && { color: themes.primaryBttnText },
                   ]}
                 >
                   Use only after verifying the alert is a false alarm or the occupant has recovered.
@@ -523,12 +525,12 @@ export default function EmergencyModal({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: "center",
     padding: spacing.two,
-    backgroundColor: "rgba(3, 7, 15, 0.88)",
+    backgroundColor: themes.overlay,
   },
   card: {
     width: "100%",
@@ -538,7 +540,7 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     backgroundColor: themes.backgroundElement,
     borderWidth: 1,
-    borderColor: "#5A2C35",
+    borderColor: `${themes.warnBttn}55`,
     overflow: "hidden",
   },
   cardContent: {
@@ -557,9 +559,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.one,
     paddingVertical: spacing.half,
     borderRadius: 999,
-    backgroundColor: "#341C22",
+    backgroundColor: `${themes.warnBttn}16`,
     borderWidth: 1,
-    borderColor: "#5A2C35",
+    borderColor: `${themes.warnBttn}55`,
   },
   alertPillText: {
     color: themes.warnBttn,
@@ -572,6 +574,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontFamily: "Body-Bold",
   },
+  passengerAlertText: { color: themes.textSecondary, fontSize: 12, letterSpacing: 0.7, fontFamily: "Body-Bold" },
   timerTrack: {
     height: 5,
     overflow: "hidden",
@@ -732,7 +735,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.one + 4,
     paddingVertical: spacing.one,
     borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.035)",
+    backgroundColor: themes.surfaceSoft,
     borderWidth: 1,
     borderColor: themes.divider,
   },
@@ -773,7 +776,7 @@ const styles = StyleSheet.create({
   contactBackdrop: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(4, 8, 18, 0.78)",
+    backgroundColor: themes.overlay,
   },
   contactSheet: {
     maxHeight: "72%",

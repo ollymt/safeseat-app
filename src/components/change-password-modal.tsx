@@ -1,5 +1,7 @@
+import ThemedHost from "@/components/themed-host";
 // components/ChangePasswordModal.tsx
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { Spacing as spacing, FontSize as fontsize, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
 import { Host, Icon } from "@expo/ui";
@@ -34,6 +36,8 @@ type Props = {
 const isValidPassword = (pw: string): boolean => pw.length >= 8;
 
 export default function ChangePasswordModal({ visible, onClose, onSuccess }: Props) {
+    const themes = useTheme();
+    const styles = createStyles(themes);
     const [isLoading, setIsLoading] = useState(false);
 
     const [oldPassword, setOldPassword] = useState("");
@@ -167,13 +171,13 @@ export default function ChangePasswordModal({ visible, onClose, onSuccess }: Pro
                                         onPress={() => setOldVisible(!oldVisible)}
                                     >
                                         <View style={{ paddingHorizontal: spacing.two, paddingVertical: spacing.one }}>
-                                            <Host>
+                                            <ThemedHost key={`old-eye-${themes.mode}`}>
                                                 {!oldVisible ? (
-                                                    <Icon name={Icon.select({ ios: "eye.fill", android: visibilityXml })} />
+                                                    <Icon name={Icon.select({ ios: "eye.fill", android: visibilityXml })} color={themes.textSecondary} />
                                                 ) : (
-                                                    <Icon name={Icon.select({ ios: "eye.slash.fill", android: visibilityOffXml })} />
+                                                    <Icon name={Icon.select({ ios: "eye.slash.fill", android: visibilityOffXml })} color={themes.textSecondary} />
                                                 )}
-                                            </Host>
+                                            </ThemedHost>
                                         </View>
                                     </Button>
                                 </View>
@@ -195,13 +199,13 @@ export default function ChangePasswordModal({ visible, onClose, onSuccess }: Pro
                                         onPress={() => setNewVisible(!newVisible)}
                                     >
                                         <View style={{ paddingHorizontal: spacing.two, paddingVertical: spacing.one }}>
-                                            <Host>
+                                            <ThemedHost key={`new-eye-${themes.mode}`}>
                                                 {!newVisible ? (
-                                                    <Icon name={Icon.select({ ios: "eye.fill", android: visibilityXml })} />
+                                                    <Icon name={Icon.select({ ios: "eye.fill", android: visibilityXml })} color={themes.textSecondary} />
                                                 ) : (
-                                                    <Icon name={Icon.select({ ios: "eye.slash.fill", android: visibilityOffXml })} />
+                                                    <Icon name={Icon.select({ ios: "eye.slash.fill", android: visibilityOffXml })} color={themes.textSecondary} />
                                                 )}
-                                            </Host>
+                                            </ThemedHost>
                                         </View>
                                     </Button>
                                 </View>
@@ -223,13 +227,13 @@ export default function ChangePasswordModal({ visible, onClose, onSuccess }: Pro
                                         onPress={() => setConfirmVisible(!confirmVisible)}
                                     >
                                         <View style={{ paddingHorizontal: spacing.two, paddingVertical: spacing.one }}>
-                                            <Host>
+                                            <ThemedHost key={`confirm-eye-${themes.mode}`}>
                                                 {!confirmVisible ? (
-                                                    <Icon name={Icon.select({ ios: "eye.fill", android: visibilityXml })} />
+                                                    <Icon name={Icon.select({ ios: "eye.fill", android: visibilityXml })} color={themes.textSecondary} />
                                                 ) : (
-                                                    <Icon name={Icon.select({ ios: "eye.slash.fill", android: visibilityOffXml })} />
+                                                    <Icon name={Icon.select({ ios: "eye.slash.fill", android: visibilityOffXml })} color={themes.textSecondary} />
                                                 )}
-                                            </Host>
+                                            </ThemedHost>
                                         </View>
                                     </Button>
                                 </View>
@@ -272,7 +276,7 @@ export default function ChangePasswordModal({ visible, onClose, onSuccess }: Pro
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
     backdrop: {
         flex: 1,
         backgroundColor: "rgba(0, 0, 0, 0.75)",

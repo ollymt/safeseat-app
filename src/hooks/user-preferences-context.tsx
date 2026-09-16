@@ -15,6 +15,7 @@ export type UserPreferences = {
   emergencyEscalation: boolean;
   escalationWindowSeconds: 20 | 25 | 30;
   useMetric: boolean;
+  themeMode: "dark" | "light";
 };
 
 const DEFAULT_PREFERENCES: UserPreferences = {
@@ -26,6 +27,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   emergencyEscalation: true,
   escalationWindowSeconds: 25,
   useMetric: true,
+  themeMode: "dark",
 };
 
 type UserPreferencesContextType = {
@@ -48,6 +50,8 @@ type UserPreferencesContextType = {
   setEscalationWindowSeconds: (value: 20 | 25 | 30) => Promise<void>;
   useMetric: boolean;
   setUseMetric: (value: boolean) => Promise<void>;
+  themeMode: "dark" | "light";
+  setThemeMode: (value: "dark" | "light") => Promise<void>;
 };
 
 const UserPreferencesContext = createContext<UserPreferencesContextType | undefined>(undefined);
@@ -62,6 +66,7 @@ function normalizePreferences(value: Partial<UserPreferences>): UserPreferences 
     ...DEFAULT_PREFERENCES,
     ...value,
     escalationWindowSeconds,
+    themeMode: value.themeMode === "light" ? "light" : "dark",
   };
 }
 
@@ -138,11 +143,17 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
         setEscalationWindowSeconds: (value) => updatePreferences({ escalationWindowSeconds: value }),
         useMetric: preferences.useMetric,
         setUseMetric: (value) => updatePreferences({ useMetric: value }),
+        themeMode: preferences.themeMode,
+        setThemeMode: (value) => updatePreferences({ themeMode: value }),
       }}
     >
       {children}
     </UserPreferencesContext.Provider>
   );
+}
+
+export function useOptionalUserPreferences() {
+  return useContext(UserPreferencesContext);
 }
 
 export function useUserPreferences() {

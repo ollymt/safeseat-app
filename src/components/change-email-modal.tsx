@@ -1,5 +1,7 @@
+import ThemedHost from "@/components/themed-host";
 // components/ChangeEmailModal.tsx
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { Spacing as spacing, FontSize as fontsize, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import * as Haptics from "expo-haptics";
 import { Host, Icon } from "@expo/ui";
 import { useEffect, useState } from "react";
@@ -16,7 +18,7 @@ import {
 } from "react-native";
 
 // 🛠️ Firebase Imports
-import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
+import { EmailAuthProvider, reauthenticateWithCredential, updateEmail } from "firebase/auth";
 import { doc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import Button from "./button";
@@ -37,6 +39,8 @@ const isValidEmail = (email: string): boolean => {
 };
 
 export default function ChangeEmailModal({ visible, onClose, onSuccess }: Props) {
+    const themes = useTheme();
+    const styles = createStyles(themes);
     const [isLoading, setIsLoading] = useState(false);
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -79,7 +83,10 @@ export default function ChangeEmailModal({ visible, onClose, onSuccess }: Props)
             const credential = EmailAuthProvider.credential(currentUser.email, password);
             await reauthenticateWithCredential(currentUser, credential);
 
-            // 2. Update the email field directly in the Firestore user document
+            // 2. Update the actual Firebase Auth login email first.
+            await updateEmail(currentUser, email.trim());
+
+            // 3. Keep the Firestore user profile in sync with Firebase Auth.
             const userRef = doc(db, "users", currentUser.uid);
             await updateDoc(userRef, {
                 email: email.trim(),
@@ -149,20 +156,20 @@ export default function ChangeEmailModal({ visible, onClose, onSuccess }: Props)
                                         onPress={() => setPassVisible(!passVisible)}
                                     >
                                         <View style={{ paddingHorizontal: spacing.two, paddingVertical: spacing.one }}>
-                                            <Host>
+                                            <ThemedHost key={`password-eye-${themes.mode}`}>
                                                 {!passVisible ? (
                                                     <Icon name={Icon.select({
                                                         ios: "eye.fill",
                                                         android: visibilityXml
-                                                    })} />
+                                                    })} color={themes.textSecondary} />
                                                 ) : (
                                                     <Icon name={Icon.select({
                                                         ios: "eye.slash.fill",
                                                         android: visibilityOffXml
-                                                    })} />
+                                                    })} color={themes.textSecondary} />
                                                 )
                                                 }
-                                            </Host>
+                                            </ThemedHost>
                                         </View>
                                     </Button>
 
@@ -206,7 +213,7 @@ export default function ChangeEmailModal({ visible, onClose, onSuccess }: Props)
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
     backdrop: {
         flex: 1,
         backgroundColor: "rgba(0, 0, 0, 0.75)",

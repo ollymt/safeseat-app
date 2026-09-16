@@ -1,4 +1,5 @@
-import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
+import { FontSize as fontsize, Spacing as spacing, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { useUserPreferences } from "@/hooks/user-preferences-context";
 import * as Haptics from "expo-haptics";
 import { addDoc, collection } from "firebase/firestore";
@@ -49,6 +50,8 @@ const isValidDate = (year: number, month: number, day: number): boolean => {
 };
 
 function FieldHeader({ label, optional = false, hint }: { label: string; optional?: boolean; hint?: string }) {
+  const themes = useTheme();
+  const styles = createStyles(themes);
   return (
     <View style={styles.fieldHeaderRow}>
       <View style={{ flex: 1 }}>
@@ -63,7 +66,9 @@ function FieldHeader({ label, optional = false, hint }: { label: string; optiona
 }
 
 export default function AddProfileModal({ visible, onClose, onSuccess }: Props) {
-  const [isLoading, setIsLoading] = useState(false);
+
+  const themes = useTheme();
+  const styles = createStyles(themes);  const [isLoading, setIsLoading] = useState(false);
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("");
   const [birthYear, setBirthYear] = useState("");
@@ -265,7 +270,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(3,7,15,0.86)", justifyContent: "center", alignItems: "center", paddingHorizontal: spacing.two },
   keyboardWrap: { width: "100%", maxWidth: 430 },
   container: { width: "100%", maxHeight: "90%", backgroundColor: themes.backgroundElevated, borderWidth: 1, borderColor: themes.divider, borderRadius: 26, padding: spacing.two, gap: spacing.one + 4, shadowColor: "#000", shadowOpacity: 0.32, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 8 },

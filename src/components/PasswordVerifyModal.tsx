@@ -1,10 +1,12 @@
+import ThemedHost from "@/components/themed-host";
 // components/PasswordVerifyModal.tsx
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { type ThemePalette, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { extendSession } from "@/utils/securitySession";
 import { Host, Icon } from "@expo/ui";
 import * as Haptics from "expo-haptics";
 import { useEffect, useRef, useState } from "react";
-import { Alert, StyleSheet, useColorScheme } from "react-native";
+import { Alert, StyleSheet } from "react-native";
 
 import { Modal, TouchableWithoutFeedback, View, KeyboardAvoidingView, Platform, Text, Keyboard } from "react-native";
 
@@ -25,6 +27,8 @@ type Props = {
 };
 
 export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Props) {
+    const themes = useTheme();
+    const styles = createStyles(themes);
     const [passwordInput, setPasswordInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const passwordInputRef = useRef<any>(null);
@@ -112,20 +116,20 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
                                         onPress={() => setPassVisible(!passVisible)}
                                     >
                                         <View style={{ paddingHorizontal: spacing.two, paddingVertical: spacing.one }}>
-                                            <Host>
+                                            <ThemedHost>
                                                 {!passVisible ? (
                                                     <Icon name={Icon.select({
                                                         ios: "eye.fill",
                                                         android: visibilityXml
-                                                    })} />
+                                                    })} color={themes.textSecondary} />
                                                 ) : (
                                                     <Icon name={Icon.select({
                                                         ios: "eye.slash.fill",
                                                         android: visibilityOffXml
-                                                    })} />
+                                                    })} color={themes.textSecondary} />
                                                 )
                                                 }
-                                            </Host>
+                                            </ThemedHost>
                                         </View>
                                     </Button>
 
@@ -153,7 +157,7 @@ export default function PasswordVerifyModal({ visible, onClose, onSuccess }: Pro
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
     // Full-screen overlay to dim screen and center content
     backdrop: {
         flex: 1,

@@ -1,4 +1,6 @@
-import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
+import ThemedHost from "@/components/themed-host";
+import { Spacing as spacing, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { withLayoutContext, router, usePathname } from "expo-router";
 import { createMaterialTopTabNavigator } from "expo-router/js-top-tabs";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -29,6 +31,8 @@ const TAB_ROOTS: Record<string, string> = {
 };
 
 function MyCustomTabBar({ state, descriptors, navigation, pathname }: any) {
+  const themes = useTheme();
+  const styles = createStyles(themes);
   const { active: guideActive, stepId: guideStepId, recordTabOpened } = useDriverGuide();
 
   return (
@@ -41,38 +45,15 @@ function MyCustomTabBar({ state, descriptors, navigation, pathname }: any) {
           const renderIcon = options.tabBarIcon;
 
           const handlePress = () => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
             recordTabOpened(route.name);
-
-            // React Navigation's default focused-tab behavior emits a
-            // POP_TO_TOP. At an already-rooted tab there is nothing to pop,
-            // which is the warning SafeSeat was showing. Do not emit tabPress
-            // for that no-op case. If the focused tab is on a nested screen,
-            // explicitly return to that tab's root instead.
             if (isFocused) {
               const rootPath = TAB_ROOTS[route.name];
-              if (rootPath && pathname !== rootPath) {
-                router.replace(rootPath as any);
-              }
+              if (rootPath && pathname !== rootPath) router.replace(rootPath as any);
               return;
             }
-
-            const event = navigation.emit({
-              type: "tabPress",
-              target: route.key,
-              canPreventDefault: true,
-            });
-
-            if (!event.defaultPrevented) {
-              navigation.navigate(route.name);
-            }
-          };
-
-          const handleLongPress = () => {
-            navigation.emit({
-              type: "tabLongPress",
-              target: route.key,
-            });
+            const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
+            if (!event.defaultPrevented) navigation.navigate(route.name);
           };
 
           return (
@@ -82,7 +63,7 @@ function MyCustomTabBar({ state, descriptors, navigation, pathname }: any) {
               accessibilityState={isFocused ? { selected: true } : {}}
               accessibilityLabel={options.tabBarAccessibilityLabel ?? label}
               onPress={handlePress}
-              onLongPress={handleLongPress}
+              onLongPress={() => navigation.emit({ type: "tabLongPress", target: route.key })}
               style={({ pressed }) => [
                 styles.tabButton,
                 isFocused && styles.activeTabButton,
@@ -90,19 +71,13 @@ function MyCustomTabBar({ state, descriptors, navigation, pathname }: any) {
                 pressed && styles.pressedTabButton,
               ]}
             >
-              {renderIcon?.({
-                focused: isFocused,
-                color: isFocused ? themes.primaryBttn : themes.textSecondary,
-                size: spacing.three,
-              })}
-              <Text style={[styles.label, isFocused && styles.activeLabel]}>
-                {label}
-              </Text>
+              {renderIcon?.({ focused: isFocused, color: isFocused ? themes.primaryBttn : themes.textSecondary, size: spacing.three })}
+              <Text style={[styles.label, isFocused && styles.activeLabel]}>{label}</Text>
               <GuidePulseOverlay
                 active={guideActive && guideStepId === "dashboard" && route.name === "assign"}
                 label="TAP SEATS"
-                borderRadius={16}
-                inset={-2}
+                borderRadius={17}
+                inset={-3}
                 beaconPosition="top"
               />
             </Pressable>
@@ -113,178 +88,61 @@ function MyCustomTabBar({ state, descriptors, navigation, pathname }: any) {
   );
 }
 
-export default function TabLayout() {
+function TabsInner() {
+  const themes = useTheme();
+  const styles = createStyles(themes);
   const pathname = usePathname();
   const isNestedScreen = pathname.split("/").filter(Boolean).length > 1;
 
+  const tabIcon = (focused: boolean, iosOn: string, iosOff: string, android: any) => (
+    <ThemedHost key={`tab-icon-${themes.mode}-${focused ? "on" : "off"}`} matchContents>
+      <Icon name={Icon.select({ ios: focused ? iosOn : iosOff, android })} size={spacing.three} color={focused ? themes.primaryBttn : themes.textSecondary} />
+    </ThemedHost>
+  );
+
+  return (
+    <SafeAreaView style={styles.safeArea} edges={["left", "right", "top"]}>
+      <View style={styles.root}>
+        <View style={styles.bannerContainer}><Banner /></View>
+        <Tabs
+          tabBarPosition="bottom"
+          // @ts-ignore
+          tabBar={(props) => <MyCustomTabBar {...props} pathname={pathname} />}
+          screenOptions={{ swipeEnabled: !isNestedScreen, lazy: true, lazyPreloadDistance: 0, headerShown: false, sceneContainerStyle: { backgroundColor: themes.background } }}
+        >
+          <Tabs.Screen name="home" options={{ title: "Home", tabBarIcon: ({ focused }: any) => tabIcon(focused, "house.fill", "house", homeXml) }} />
+          <Tabs.Screen name="assign" options={{ title: "Seats", tabBarIcon: ({ focused }: any) => tabIcon(focused, "carseat.right.fill", "carseat.right", seatXml) }} />
+          <Tabs.Screen name="everyone" options={{ title: "Profiles", tabBarIcon: ({ focused }: any) => tabIcon(focused, "person.3.fill", "person.3", groupsXml) }} />
+          <Tabs.Screen name="settings" options={{ title: "Settings", tabBarIcon: ({ focused }: any) => tabIcon(focused, "gearshape.fill", "gearshape", settingsXml) }} />
+        </Tabs>
+        <DriverGuideOverlay />
+      </View>
+    </SafeAreaView>
+  );
+}
+
+export default function TabLayout() {
   return (
     <UserPreferencesProvider>
       <SafeSeatHubProvider>
         <DriverGuideProvider>
-      <SafeAreaView style={styles.safeArea} edges={["left", "right", "top"]}>
-        <View style={styles.root}>
-          <View style={styles.bannerContainer}>
-            <Banner />
-          </View>
-
-          <Tabs
-            tabBarPosition="bottom"
-            // @ts-ignore material top tabs accepts a custom tab bar renderer
-            tabBar={(props) => <MyCustomTabBar {...props} pathname={pathname} />}
-            screenOptions={{
-              swipeEnabled: !isNestedScreen,
-              headerShown: false,
-              sceneContainerStyle: {
-                backgroundColor: themes.background,
-              },
-            }}
-          >
-            <Tabs.Screen
-              name="home"
-              options={{
-                title: "Home",
-                tabBarIcon: ({ focused }: { focused: boolean }) => (
-                  <Host matchContents>
-                    <Icon
-                      name={Icon.select({
-                        ios: focused ? "house.fill" : "house",
-                        android: homeXml,
-                      })}
-                      size={spacing.three}
-                      color={focused ? themes.primaryBttn : themes.textSecondary}
-                    />
-                  </Host>
-                ),
-              }}
-            />
-
-            <Tabs.Screen
-              name="assign"
-              options={{
-                title: "Seats",
-                tabBarIcon: ({ focused }: { focused: boolean }) => (
-                  <Host matchContents>
-                    <Icon
-                      name={Icon.select({
-                        ios: focused ? "carseat.right.fill" : "carseat.right",
-                        android: seatXml,
-                      })}
-                      size={spacing.three}
-                      color={focused ? themes.primaryBttn : themes.textSecondary}
-                    />
-                  </Host>
-                ),
-              }}
-            />
-
-            <Tabs.Screen
-              name="everyone"
-              options={{
-                title: "Profiles",
-                tabBarIcon: ({ focused }: { focused: boolean }) => (
-                  <Host matchContents>
-                    <Icon
-                      name={Icon.select({
-                        ios: focused ? "person.3.fill" : "person.3",
-                        android: groupsXml,
-                      })}
-                      size={spacing.three}
-                      color={focused ? themes.primaryBttn : themes.textSecondary}
-                    />
-                  </Host>
-                ),
-              }}
-            />
-
-            <Tabs.Screen
-              name="settings"
-              options={{
-                title: "Settings",
-                tabBarIcon: ({ focused }: { focused: boolean }) => (
-                  <Host matchContents>
-                    <Icon
-                      name={Icon.select({
-                        ios: focused ? "gearshape.fill" : "gearshape",
-                        android: settingsXml,
-                      })}
-                      size={spacing.three}
-                      color={focused ? themes.primaryBttn : themes.textSecondary}
-                    />
-                  </Host>
-                ),
-              }}
-            />
-          </Tabs>
-          <DriverGuideOverlay />
-        </View>
-      </SafeAreaView>
+          <TabsInner />
         </DriverGuideProvider>
       </SafeSeatHubProvider>
     </UserPreferencesProvider>
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: themes.background,
-  },
-  root: {
-    flex: 1,
-    backgroundColor: themes.background,
-  },
-  bannerContainer: {
-    paddingHorizontal: spacing.two,
-    paddingBottom: spacing.one,
-  },
-  tabContainer: {
-    width: "100%",
-    backgroundColor: themes.background,
-    paddingHorizontal: spacing.two,
-    paddingTop: spacing.one,
-    paddingBottom: spacing.one,
-  },
-  tabDrawer: {
-    minHeight: 66,
-    flexDirection: "row",
-    alignItems: "stretch",
-    backgroundColor: themes.backgroundElement,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: themes.divider,
-    padding: 5,
-  },
-  tabButton: {
-    flex: 1,
-    position: "relative",
-    overflow: "visible",
-    minHeight: 54,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.half,
-    borderRadius: 16,
-    paddingHorizontal: spacing.half,
-  },
-  activeTabButton: {
-    backgroundColor: themes.primarySoft,
-    borderWidth: 1,
-    borderColor: themes.primaryBorder,
-  },
-  guideTabButton: {
-    borderWidth: 1,
-    borderColor: themes.primaryBttn,
-    backgroundColor: "rgba(31,210,149,0.12)",
-  },
-  pressedTabButton: {
-    opacity: 0.72,
-  },
-  label: {
-    color: themes.textSecondary,
-    fontSize: fontsize.caption,
-    fontFamily: "Body-Medium",
-  },
-  activeLabel: {
-    color: themes.primaryBttn,
-    fontFamily: "Body-Bold",
-  },
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: themes.background },
+  root: { flex: 1, backgroundColor: themes.background },
+  bannerContainer: { paddingHorizontal: spacing.two, paddingBottom: spacing.one },
+  tabContainer: { width: "100%", backgroundColor: themes.background, paddingHorizontal: spacing.two, paddingTop: spacing.one, paddingBottom: spacing.one },
+  tabDrawer: { minHeight: 70, flexDirection: "row", alignItems: "stretch", backgroundColor: themes.backgroundElement, borderRadius: 24, borderWidth: 1, borderColor: themes.divider, padding: 5, shadowColor: themes.shadow, shadowOpacity: themes.mode === "dark" ? 0.2 : 0.08, shadowRadius: 12, elevation: 5 },
+  tabButton: { flex: 1, position: "relative", overflow: "visible", alignItems: "center", justifyContent: "center", gap: 4, borderRadius: 18 },
+  activeTabButton: { backgroundColor: themes.primarySoft },
+  guideTabButton: { zIndex: 50 },
+  pressedTabButton: { opacity: 0.72 },
+  label: { color: themes.textSecondary, fontSize: 13, fontFamily: "Body-Medium" },
+  activeLabel: { color: themes.primaryBttn, fontFamily: "Body-Bold" },
 });

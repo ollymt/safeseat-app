@@ -1,5 +1,6 @@
+import ThemedHost from "@/components/themed-host";
 // @/components/setting-date-picker.android.tsx
-import { Themes } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { Host, Icon } from "@expo/ui";
 import { useState, useMemo, useEffect } from "react";
 import {
@@ -8,7 +9,6 @@ import {
     ScrollView,
     StyleSheet,
     Text,
-    useColorScheme,
     View,
 } from "react-native";
 
@@ -34,9 +34,7 @@ export default function SettingDatePickerItem({
     enabled = true,
     onValueChange,
 }: SettingDatePickerProps) {
-    const colorScheme = useColorScheme();
-    const activeScheme = colorScheme === "dark" ? "dark" : "light";
-    const currentTheme = Themes[activeScheme];
+    const currentTheme = useTheme();
 
     // Core Visibility State
     const [modalVisible, setModalVisible] = useState(false);
@@ -115,16 +113,16 @@ export default function SettingDatePickerItem({
             <Pressable
                 onPress={enabled ? handleOpenModal : undefined}
                 disabled={!enabled}
-                style={({ pressed }) => [{ backgroundColor: currentTheme.element, opacity: pressed ? 0.8 : 1 }]}
+                style={({ pressed }) => [{ backgroundColor: currentTheme.backgroundElement, opacity: pressed ? 0.8 : 1 }]}
             >
-                <View style={[setitem.setItemBase, { borderBottomWidth: isLast ? 0 : 1, borderBottomColor: currentTheme.border }]}>
+                <View style={[setitem.setItemBase, { borderBottomWidth: isLast ? 0 : 1, borderBottomColor: currentTheme.divider }]}>
                     <View style={setitem.leftContainer}>
                         {iconName && (
                             /* Fixed touch interception by adding pointerEvents="none" to native icon block */
                             <View style={[setitem.iconWrapper, { backgroundColor: currentTheme.primaryBttn, padding: 6, borderRadius: 8 }]} pointerEvents="none">
-                                <Host style={{ width: 22, height: 22 }}>
+                                <ThemedHost style={{ width: 22, height: 22 }}>
                                     <Icon name={iconName} color={currentTheme.primaryBttnText} />
-                                </Host>
+                                </ThemedHost>
                             </View>
                         )}
                         <Text style={[setitem.settingName, { color: currentTheme.text }]}>{name}</Text>
@@ -145,7 +143,7 @@ export default function SettingDatePickerItem({
                 onRequestClose={() => setModalVisible(false)}
             >
                 <View style={setitem.modalOverlay}>
-                    <View style={[setitem.modalContent, { backgroundColor: currentTheme.element }]}>
+                    <View style={[setitem.modalContent, { backgroundColor: currentTheme.backgroundElement }]}>
                         <Text style={[setitem.modalTitle, { color: currentTheme.text }]}>Select Birthday</Text>
 
                         {/* 3-Column List Select Framework */}
@@ -154,7 +152,7 @@ export default function SettingDatePickerItem({
                             {/* Month Segment */}
                             <View style={setitem.pickerColumn}>
                                 <Text style={[setitem.columnLabel, { color: currentTheme.textSecondary }]}>Month</Text>
-                                <ScrollView style={[setitem.scrollTrack, { borderColor: currentTheme.border }]} nestedScrollEnabled={true}>
+                                <ScrollView style={[setitem.scrollTrack, { borderColor: currentTheme.divider }]} nestedScrollEnabled={true}>
                                     {MONTHS.map((m, idx) => (
                                         <Pressable
                                             key={m}
@@ -170,7 +168,7 @@ export default function SettingDatePickerItem({
                             {/* Day Segment */}
                             <View style={setitem.pickerColumn}>
                                 <Text style={[setitem.columnLabel, { color: currentTheme.textSecondary }]}>Day</Text>
-                                <ScrollView style={[setitem.scrollTrack, { borderColor: currentTheme.border }]} nestedScrollEnabled={true}>
+                                <ScrollView style={[setitem.scrollTrack, { borderColor: currentTheme.divider }]} nestedScrollEnabled={true}>
                                     {daysInMonth.map((d) => (
                                         <Pressable
                                             key={d}
@@ -186,7 +184,7 @@ export default function SettingDatePickerItem({
                             {/* Year Segment */}
                             <View style={setitem.pickerColumn}>
                                 <Text style={[setitem.columnLabel, { color: currentTheme.textSecondary }]}>Year</Text>
-                                <ScrollView style={[setitem.scrollTrack, { borderColor: currentTheme.border }]} nestedScrollEnabled={true}>
+                                <ScrollView style={[setitem.scrollTrack, { borderColor: currentTheme.divider }]} nestedScrollEnabled={true}>
                                     {yearsList.map((y) => (
                                         <Pressable
                                             key={y}

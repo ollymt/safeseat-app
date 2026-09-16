@@ -1,5 +1,5 @@
 // @/components/setting-picker.android.tsx
-import { Themes } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { useState, useEffect } from "react";
 import {
     Modal,
@@ -7,7 +7,6 @@ import {
     ScrollView,
     StyleSheet,
     Text,
-    useColorScheme,
     View,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -47,9 +46,7 @@ export default function SettingPicker({
     onValueChange,
     onPress,
 }: SettingPickerProps) {
-    const colorScheme = useColorScheme();
-    const activeScheme = colorScheme === "dark" ? "dark" : "light";
-    const currentTheme = Themes[activeScheme];
+    const currentTheme = useTheme();
 
     const [selectedBloodType, setSelectedBloodType] = useState(value);
 
@@ -77,9 +74,9 @@ export default function SettingPicker({
                 style={({ pressed }) => [
                     setitem.setItemBase,
                     {
-                        backgroundColor: currentTheme.element,
+                        backgroundColor: currentTheme.backgroundElement,
                         borderBottomWidth: isLast ? 0 : 1,
-                        borderBottomColor: currentTheme.border,
+                        borderBottomColor: currentTheme.divider,
                         opacity: pressed ? 0.8 : 1
                     }
                 ]}
@@ -117,7 +114,7 @@ export default function SettingPicker({
                 <View style={[setitem.pageContainer, { backgroundColor: currentTheme.background }]}>
 
                     {/* Header bar structure */}
-                    <View style={[setitem.headerBar, { borderBottomColor: currentTheme.border }]}>
+                    <View style={[setitem.headerBar, { borderBottomColor: currentTheme.divider }]}>
                         <Pressable onPress={onClose} style={setitem.backButton}>
                             <MaterialIcons name="arrow-back" size={24} color={currentTheme.text} />
                         </Pressable>
@@ -138,8 +135,8 @@ export default function SettingPicker({
                                     style={({ pressed }) => [
                                         setitem.pageRow,
                                         {
-                                            backgroundColor: isSelected ? currentTheme.element : "transparent",
-                                            borderBottomColor: currentTheme.border,
+                                            backgroundColor: isSelected ? currentTheme.backgroundElement : "transparent",
+                                            borderBottomColor: currentTheme.divider,
                                             opacity: pressed ? 0.7 : 1
                                         }
                                     ]}

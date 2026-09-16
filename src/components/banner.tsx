@@ -1,6 +1,8 @@
+import ThemedHost from "@/components/themed-host";
 import sirenXml from "@expo/material-symbols/siren.xml";
 import closeXml from "@expo/material-symbols/close.xml";
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { Spacing as spacing, FontSize as fontsize, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { useBanner } from "@/hooks/banner-context";
 import { Host, Icon } from "@expo/ui";
 import {
@@ -23,16 +25,16 @@ import { useEffect } from "react";
 import * as Haptics from "expo-haptics"
 
 export default function Banner() {
+    const themes = useTheme();
+    const seatcard = createStyles(themes);
     const { visible, message, hideBanner } = useBanner();
     const insets = useSafeAreaInsets();
 
-    if (!visible) return null;
+    useEffect(() => {
+        if (visible) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }, [visible, message]);
 
-    useEffect((() => {
-        if (visible) {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-        }
-    }), [message])
+    if (!visible) return null;
 
     // 1. Call Contact Handler (Firebase fetch)
     const handleCallContact = async () => {
@@ -129,7 +131,7 @@ export default function Banner() {
                     },
                 ]}
             >
-                <Host matchContents>
+                <ThemedHost matchContents>
                     <Icon
                         name={Icon.select({
                             ios: "light.beacon.max.fill",
@@ -138,7 +140,7 @@ export default function Banner() {
                         color={themes.warnBttnText}
                         size={spacing.three}
                     />
-                </Host>
+                </ThemedHost>
             </View>
             <View
                 style={{
@@ -165,7 +167,7 @@ export default function Banner() {
                             hideBanner();
                         }}
                     >
-                        <Host matchContents>
+                        <ThemedHost matchContents>
                             <Icon
                                 name={Icon.select({
                                     ios: "xmark",
@@ -174,7 +176,7 @@ export default function Banner() {
                                 size={spacing.three}
                                 color={themes.textSecondary}
                             />
-                        </Host>
+                        </ThemedHost>
                     </Pressable>
                 </View>
 
@@ -202,7 +204,7 @@ export default function Banner() {
     );
 }
 
-const seatcard = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
     baseCard: {
         width: "100%",
         borderWidth: spacing.none,

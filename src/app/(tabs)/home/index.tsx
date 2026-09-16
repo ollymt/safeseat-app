@@ -1,7 +1,10 @@
+import ThemedHost from "@/components/themed-host";
 import EmergencyModal from "@/components/emergency-modal";
-import SeatCard, { SeatVitals } from "@/components/seat-card";
+import { SeatVitals } from "@/components/seat-card";
+import HomeMonitorRow from "@/components/home-monitor-row";
 import GuidePulseOverlay from "@/components/guide-pulse-overlay";
-import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
+import { FontSize as fontsize, Spacing as spacing, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
 import { useDriverGuide } from "@/hooks/driver-guide-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -71,7 +74,7 @@ const SEAT_ROLES: Record<number, string> = {
 
 const SEAT_NUMBERS = [1, 2, 3, 4, 5];
 
-const STATUS_COPY = {
+const buildStatusCopy = (themes: ThemePalette) => ({
   safe: {
     label: "SAFE",
     headline: "No unusual signs detected",
@@ -96,11 +99,17 @@ const STATUS_COPY = {
     detail: "",
     color: themes.info,
   },
-} as const;
+} as const);
 
-type OverallState = keyof typeof STATUS_COPY;
+type OverallState = "safe" | "warning" | "emergency" | "unknown";
 
-const getHeroColors = (state: OverallState): [string, string, string] => {
+const getHeroColors = (themes: ThemePalette, state: OverallState): [string, string, string] => {
+  if (themes.mode === "light") {
+    if (state === "safe") return ["#E4F7EC", "#EFF9F3", "#FFFFFF"];
+    if (state === "warning") return ["#FFF2D7", "#FFF8EA", "#FFFFFF"];
+    if (state === "emergency") return ["#FDE7E9", "#FFF3F4", "#FFFFFF"];
+    return ["#E6F1FB", "#F2F7FC", "#FFFFFF"];
+  }
   if (state === "safe") return ["#123429", "#102A27", "#0E1D29"];
   if (state === "warning") return ["#352F1F", "#1F2A2C", "#0E1D29"];
   if (state === "emergency") return ["#382329", "#23232D", "#0E1D29"];
@@ -108,6 +117,9 @@ const getHeroColors = (state: OverallState): [string, string, string] => {
 };
 
 export default function Home() {
+  const themes = useTheme();
+  const styles = createStyles(themes);
+  const STATUS_COPY = useMemo(() => buildStatusCopy(themes), [themes]);
   const router = useRouter();
   const { isStep, recordLiveSeatOpened } = useDriverGuide();
   const insets = useSafeAreaInsets();
@@ -385,7 +397,7 @@ export default function Home() {
   }, [assignments, getSeatState, hardwareSeatNo, overallState]);
 
   const copy = STATUS_COPY[overallState];
-  const heroColors = getHeroColors(overallState);
+  const heroColors = getHeroColors(themes, overallState);
   const overallIcon = overallState === "safe"
     ? Icon.select({ ios: "checkmark.circle.fill", android: checkXml })
     : overallState === "warning"
@@ -561,9 +573,9 @@ export default function Home() {
             },
           ]}
         >
-          <Host matchContents>
+          <ThemedHost matchContents>
             <Icon name={overallIcon} color={copy.color} size={52} />
-          </Host>
+          </ThemedHost>
         </Animated.View>
       </View>
     );
@@ -589,7 +601,7 @@ export default function Home() {
                 >
                   <Text style={styles.eyebrow}>SAFESEAT ACTIVE</Text>
                 </Pressable>
-                <Text style={styles.pageHeader}>Home</Text>
+                <Text style={styles.pageHeader}>Cabin Monitor</Text>
               </View>
 
               <View style={[styles.liveBadge, !hubConnected && styles.liveBadgeOffline]}>
@@ -608,22 +620,20 @@ export default function Home() {
             <View style={styles.activeSeatList}>
               {SEAT_NUMBERS.map((seatNo) => (
                 <View key={seatNo} style={styles.homeSeatRowActive}>
-                  <SeatCard
-                    home
+                  <HomeMonitorRow
                     seatNo={seatNo}
                     role={SEAT_ROLES[seatNo]}
                     name={getDisplayName(assignments[seatNo])}
                     photo={getProfilePhoto(assignments[seatNo])}
                     state={assignments[seatNo] ? getSeatState(seatNo) : "empty"}
-                    animationActive={screenFocused}
-                    animationCycle={animationCycle}
+                    isHardwareSeat={seatNo === hardwareSeatNo}
                     vitals={seatNo === hardwareSeatNo ? vitalSigns : undefined}
                     onPress={() => assignments[seatNo] ? showSeatDetails(seatNo) : router.push("/assign")}
                   />
                   <GuidePulseOverlay
                     active={isStep("alerts") && seatNo === (hardwareSeatNo ?? SEAT_NUMBERS.find((n) => Boolean(assignments[n])) ?? 1)}
                     label="TAP STATUS"
-                    borderRadius={21}
+                    borderRadius={18}
                     inset={-3}
                     beaconPosition="top"
                   />
@@ -642,13 +652,12 @@ export default function Home() {
                 style={({ pressed }) => [styles.sessionControl, styles.seatsControl, pressed && styles.controlPressed]}
               >
                 <View style={styles.sessionControlIcon}>
-                  <Host matchContents>
+                  <ThemedHost matchContents>
                     <Icon name={Icon.select({ ios: "carseat.right.fill", android: lockOpenXml })} size={23} color={themes.primaryBttn} />
-                  </Host>
+                  </ThemedHost>
                 </View>
                 <View style={styles.sessionControlCopy}>
                   <Text style={styles.sessionControlTitle}>Seats</Text>
-                  <Text style={styles.sessionControlText}>Change assignments</Text>
                 </View>
                 <Text style={styles.sessionControlChevron}>›</Text>
               </Pressable>
@@ -664,62 +673,72 @@ export default function Home() {
                 </View>
                 <View style={styles.sessionControlCopy}>
                   <Text style={styles.endControlTitle}>End Session</Text>
-                  <Text style={styles.endControlText}>Stop monitoring</Text>
                 </View>
               </Pressable>
             </View>
           </View>
         ) : (
-          <ScrollView
-            contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
-            showsVerticalScrollIndicator={false}
-            bounces
-          >
-            <View style={styles.container}>
-              <View style={styles.headerRow}>
-                <View>
-                  <Text style={styles.eyebrow}>SAFESEAT</Text>
-                  <Text style={styles.pageHeader}>Home</Text>
-                </View>
+          <View style={styles.activeContainer}>
+            <View style={styles.headerRow}>
+              <View>
+                <Text style={styles.eyebrow}>SAFESEAT</Text>
+                <Text style={styles.pageHeader}>Cabin Monitor</Text>
               </View>
 
-              <View style={styles.preSessionTopRow}>
-                <View>
-                  <Text style={styles.preSessionLabel}>SEAT SETUP</Text>
-                  <Text style={styles.preSessionTitle}>{assignedSeatCount}/5 selected</Text>
-                </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Choose seats"
-                  onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    router.push("/assign");
-                  }}
-                  style={({ pressed }) => [styles.chooseSeatsButton, pressed && styles.controlPressed]}
-                >
-                  <Text style={styles.chooseSeatsButtonText}>Choose Seats</Text>
-                </Pressable>
-              </View>
-
-              <View style={styles.homeSeatList}>
-                {SEAT_NUMBERS.map((seatNo) => (
-                  <View key={seatNo} style={styles.homeSeatRow}>
-                    <SeatCard
-                      compact
-                      seatNo={seatNo}
-                      role={SEAT_ROLES[seatNo]}
-                      name={getDisplayName(assignments[seatNo])}
-                      photo={getProfilePhoto(assignments[seatNo])}
-                      state={assignments[seatNo] ? getSeatState(seatNo) : "empty"}
-                      animationActive={false}
-                      animationCycle={animationCycle}
-                      onPress={() => router.push("/assign")}
-                    />
-                  </View>
-                ))}
+              <View style={styles.setupBadge}>
+                <View style={styles.setupBadgeDot} />
+                <Text style={styles.setupBadgeText}>SETUP</Text>
               </View>
             </View>
-          </ScrollView>
+
+            <View style={styles.activeSeatList}>
+              {SEAT_NUMBERS.map((seatNo) => {
+                const profile = assignments[seatNo];
+                let setupState: SeatState = "empty";
+
+                if (profile) {
+                  const accountOwnerDriver = seatNo === 1 && Boolean(profile.isAccountOwner);
+                  const consent = consents[seatNo];
+                  if (!accountOwnerDriver && consent === "declined") setupState = "declined";
+                  else if (!accountOwnerDriver && consent !== "confirmed") setupState = "consent";
+                  else if (seatNo === hardwareSeatNo) setupState = hubConnected && telemetryReady ? "ready" : "offline";
+                  else setupState = "assigned";
+                }
+
+                return (
+                  <View key={seatNo} style={styles.homeSeatRowActive}>
+                    <HomeMonitorRow
+                      seatNo={seatNo}
+                      role={SEAT_ROLES[seatNo]}
+                      name={getDisplayName(profile)}
+                      photo={getProfilePhoto(profile)}
+                      state={setupState}
+                      isHardwareSeat={seatNo === hardwareSeatNo}
+                      onPress={() => {
+                        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        router.push("/assign");
+                      }}
+                    />
+                  </View>
+                );
+              })}
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Configure seats"
+              onPress={() => {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push("/assign");
+              }}
+              style={({ pressed }) => [styles.setupAction, pressed && styles.controlPressed]}
+            >
+              <View style={styles.setupActionCopy}>
+                <Text style={styles.setupActionTitle}>Set Up Seats</Text>
+              </View>
+              <Text style={styles.setupActionChevron}>›</Text>
+            </Pressable>
+          </View>
         )}
 
         <Modal
@@ -842,7 +861,7 @@ export default function Home() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: themes.background,
@@ -864,7 +883,7 @@ const styles = StyleSheet.create({
     width: 280,
     height: 280,
     borderRadius: 140,
-    backgroundColor: "#163A4C",
+    backgroundColor: themes.info,
     opacity: 0.13,
     bottom: 30,
     left: -185,
@@ -878,15 +897,48 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.two,
     paddingTop: spacing.half,
     paddingBottom: spacing.one,
-    gap: spacing.one,
+    gap: 7,
     minHeight: 0,
   },
   activeSeatList: { flex: 1, minHeight: 0, gap: 7 },
   homeSeatRowActive: { flex: 1, minHeight: 0, width: "100%", position: "relative", overflow: "visible" },
+  monitorBoardHeader: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 2, marginTop: -2 },
+  monitorBoardEyebrow: { color: themes.primaryBttn, fontSize: 9, letterSpacing: 1.05, fontFamily: "Body-Bold" },
+  monitorBoardTitle: { color: themes.text, fontSize: 14.5, lineHeight: 17, fontFamily: "Body-Bold", marginTop: 1 },
+  monitorBoardHint: { color: themes.textMuted, fontSize: 8.5, lineHeight: 11, fontFamily: "Body-Regular", textAlign: "right" },
+  setupBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: themes.surfaceSoft,
+    borderWidth: 1,
+    borderColor: themes.divider,
+  },
+  setupBadgeDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: themes.lightOrange },
+  setupBadgeText: { color: themes.textSecondary, fontSize: 10, letterSpacing: 0.7, fontFamily: "Body-Bold" },
+  setupAction: {
+    minHeight: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: themes.primaryBorder,
+    backgroundColor: themes.primarySoft,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  setupActionCopy: { flex: 1, minWidth: 0 },
+  setupActionTitle: { color: themes.primaryBttn, fontSize: 15, lineHeight: 18, fontFamily: "Body-Bold" },
+  setupActionText: { color: themes.textSecondary, fontSize: 10.5, lineHeight: 13, fontFamily: "Body-Regular", marginTop: 2 },
+  setupActionChevron: { color: themes.primaryBttn, fontSize: 26, lineHeight: 28, fontFamily: "Body-Regular" },
 
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  eyebrow: { color: themes.primaryBttn, fontSize: 9.5, letterSpacing: 1.35, fontFamily: "Body-Bold" },
-  pageHeader: { fontSize: fontsize.pageHeader, fontFamily: "Logo-Font", color: themes.text, marginTop: 1 },
+  eyebrow: { color: themes.primaryBttn, fontSize: 11.5, letterSpacing: 1.25, fontFamily: "Body-Bold" },
+  pageHeader: { fontSize: fontsize.pageHeader + 2, fontFamily: "Logo-Font", color: themes.text, marginTop: 1 },
   liveBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -894,7 +946,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.one + 3,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: "rgba(52,209,127,0.10)",
+    backgroundColor: themes.primarySoft,
     borderWidth: 1,
     borderColor: themes.primaryBorder,
     shadowColor: themes.primaryBttn,
@@ -906,7 +958,7 @@ const styles = StyleSheet.create({
   livePulseRing: { position: "absolute", width: 8, height: 8, borderRadius: 4, backgroundColor: themes.primaryBttn },
   liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: themes.primaryBttn },
   liveDotOffline: { backgroundColor: themes.textMuted },
-  liveText: { color: themes.primaryBttn, fontSize: 9, letterSpacing: 0.7, fontFamily: "Body-Bold" },
+  liveText: { color: themes.primaryBttn, fontSize: 10.5, letterSpacing: 0.7, fontFamily: "Body-Bold" },
   liveTextOffline: { color: themes.textMuted },
 
   statusConsole: {
@@ -917,7 +969,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.two,
     borderRadius: 28,
     borderWidth: 1.1,
-    shadowColor: "#000",
+    shadowColor: themes.shadow,
     shadowOpacity: 0.3,
     shadowRadius: 26,
     shadowOffset: { width: 0, height: 12 },
@@ -968,9 +1020,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.045)",
+    backgroundColor: themes.surfaceSoft,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.07)",
+    borderColor: themes.divider,
   },
   occupantPillNumber: { color: themes.text, fontSize: 11, fontFamily: "Body-Bold" },
   occupantPillLabel: { color: themes.textMuted, fontSize: 7.5, letterSpacing: 0.45, fontFamily: "Body-Bold" },
@@ -1001,7 +1053,7 @@ const styles = StyleSheet.create({
     zIndex: 3,
   },
   symbolCoreRaised: {
-    shadowColor: "#000",
+    shadowColor: themes.shadow,
     shadowOpacity: 0.22,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 7 },
@@ -1059,15 +1111,13 @@ const styles = StyleSheet.create({
     gap: spacing.one,
     paddingTop: spacing.one + 2,
     borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.07)",
+    borderTopColor: themes.divider,
   },
   monitoringChip: { flexDirection: "row", alignItems: "center", gap: 7, flexShrink: 1 },
   monitoringChipDot: { width: 7, height: 7, borderRadius: 4 },
   monitoringChipText: { color: themes.textSecondary, fontSize: 9.5, fontFamily: "Body-Bold" },
   consoleBottomHint: { color: themes.textMuted, fontSize: 8.5, fontFamily: "Body-Regular", textAlign: "right", flexShrink: 1 },
 
-  homeSeatList: { gap: 8 },
-  homeSeatRow: { width: "100%" },
   preSessionTopRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1089,13 +1139,13 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 5 },
     elevation: 3,
   },
-  chooseSeatsButtonText: { color: themes.background, fontSize: 11, fontFamily: "Body-Bold" },
+  chooseSeatsButtonText: { color: themes.primaryBttnText, fontSize: 13, fontFamily: "Body-Bold" },
 
   sessionControls: { flexDirection: "row", gap: spacing.one },
   sessionControl: {
     flex: 1,
-    minHeight: 52,
-    borderRadius: 18,
+    minHeight: 48,
+    borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
     alignItems: "center",
@@ -1103,12 +1153,12 @@ const styles = StyleSheet.create({
     gap: spacing.one,
   },
   seatsControl: {
-    backgroundColor: "rgba(18,56,39,0.50)",
+    backgroundColor: themes.primarySoft,
     borderColor: themes.primaryBorder,
   },
   endControl: {
-    backgroundColor: "rgba(255,103,111,0.045)",
-    borderColor: "rgba(255,103,111,0.22)",
+    backgroundColor: `${themes.warnBttn}0D`,
+    borderColor: `${themes.warnBttn}38`,
   },
   controlPressed: { opacity: 0.77, transform: [{ scale: 0.985 }] },
   sessionControlIcon: {
@@ -1122,8 +1172,8 @@ const styles = StyleSheet.create({
     borderColor: themes.primaryBorder,
   },
   sessionControlCopy: { flex: 1, minWidth: 0 },
-  sessionControlTitle: { color: themes.text, fontSize: 13, fontFamily: "Body-Bold" },
-  sessionControlText: { color: themes.textMuted, fontSize: 8.5, marginTop: 2, fontFamily: "Body-Regular" },
+  sessionControlTitle: { color: themes.text, fontSize: 16, fontFamily: "Body-Bold" },
+  sessionControlText: { color: themes.textMuted, fontSize: 10.5, marginTop: 2, fontFamily: "Body-Regular" },
   sessionControlChevron: { color: themes.primaryBttn, fontSize: 27, lineHeight: 27, fontFamily: "Body-Regular" },
   endIconWrap: {
     width: 38,
@@ -1131,13 +1181,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,103,111,0.08)",
+    backgroundColor: `${themes.warnBttn}14`,
     borderWidth: 1,
-    borderColor: "rgba(255,103,111,0.24)",
+    borderColor: `${themes.warnBttn}3D`,
   },
   endIconSquare: { width: 13, height: 13, borderRadius: 3, backgroundColor: themes.warnBttn },
-  endControlTitle: { color: themes.warnBttn, fontSize: 12.5, fontFamily: "Body-Bold" },
-  endControlText: { color: themes.textMuted, fontSize: 8.5, marginTop: 2, fontFamily: "Body-Regular" },
+  endControlTitle: { color: themes.warnBttn, fontSize: 14.5, fontFamily: "Body-Bold" },
+  endControlText: { color: themes.textMuted, fontSize: 10.5, marginTop: 2, fontFamily: "Body-Regular" },
 
   section: { gap: spacing.one },
   sectionHeadingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 },
@@ -1168,7 +1218,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: themes.primaryBorder,
     minHeight: 410,
-    shadowColor: "#000",
+    shadowColor: themes.shadow,
     shadowOpacity: 0.24,
     shadowRadius: 22,
     shadowOffset: { width: 0, height: 11 },
@@ -1191,7 +1241,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: "rgba(52,209,127,0.08)",
+    backgroundColor: themes.primarySoft,
     borderWidth: 1,
     borderColor: themes.primaryBorder,
   },
@@ -1205,9 +1255,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.two,
     padding: spacing.one + 4,
     borderRadius: 22,
-    backgroundColor: "rgba(5,14,23,0.42)",
+    backgroundColor: themes.surfaceSoft,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.07)",
+    borderColor: themes.divider,
     gap: spacing.one,
   },
   cabinPreviewHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 2 },
@@ -1221,20 +1271,20 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.035)",
+    backgroundColor: themes.backgroundElement,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.075)",
+    borderColor: themes.divider,
   },
-  cabinSeatPrimary: { backgroundColor: "rgba(52,209,127,0.075)", borderColor: themes.primaryBorder },
+  cabinSeatPrimary: { backgroundColor: themes.primarySoft, borderColor: themes.primaryBorder },
   cabinSeatSmall: {
     flex: 1,
     minHeight: 58,
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.03)",
+    backgroundColor: themes.backgroundElement,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.065)",
+    borderColor: themes.divider,
   },
   cabinSeatShort: { color: themes.primaryBttn, fontSize: 16, fontFamily: "Body-Bold" },
   cabinSeatShortSmall: { color: themes.textSecondary, fontSize: 13, fontFamily: "Body-Bold" },
@@ -1245,9 +1295,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.two,
     borderRadius: 20,
     padding: spacing.one + 4,
-    backgroundColor: "rgba(7,17,27,0.52)",
+    backgroundColor: themes.surfaceSoft,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: themes.divider,
     gap: spacing.one,
   },
   setupSummaryTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.one },
@@ -1260,7 +1310,7 @@ const styles = StyleSheet.create({
   setupSummaryStatusText: { color: themes.textMuted, fontSize: 7.5, letterSpacing: 0.55, fontFamily: "Body-Bold" },
   setupSummaryStatusTextReady: { color: themes.primaryBttn },
   setupPeoplePreview: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
-  setupPersonChip: { width: "48.5%", minHeight: 46, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 8, paddingVertical: 7, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.035)", borderWidth: 1, borderColor: "rgba(255,255,255,0.06)" },
+  setupPersonChip: { width: "48.5%", minHeight: 46, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 8, paddingVertical: 7, borderRadius: 14, backgroundColor: themes.backgroundElement, borderWidth: 1, borderColor: themes.divider },
   setupPersonAvatar: { width: 30, height: 30, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: themes.primarySoft, borderWidth: 1, borderColor: themes.primaryBorder },
   setupPersonInitial: { color: themes.primaryBttn, fontSize: 11, fontFamily: "Body-Bold" },
   setupPersonName: { color: themes.text, fontSize: 10.5, fontFamily: "Body-Bold" },
@@ -1293,12 +1343,12 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(5,22,14,0.12)",
+    backgroundColor: themes.mode === "dark" ? "rgba(5,22,14,0.12)" : "rgba(255,255,255,0.18)",
   },
   setupPrimaryIconText: { color: themes.primaryBttnText, fontSize: 25, lineHeight: 27, fontFamily: "Body-Regular" },
   setupPrimaryCopy: { flex: 1 },
   setupPrimaryTitle: { color: themes.primaryBttnText, fontSize: 14, fontFamily: "Body-Bold" },
-  setupPrimaryText: { color: "rgba(5,22,14,0.72)", fontSize: 9, marginTop: 2, fontFamily: "Body-Bold" },
+  setupPrimaryText: { color: themes.mode === "dark" ? "rgba(5,22,14,0.72)" : "rgba(255,255,255,0.84)", fontSize: 9, marginTop: 2, fontFamily: "Body-Bold" },
   setupPrimaryChevron: { color: themes.primaryBttnText, fontSize: 28, lineHeight: 28, fontFamily: "Body-Regular" },
 
   uatModalCard: {
@@ -1322,7 +1372,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(52,209,127,0.09)",
+    backgroundColor: themes.primarySoft,
     borderWidth: 1,
     borderColor: themes.primaryBorder,
   },
@@ -1343,21 +1393,21 @@ const styles = StyleSheet.create({
   uatCloseText: { color: themes.textMuted, fontSize: 12, fontFamily: "Body-Bold" },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(3,8,15,0.78)",
+    backgroundColor: themes.overlay,
     justifyContent: "flex-end",
     paddingHorizontal: spacing.two,
     paddingBottom: spacing.two,
   },
   endModalCard: {
     borderRadius: 30,
-    backgroundColor: "#111C2D",
+    backgroundColor: themes.backgroundElevated,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.09)",
+    borderColor: themes.divider,
     paddingHorizontal: spacing.three,
     paddingTop: spacing.one,
     paddingBottom: spacing.three,
     alignItems: "center",
-    shadowColor: "#000",
+    shadowColor: themes.shadow,
     shadowOpacity: 0.45,
     shadowRadius: 30,
     shadowOffset: { width: 0, height: -10 },
@@ -1378,7 +1428,7 @@ const styles = StyleSheet.create({
   endModalStopSquare: { width: 22, height: 22, borderRadius: 5, backgroundColor: themes.warnBttn },
   endModalEyebrow: { color: themes.warnBttn, fontSize: 8.5, letterSpacing: 1.15, fontFamily: "Body-Bold" },
   endModalTitle: { color: themes.text, fontSize: 25, lineHeight: 30, fontFamily: "Body-Bold", marginTop: 5, textAlign: "center" },
-  endModalText: { color: themes.textSecondary, fontSize: 12, lineHeight: 18, fontFamily: "Body-Regular", textAlign: "center", marginTop: spacing.one, maxWidth: 315 },
+  endModalText: { color: themes.textSecondary, fontSize: 14, lineHeight: 20, fontFamily: "Body-Regular", textAlign: "center", marginTop: spacing.one, maxWidth: 315 },
   endModalActions: { width: "100%", gap: spacing.one, marginTop: spacing.three },
   keepMonitoringButton: {
     minHeight: 52,
@@ -1389,7 +1439,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: themes.primaryBorder,
   },
-  keepMonitoringText: { color: themes.primaryBttn, fontSize: 13, fontFamily: "Body-Bold" },
+  keepMonitoringText: { color: themes.primaryBttn, fontSize: 15, fontFamily: "Body-Bold" },
   confirmEndButton: {
     minHeight: 52,
     flexDirection: "row",
@@ -1402,7 +1452,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,103,111,0.28)",
   },
   confirmEndDot: { width: 11, height: 11, borderRadius: 3, backgroundColor: themes.warnBttn },
-  confirmEndText: { color: themes.warnBttn, fontSize: 13, fontFamily: "Body-Bold" },
+  confirmEndText: { color: themes.warnBttn, fontSize: 15, fontFamily: "Body-Bold" },
   modalButtonPressed: { opacity: 0.76, transform: [{ scale: 0.99 }] },
   disabledButton: { opacity: 0.55 },
   guideTarget: {

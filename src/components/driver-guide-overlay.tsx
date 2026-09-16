@@ -1,10 +1,13 @@
-import { Spacing as spacing, Themes as themes } from "@/constants/theme";
+import { Spacing as spacing, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { useDriverGuide } from "@/hooks/driver-guide-context";
 import * as Haptics from "expo-haptics";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function DriverGuideOverlay() {
+  const themes = useTheme();
+  const styles = createStyles(themes);
   const {
     active,
     step,
@@ -113,11 +116,11 @@ export default function DriverGuideOverlay() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
   safeArea: { flex: 1 },
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(4, 10, 20, 0.70)",
+    backgroundColor: themes.mode === "dark" ? "rgba(4,10,20,0.70)" : "rgba(16,32,51,0.28)",
   },
   coachCard: {
     position: "absolute",
@@ -127,7 +130,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 11,
     borderRadius: 17,
-    backgroundColor: "rgba(10, 22, 36, 0.96)",
+    backgroundColor: themes.backgroundElevated,
     borderWidth: 1,
     borderColor: "rgba(31,210,149,0.40)",
     shadowColor: "#000",
@@ -144,7 +147,7 @@ const styles = StyleSheet.create({
     top: "27%",
     padding: spacing.two,
     borderRadius: 22,
-    backgroundColor: "#101B2CF7",
+    backgroundColor: themes.backgroundElevated,
     borderWidth: 1,
     borderColor: "rgba(31,210,149,0.44)",
     shadowColor: "#000",
@@ -160,22 +163,22 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   badge: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: themes.primaryBttn },
-  eyebrow: { color: themes.primaryBttn, fontSize: 8.5, letterSpacing: 0.85, fontFamily: "Body-Bold", flexShrink: 1 },
-  exitInline: { color: themes.textMuted, fontSize: 9, letterSpacing: 0.6, fontFamily: "Body-Bold" },
-  coachTitle: { color: themes.text, fontSize: 15, lineHeight: 19, fontFamily: "Body-Bold" },
-  heroTitle: { color: themes.text, fontSize: 22, lineHeight: 27, fontFamily: "Body-Bold" },
-  heroBody: { color: themes.textSecondary, fontSize: 13, lineHeight: 19, fontFamily: "Body-Regular" },
+  eyebrow: { color: themes.primaryBttn, fontSize: 10.5, letterSpacing: 0.85, fontFamily: "Body-Bold", flexShrink: 1 },
+  exitInline: { color: themes.textMuted, fontSize: 10.5, letterSpacing: 0.6, fontFamily: "Body-Bold" },
+  coachTitle: { color: themes.text, fontSize: 17, lineHeight: 22, fontFamily: "Body-Bold" },
+  heroTitle: { color: themes.text, fontSize: 25, lineHeight: 31, fontFamily: "Body-Bold" },
+  heroBody: { color: themes.textSecondary, fontSize: 15, lineHeight: 21, fontFamily: "Body-Regular" },
   doRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   doArrow: { width: 23, height: 23, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: themes.primarySoft, borderWidth: 1, borderColor: themes.primaryBorder },
   doArrowText: { color: themes.primaryBttn, fontSize: 15, lineHeight: 18, fontFamily: "Body-Bold" },
-  doText: { flex: 1, color: themes.textSecondary, fontSize: 11.5, lineHeight: 15.5, fontFamily: "Body-Bold" },
+  doText: { flex: 1, color: themes.textSecondary, fontSize: 13.5, lineHeight: 18, fontFamily: "Body-Bold" },
   waitRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingTop: 1 },
   waitDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: themes.primaryBttn },
-  waitText: { color: themes.textMuted, fontSize: 9.5, fontFamily: "Body-Medium" },
+  waitText: { color: themes.textMuted, fontSize: 11, fontFamily: "Body-Medium" },
   heroActions: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.one, marginTop: 2 },
   skipButton: { minHeight: 42, justifyContent: "center", paddingHorizontal: 5 },
-  skipText: { color: themes.textMuted, fontSize: 12, fontFamily: "Body-Bold" },
+  skipText: { color: themes.textMuted, fontSize: 14, fontFamily: "Body-Bold" },
   primaryButton: { minHeight: 44, justifyContent: "center", paddingHorizontal: 19, borderRadius: 13, backgroundColor: themes.primaryBttn },
-  primaryText: { color: themes.primaryBttnText, fontSize: 13, fontFamily: "Body-Bold" },
+  primaryText: { color: themes.primaryBttnText, fontSize: 15, fontFamily: "Body-Bold" },
   pressed: { opacity: 0.76, transform: [{ scale: 0.985 }] },
 });

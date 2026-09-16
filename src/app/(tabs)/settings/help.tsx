@@ -1,84 +1,25 @@
-import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
+import { FontSize as fontsize, Spacing as spacing, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 const STEPS = [
   ["1", "Choose seats", "Assign the driver and passengers to their actual seats."],
-  ["2", "Confirm passenger consent", "Passengers must agree before monitoring. The account owner in Driver is ready automatically."],
-  ["3", "Check SafeSeat", "The monitored seat must show Ready and the SafeSeat connection must be online."],
-  ["4", "Start Monitoring", "Use the fixed action at the bottom of Seats to begin the trip."],
-];
-
-const STATES = [
-  ["SAFE", "No unusual signs detected", themes.green],
-  ["WARNING", "Check the passenger", themes.lightOrange],
-  ["EMERGENCY", "Immediate attention may be needed", themes.warnBttn],
-  ["ANALYZING", "SafeSeat is still checking", themes.info],
-  ["OFFLINE", "Monitoring data is not available", themes.textMuted],
+  ["2", "Confirm passenger consent", "Passengers must agree before monitoring. The signed-in Driver is ready automatically."],
+  ["3", "Check SafeSeat", "The monitored seat must show Ready and SafeSeat must be online."],
+  ["4", "Start Monitoring", "Use the fixed action at the bottom of Seats."],
 ];
 
 export default function QuickHelp() {
-  const insets = useSafeAreaInsets();
-  return (
-    <SafeAreaView style={styles.screen} edges={["left", "right", "bottom"]}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 90 + insets.bottom }]} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.eyebrow}>QUICK HELP</Text>
-          <Text style={styles.title}>Using SafeSeat</Text>
-        </View>
-
-        <Text style={styles.sectionLabel}>START A TRIP</Text>
-        <View style={styles.card}>
-          {STEPS.map(([number, title, detail], index) => (
-            <View key={number} style={[styles.stepRow, index < STEPS.length - 1 && styles.divider]}>
-              <View style={styles.number}><Text style={styles.numberText}>{number}</Text></View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.stepTitle}>{title}</Text>
-                <Text style={styles.stepDetail}>{detail}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-
-        <Text style={styles.sectionLabel}>STATUS GUIDE</Text>
-        <View style={styles.card}>
-          {STATES.map(([label, detail, color], index) => (
-            <View key={String(label)} style={[styles.stateRow, index < STATES.length - 1 && styles.divider]}>
-              <View style={[styles.dot, { backgroundColor: String(color) }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.stateLabel, { color: String(color) }]}>{label}</Text>
-                <Text style={styles.stepDetail}>{detail}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-
-        <Text style={styles.sectionLabel}>DURING AN ALERT</Text>
-        <View style={styles.cardCompact}>
-          <Text style={styles.alertText}>Check which seat is affected, review the available heart-rate and breathing-rate indicators, and respond to the passenger’s condition.</Text>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
+  const themes=useTheme(); const styles=createStyles(themes); const insets=useSafeAreaInsets();
+  const states=[
+    ["SAFE","No unusual signs detected",themes.green],["WARNING","Check the person in that seat",themes.lightOrange],["EMERGENCY","Immediate attention may be needed",themes.warnBttn],["ANALYZING","SafeSeat is still checking",themes.info],["OFFLINE","Monitoring data is not available",themes.textMuted],
+  ];
+  return <SafeAreaView style={styles.screen} edges={["left","right","bottom"]}><ScrollView contentContainerStyle={[styles.content,{paddingBottom:90+insets.bottom}]} showsVerticalScrollIndicator={false}>
+    <View style={styles.header}><Text style={styles.eyebrow}>QUICK HELP</Text><Text style={styles.title}>Using SafeSeat</Text></View>
+    <Text style={styles.sectionLabel}>START A TRIP</Text><View style={styles.card}>{STEPS.map(([n,t,d],i)=><View key={n} style={[styles.stepRow,i<STEPS.length-1&&styles.divider]}><View style={styles.number}><Text style={styles.numberText}>{n}</Text></View><View style={{flex:1}}><Text style={styles.stepTitle}>{t}</Text><Text style={styles.stepDetail}>{d}</Text></View></View>)}</View>
+    <Text style={styles.sectionLabel}>STATUS GUIDE</Text><View style={styles.card}>{states.map(([l,d,c],i)=><View key={String(l)} style={[styles.stateRow,i<states.length-1&&styles.divider]}><View style={[styles.dot,{backgroundColor:String(c)}]}/><View style={{flex:1}}><Text style={[styles.stateLabel,{color:String(c)}]}>{l}</Text><Text style={styles.stepDetail}>{d}</Text></View></View>)}</View>
+    <Text style={styles.sectionLabel}>DURING AN ALERT</Text><View style={styles.cardCompact}><Text style={styles.alertText}>Check the affected seat, review available heart-rate and breathing-rate indicators, and respond to the person’s condition. Passenger emergencies alert the driver; automated SMS is Driver-seat only.</Text></View>
+  </ScrollView></SafeAreaView>
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: themes.background },
-  content: { paddingHorizontal: spacing.two, paddingTop: 58, gap: spacing.one + 4 },
-  header: { marginBottom: spacing.one },
-  eyebrow: { color: themes.primaryBttn, fontSize: 10, letterSpacing: 1.3, fontFamily: "Body-Bold" },
-  title: { color: themes.text, fontSize: fontsize.pageHeader, fontFamily: "Logo-Font", marginTop: 3 },
-  sectionLabel: { color: themes.textMuted, fontSize: 10, letterSpacing: 1.15, fontFamily: "Body-Bold", marginTop: spacing.one },
-  card: { borderRadius: 18, backgroundColor: themes.backgroundElement, borderWidth: 1, borderColor: themes.divider, overflow: "hidden" },
-  cardCompact: { borderRadius: 18, backgroundColor: themes.backgroundElement, borderWidth: 1, borderColor: themes.divider, padding: spacing.two },
-  stepRow: { minHeight: 72, flexDirection: "row", alignItems: "center", gap: spacing.one + 4, padding: spacing.one + 4 },
-  stateRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: spacing.one + 4, paddingHorizontal: spacing.two, paddingVertical: spacing.one },
-  divider: { borderBottomWidth: 1, borderBottomColor: themes.divider },
-  number: { width: 32, height: 32, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: themes.primarySoft, borderWidth: 1, borderColor: themes.primaryBorder },
-  numberText: { color: themes.primaryBttn, fontSize: 13, fontFamily: "Body-Bold" },
-  stepTitle: { color: themes.text, fontSize: 14, fontFamily: "Body-Bold" },
-  stepDetail: { color: themes.textSecondary, fontSize: 12, lineHeight: 17, marginTop: 2, fontFamily: "Body-Regular" },
-  dot: { width: 10, height: 10, borderRadius: 5 },
-  stateLabel: { fontSize: 11, letterSpacing: 0.7, fontFamily: "Body-Bold" },
-  alertText: { color: themes.textSecondary, fontSize: 13, lineHeight: 19, fontFamily: "Body-Regular" },
-});
+const createStyles=(t:ThemePalette)=>StyleSheet.create({screen:{flex:1,backgroundColor:t.background},content:{paddingHorizontal:spacing.two,paddingTop:38,gap:12},header:{marginBottom:8},eyebrow:{color:t.primaryBttn,fontSize:12,letterSpacing:1.2,fontFamily:"Body-Bold"},title:{color:t.text,fontSize:fontsize.pageHeader,fontFamily:"Logo-Font",marginTop:3},sectionLabel:{color:t.textMuted,fontSize:12,letterSpacing:1.1,fontFamily:"Body-Bold",marginTop:8},card:{borderRadius:18,backgroundColor:t.backgroundElement,borderWidth:1,borderColor:t.divider,overflow:"hidden"},cardCompact:{borderRadius:18,backgroundColor:t.backgroundElement,borderWidth:1,borderColor:t.divider,padding:spacing.two},stepRow:{minHeight:80,flexDirection:"row",alignItems:"center",gap:12,padding:14},stateRow:{minHeight:66,flexDirection:"row",alignItems:"center",gap:12,paddingHorizontal:16,paddingVertical:10},divider:{borderBottomWidth:1,borderBottomColor:t.divider},number:{width:36,height:36,borderRadius:12,alignItems:"center",justifyContent:"center",backgroundColor:t.primarySoft,borderWidth:1,borderColor:t.primaryBorder},numberText:{color:t.primaryBttn,fontSize:15,fontFamily:"Body-Bold"},stepTitle:{color:t.text,fontSize:16,fontFamily:"Body-Bold"},stepDetail:{color:t.textSecondary,fontSize:14,lineHeight:20,marginTop:2,fontFamily:"Body-Regular"},dot:{width:11,height:11,borderRadius:6},stateLabel:{fontSize:13,letterSpacing:.6,fontFamily:"Body-Bold"},alertText:{color:t.textSecondary,fontSize:15,lineHeight:22,fontFamily:"Body-Regular"}});

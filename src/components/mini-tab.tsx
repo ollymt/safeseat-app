@@ -1,4 +1,5 @@
-import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
+import { FontSize as fontsize, Spacing as spacing, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { Pressable, StyleSheet, Text, View, ViewStyle } from "react-native";
 
 type MiniTabProps = {
@@ -9,7 +10,9 @@ type MiniTabProps = {
 };
 
 export default function MiniTab({ values, selectedIndex, onChange, style }: MiniTabProps) {
-  return (
+
+  const themes = useTheme();
+  const styles = createStyles(themes);  return (
     <View style={[styles.container, style]}>
       {values.map((item, index) => {
         const isSelected = selectedIndex === index;
@@ -33,7 +36,7 @@ export default function MiniTab({ values, selectedIndex, onChange, style }: Mini
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
   container: {
     flexDirection: "row",
     padding: spacing.half,

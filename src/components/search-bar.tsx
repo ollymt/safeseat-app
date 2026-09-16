@@ -5,9 +5,9 @@ import {
     View,
     Platform,
     PlatformColor,
-    useColorScheme,
 } from "react-native";
-import { Themes } from "@/constants/theme";
+import { type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 
 type Props = {
     value: string;
@@ -20,9 +20,11 @@ export default function AdaptiveSearchBar({
     onChangeText,
     placeholder = "Search...",
 }: Props) {
-    const colorScheme = useColorScheme();
-    const isDark = colorScheme === "dark";
-    const currentTheme = Themes[isDark ? "dark" : "light"];
+
+  const themes = useTheme();
+  const styles = createStyles(themes);
+    const isDark = themes.mode === "dark";
+    const currentTheme = themes;
 
     // 🎨 iOS Liquid Glass Styles
     const iosGlassColor = isDark
@@ -72,7 +74,7 @@ export default function AdaptiveSearchBar({
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
     baseContainer: {
         width: "100%",
         height: 50,

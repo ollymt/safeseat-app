@@ -1,19 +1,3 @@
 import { Stack } from "expo-router";
-import { Themes as themes } from "@/constants/theme";
-
-export default function TabsLayout() {
-  return (
-    <Stack
-      screenOptions={{
-        headerShown: true,
-        headerTransparent: true,
-        title: "",
-        headerTintColor: themes.text,
-        headerShadowVisible: false,
-        animation: "slide_from_right",
-      }}
-    >
-      <Stack.Screen name="index" />
-    </Stack>
-  );
-}
+import { useTheme } from "@/hooks/use-theme";
+export default function TabsLayout(){const themes=useTheme();return <Stack screenOptions={{headerShown:true,headerTransparent:true,title:"",headerTintColor:themes.text,headerShadowVisible:false,animation:"slide_from_right",contentStyle:{backgroundColor:themes.background}}}><Stack.Screen name="index" /></Stack>}

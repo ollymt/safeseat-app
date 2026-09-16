@@ -1,4 +1,5 @@
-import { Themes } from "@/constants/theme";
+import ThemedHost from "@/components/themed-host";
+import { useTheme } from "@/hooks/use-theme";
 import { Host, Icon } from "@expo/ui";
 import { DatePicker } from "@expo/ui/swift-ui";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -8,7 +9,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  useColorScheme,
   View,
 } from "react-native";
 
@@ -31,9 +31,7 @@ export default function SettingDatePickerItem({
   onPress,
   onValueChange,
 }: SettingDatePickerProps) {
-  const colorScheme = useColorScheme();
-  const activeScheme = colorScheme === "dark" ? "dark" : "light";
-  const currentTheme = Themes[activeScheme];
+  const currentTheme = useTheme();
 
   // Micro-debounce handler ref to avoid multiple writes while scrolling native wheel/month calendars
   // @ts-ignore
@@ -109,9 +107,9 @@ export default function SettingDatePickerItem({
       style={[
         setitem.setItemBase,
         {
-          backgroundColor: currentTheme.element,
+          backgroundColor: currentTheme.backgroundElement,
           borderBottomWidth: isLast ? 0 : 1,
-          borderBottomColor: currentTheme.border,
+          borderBottomColor: currentTheme.divider,
         },
       ]}
     >
@@ -127,9 +125,9 @@ export default function SettingDatePickerItem({
               },
             ]}
           >
-            <Host style={{ width: 22, height: 22 }}>
+            <ThemedHost style={{ width: 22, height: 22 }}>
               <Icon name={iconName} color={currentTheme.primaryBttnText} />
-            </Host>
+            </ThemedHost>
           </View>
         )}
 
@@ -149,13 +147,13 @@ export default function SettingDatePickerItem({
         }}
       >
         {Platform.OS === "ios" ? (
-          <Host matchContents>
+          <ThemedHost matchContents>
             <DatePicker
               selection={selectedBirthday}
               displayedComponents={["date"]}
               onDateChange={handleDateChange}
             />
-          </Host>
+          </ThemedHost>
         ) : (
           <>
             <Pressable

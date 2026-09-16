@@ -1,5 +1,7 @@
+import ThemedHost from "@/components/themed-host";
 // components/ChangePhoneModal.tsx
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { Spacing as spacing, FontSize as fontsize, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
 import { Host, Icon } from "@expo/ui";
@@ -38,6 +40,8 @@ const isValidPhoneNumber = (phone: string): boolean => {
 };
 
 export default function ChangePhoneModal({ visible, onClose, onSuccess }: Props) {
+    const themes = useTheme();
+    const styles = createStyles(themes);
     const [isLoading, setIsLoading] = useState(false);
     const [phone, setPhone] = useState("");
     const [password, setPassword] = useState("");
@@ -149,20 +153,20 @@ export default function ChangePhoneModal({ visible, onClose, onSuccess }: Props)
                                         onPress={() => setPassVisible(!passVisible)}
                                     >
                                         <View style={{ paddingHorizontal: spacing.two, paddingVertical: spacing.one }}>
-                                            <Host>
+                                            <ThemedHost key={`password-eye-${themes.mode}`}>
                                                 {!passVisible ? (
                                                     <Icon name={Icon.select({
                                                         ios: "eye.fill",
                                                         android: visibilityXml
-                                                    })} />
+                                                    })} color={themes.textSecondary} />
                                                 ) : (
                                                     <Icon name={Icon.select({
                                                         ios: "eye.slash.fill",
                                                         android: visibilityOffXml
-                                                    })} />
+                                                    })} color={themes.textSecondary} />
                                                 )
                                                 }
-                                            </Host>
+                                            </ThemedHost>
                                         </View>
                                     </Button>
 
@@ -206,7 +210,7 @@ export default function ChangePhoneModal({ visible, onClose, onSuccess }: Props)
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
     backdrop: {
         flex: 1,
         backgroundColor: "rgba(0, 0, 0, 0.75)",

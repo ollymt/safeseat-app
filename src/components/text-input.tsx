@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { StyleSheet, TextInput as RNTextInput, KeyboardTypeOptions } from "react-native";
 
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { Spacing as spacing, FontSize as fontsize, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 
 type TextInputProps = {
     type?: "text" | "email" | "phone" | "number" | "password";
@@ -20,7 +21,9 @@ export default function TextInput({
     value,
     onChangeText,
 }: TextInputProps) {
-    const [internalText, setInternalText] = useState("");
+
+  const themes = useTheme();
+  const styles = createStyles(themes);    const [internalText, setInternalText] = useState("");
     const [isFocused, setIsFocused] = useState(false);
 
     // Determines the keyboard layout
@@ -56,6 +59,7 @@ export default function TextInput({
             // Native input type configurations
             keyboardType={getKeyboardType()}
             secureTextEntry={type === "password"}
+            keyboardAppearance={themes.mode}
             autoCapitalize={type === "email" || type === "password" ? "none" : "sentences"}
             autoCorrect={type !== "password"}
             textContentType={
@@ -71,7 +75,7 @@ export default function TextInput({
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
     input: {
         height: spacing.six,
         borderWidth: spacing.quarter,

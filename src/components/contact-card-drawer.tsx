@@ -1,14 +1,16 @@
+import ThemedHost from "@/components/themed-host";
 import closeXml from "@expo/material-symbols/close.xml";
 import chatXml from "@expo/material-symbols/chat.xml";
 import callXml from "@expo/material-symbols/call.xml";
 // components/PasswordVerifyModal.tsx
-import { Themes } from "@/constants/theme";
+import { type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { BottomSheet, Button, Column, Host, Icon, Row, Spacer, Text } from "@expo/ui";
 import { buttonBorderShape, buttonStyle, controlSize } from "@expo/ui/swift-ui/modifiers";
 
 import * as Haptics from "expo-haptics"
 import { useEffect, useRef, useState } from "react";
-import { Alert, StyleSheet, useColorScheme } from "react-native";
+import { Alert, StyleSheet } from "react-native";
 
 type Props = {
     visible: boolean;
@@ -19,16 +21,16 @@ type Props = {
 };
 
 export default function ContactCardDrawer({ visible, onClose, name, number, order }: Props) {
-    const colorScheme = useColorScheme();
-    const activeScheme = colorScheme === "dark" ? "dark" : "light";
-    const currentTheme = Themes[activeScheme];
+
+  const themes = useTheme();
+  const styles = createStyles(themes);    const currentTheme = themes;
 
     useEffect(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     }, [visible])
 
     return (
-        <Host matchContents>
+        <ThemedHost matchContents>
             <BottomSheet isPresented={visible} onDismiss={onClose} showDragIndicator={false} snapPoints={["half"]}>
                 <Column spacing={16} alignment="start">
                     <Spacer size={0} />
@@ -63,7 +65,7 @@ export default function ContactCardDrawer({ visible, onClose, name, number, orde
                             <Icon name={Icon.select({
                                 ios: "xmark",
                                 android: closeXml
-                            })} />
+                            })} color={themes.textSecondary} />
                         </Button>
                     </Row>
                     {/* 🔲 Native Large Square Action Buttons Grid */}
@@ -81,7 +83,7 @@ export default function ContactCardDrawer({ visible, onClose, name, number, orde
                                 <Icon name={Icon.select({
                                     ios: "pencil",
                                     android: chatXml
-                                })} size={24} />
+                                })} size={24} color={themes.text} />
                                 <Text textStyle={{ fontSize: 14, fontWeight: "600" }}>Edit</Text>
                             </Column>
                         </Button>
@@ -98,7 +100,7 @@ export default function ContactCardDrawer({ visible, onClose, name, number, orde
                                 <Icon name={Icon.select({
                                     ios: "bubble.left.and.bubble.right.fill",
                                     android: chatXml
-                                })} size={24} />
+                                })} size={24} color={themes.text} />
                                 <Text textStyle={{ fontSize: 14, fontWeight: "600" }}>Message</Text>
                             </Column>
                         </Button>
@@ -115,7 +117,7 @@ export default function ContactCardDrawer({ visible, onClose, name, number, orde
                                 <Icon name={Icon.select({
                                     ios: "phone.fill",
                                     android: callXml
-                                })} size={24} />
+                                })} size={24} color={themes.primaryBttnText} />
                                 <Text textStyle={{ fontSize: 14, fontWeight: "600" }}>Call</Text>
                             </Column>
                         </Button>
@@ -123,11 +125,11 @@ export default function ContactCardDrawer({ visible, onClose, name, number, orde
                     <Spacer />
                 </Column>
             </BottomSheet>
-        </Host>
+        </ThemedHost>
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
     title: {
         fontSize: 36,
         textAlign: "center",

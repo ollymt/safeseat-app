@@ -1,9 +1,11 @@
+import ThemedHost from "@/components/themed-host";
 import checkXml from "@expo/material-symbols/check.xml";
 import warningXml from "@expo/material-symbols/warning.xml";
 import sirenXml from "@expo/material-symbols/siren.xml";
 import circleXml from "@expo/material-symbols/circle.xml";
 import addXml from "@expo/material-symbols/add.xml";
-import { Themes as themes } from "@/constants/theme";
+import { type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import GuidePulseOverlay from "./guide-pulse-overlay";
 import { Host, Icon } from "@expo/ui";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
@@ -41,6 +43,8 @@ export default function AssignCard({
   guideActive = false,
   onPress,
 }: AssignCardProps) {
+  const themes = useTheme();
+  const styles = createStyles(themes);
   const displayName = assignedProfile?.name ?? name;
   const rawIcon = assignedProfile?.icon ?? pfp;
   const seatLabel = titleCase(seatCode);
@@ -115,7 +119,7 @@ export default function AssignCard({
           <Text style={styles.profileName} numberOfLines={1}>{displayName}</Text>
           {stateLabel ? (
             <View style={styles.compactState}>
-              <Host matchContents><Icon name={stateIcon} color={stateColor} size={13} /></Host>
+              <ThemedHost matchContents><Icon name={stateIcon} color={stateColor} size={13} /></ThemedHost>
               <Text style={[styles.compactStateText, { color: stateColor }]} numberOfLines={1}>{stateLabel}</Text>
             </View>
           ) : (
@@ -126,9 +130,9 @@ export default function AssignCard({
         <View style={styles.emptyContent}>
           {!locked ? (
             <View style={styles.plusCircle}>
-              <Host matchContents>
+              <ThemedHost matchContents>
                 <Icon name={Icon.select({ ios: "plus", android: addXml })} color={themes.text} size={18} />
-              </Host>
+              </ThemedHost>
             </View>
           ) : null}
           <Text style={[styles.seatLabel, styles.emptySeatLabel]} numberOfLines={2}>{seatLabel}</Text>
@@ -148,7 +152,7 @@ export default function AssignCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
   baseCard: {
     flex: 1,
     position: "relative",
@@ -165,11 +169,11 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   emptyCard: {
-    backgroundColor: "rgba(6,14,24,0.34)",
-    borderColor: "rgba(255,255,255,0.38)",
+    backgroundColor: themes.mode === "dark" ? "rgba(6,14,24,0.34)" : "rgba(255,255,255,0.60)",
+    borderColor: themes.mode === "dark" ? "rgba(255,255,255,0.38)" : "rgba(16,32,51,0.26)",
   },
   assignedCard: {
-    backgroundColor: "rgba(8,18,30,0.66)",
+    backgroundColor: themes.cardTranslucent,
   },
   hardwareCard: {
     shadowOpacity: 0.28,
@@ -177,16 +181,16 @@ const styles = StyleSheet.create({
   },
   profileContainer: { alignItems: "center", justifyContent: "center", width: "100%", gap: 2 },
   avatar: { width: 38, height: 38, borderRadius: 19, resizeMode: "cover", borderWidth: 2 },
-  avatarFallback: { width: 38, height: 38, borderRadius: 19, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(18,31,46,0.94)", borderWidth: 2 },
+  avatarFallback: { width: 38, height: 38, borderRadius: 19, justifyContent: "center", alignItems: "center", backgroundColor: themes.backgroundElevated, borderWidth: 2 },
   monogram: { fontSize: 16, fontFamily: "Body-Bold", color: themes.text },
-  seatLabel: { fontSize: 8.5, lineHeight: 10.5, letterSpacing: 0.28, color: themes.textSecondary, fontFamily: "Body-Bold", textAlign: "center" },
-  emptySeatLabel: { color: themes.text, fontSize: 9.5, lineHeight: 12, textShadowColor: "rgba(0,0,0,0.78)", textShadowRadius: 4 },
-  profileName: { fontSize: 11, lineHeight: 13, color: themes.text, fontFamily: "Body-Bold", textAlign: "center", maxWidth: "100%" },
-  assignedText: { fontSize: 8, color: themes.textSecondary, fontFamily: "Body-Medium" },
+  seatLabel: { fontSize: 11.5, lineHeight: 14, letterSpacing: 0.28, color: themes.textSecondary, fontFamily: "Body-Bold", textAlign: "center" },
+  emptySeatLabel: { color: themes.text, fontSize: 12, lineHeight: 15, textShadowColor: "rgba(0,0,0,0.78)", textShadowRadius: 4 },
+  profileName: { fontSize: 13.5, lineHeight: 16, color: themes.text, fontFamily: "Body-Bold", textAlign: "center", maxWidth: "100%" },
+  assignedText: { fontSize: 10.5, color: themes.textSecondary, fontFamily: "Body-Medium" },
   compactState: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 1 },
-  compactStateText: { fontSize: 6.8, letterSpacing: 0.18, fontFamily: "Body-Bold" },
+  compactStateText: { fontSize: 8.3, letterSpacing: 0.18, fontFamily: "Body-Bold" },
   emptyContent: { justifyContent: "center", alignItems: "center", gap: 4, width: "100%" },
-  plusCircle: { width: 29, height: 29, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(6,14,24,0.58)", borderWidth: 1, borderColor: "rgba(255,255,255,0.58)" },
-  actionPill: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 999, backgroundColor: "rgba(6,14,24,0.56)", borderWidth: 1, borderColor: "rgba(255,255,255,0.16)" },
-  actionText: { fontSize: 6.8, color: themes.textSecondary, fontFamily: "Body-Bold", textAlign: "center", letterSpacing: 0.35 },
+  plusCircle: { width: 29, height: 29, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: themes.mode === "dark" ? "rgba(6,14,24,0.58)" : "rgba(255,255,255,0.82)", borderWidth: 1, borderColor: themes.mode === "dark" ? "rgba(255,255,255,0.58)" : themes.divider },
+  actionPill: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 999, backgroundColor: themes.mode === "dark" ? "rgba(6,14,24,0.56)" : "rgba(255,255,255,0.86)", borderWidth: 1, borderColor: themes.divider },
+  actionText: { fontSize: 9.5, color: themes.textSecondary, fontFamily: "Body-Bold", textAlign: "center", letterSpacing: 0.35 },
 });

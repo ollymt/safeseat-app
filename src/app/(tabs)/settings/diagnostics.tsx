@@ -1,5 +1,6 @@
 import Button from "@/components/button";
-import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
+import { FontSize as fontsize, Spacing as spacing, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { auth, db } from "@/firebase";
 import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
 import { SafeSeatStatusPayload, sensorHealthLabel } from "@/services/safeseat-hub";
@@ -119,14 +120,16 @@ function hardwareChecks(status: SafeSeatStatusPayload | null): HardwareCheck[] {
   ];
 }
 
-function levelColor(level: Level) {
+function levelColor(level: Level, themes: ThemePalette) {
   if (level === "ready") return themes.primaryBttn;
   if (level === "attention") return themes.lightOrange;
   return themes.textMuted;
 }
 
 export default function Diagnostics() {
-  const insets = useSafeAreaInsets();
+
+  const themes = useTheme();
+  const styles = createStyles(themes);  const insets = useSafeAreaInsets();
   const {
     connected: hubConnected,
     telemetryReady,
@@ -288,14 +291,14 @@ export default function Diagnostics() {
           <View style={styles.moduleStack}>
             {modules.map((module) => (
               <View key={module.id} style={styles.moduleCard}>
-                <View style={[styles.moduleId, { borderColor: levelColor(module.level) }]}>
-                  <Text style={[styles.moduleIdText, { color: levelColor(module.level) }]}>{module.id}</Text>
+                <View style={[styles.moduleId, { borderColor: levelColor(module.level, themes) }]}>
+                  <Text style={[styles.moduleIdText, { color: levelColor(module.level, themes) }]}>{module.id}</Text>
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.moduleTitle}>{module.label}</Text>
                   <Text style={styles.moduleDetail}>{module.detail}</Text>
                 </View>
-                <Text style={[styles.moduleStatus, { color: levelColor(module.level) }]}>{module.value}</Text>
+                <Text style={[styles.moduleStatus, { color: levelColor(module.level, themes) }]}>{module.value}</Text>
               </View>
             ))}
           </View>
@@ -315,7 +318,7 @@ export default function Diagnostics() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: themes.background },
   content: { paddingHorizontal: spacing.two, paddingTop: spacing.six, gap: spacing.two },
   headerBlock: { gap: spacing.half, marginBottom: spacing.one },

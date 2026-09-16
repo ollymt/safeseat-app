@@ -1,4 +1,6 @@
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import ThemedHost from "@/components/themed-host";
+import { Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { Host, Icon, Picker } from "@expo/ui";
 // 1. Import the native scroll view wrapper designed specifically for Expo UI
 // Static import instead of a runtime import() — Icon.select needs an actual
@@ -48,6 +50,7 @@ export default function SettingPicker({
   onPress,
   onValueChange,
 }: SettingPickerProps) {
+  const themes = useTheme();
   const [selectedBloodType, setSelectedBloodType] = useState(value);
   const [bloodTypeIsPresented, setBloodTypeIsPresented] = useState(false);
   // 4. FIX: Holds a tapped value until the native sheet has fully finished
@@ -110,9 +113,9 @@ export default function SettingPicker({
                 },
               ]}
             >
-              <Host style={{ width: 22, height: 22 }}>
+              <ThemedHost style={{ width: 22, height: 22 }}>
                 <Icon name={iconName} color={themes.primaryBttnText} />
-              </Host>
+              </ThemedHost>
             </View>
           )}
           <Text style={[setitem.settingName, { color: themes.text }]}>
@@ -123,7 +126,7 @@ export default function SettingPicker({
         {/* RIGHT BLOCK */}
         <View style={setitem.rightContainer}>
           {Platform.OS == "ios" ? (
-            <Host matchContents>
+            <ThemedHost matchContents>
               <Picker
                 selectedValue={selectedBloodType}
                 onValueChange={handleValueChangeIos}
@@ -133,7 +136,7 @@ export default function SettingPicker({
                   <Picker.Item key={b.value} label={b.label} value={b.value} />
                 ))}
               </Picker>
-            </Host>
+            </ThemedHost>
           ) : (
             /* Added pointerEvents="none" to pass gestures directly up to the parent row wrapper on Android */
             <View
@@ -148,7 +151,7 @@ export default function SettingPicker({
               >
                 {currentLabel}
               </Text>
-              <Host style={{ width: 20, height: 20 }}>
+              <ThemedHost style={{ width: 20, height: 20 }}>
                 <Icon
                   name={Icon.select({
                     ios: "chevron.up.chevron.down",
@@ -156,7 +159,7 @@ export default function SettingPicker({
                   })}
                   color={themes.primaryBttn}
                 />
-              </Host>
+              </ThemedHost>
             </View>
           )}
         </View>

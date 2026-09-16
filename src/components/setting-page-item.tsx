@@ -1,127 +1,116 @@
-import chevronRightXml from "@expo/material-symbols/chevron_right.xml";
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
-import { Host, Icon } from "@expo/ui";
-import {
-    Pressable,
-    StyleSheet,
-    Text,
-    useColorScheme,
-    View,
-} from "react-native";
+import { type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
+import { Ionicons } from "@expo/vector-icons";
+import type { ComponentProps } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
-type SettingPageItemProps = {
-    iconName?: Parameters<typeof Icon>[0]["name"];
-    name: string;
-    value?: string;
-    enabled?: boolean;
-    isLast?: boolean;
-    destructive?: boolean;
-    showChevron?: boolean;
-    onPress?: () => void;
+type IconName = ComponentProps<typeof Ionicons>["name"];
+
+type Props = {
+  iconName?: IconName;
+  name: string;
+  value?: string;
+  enabled?: boolean;
+  isLast?: boolean;
+  destructive?: boolean;
+  showChevron?: boolean;
+  onPress?: () => void;
 };
 
 export default function SettingPageItem({
-    iconName,
-    name,
-    value,
-    showChevron = false,
-    isLast = false,
-    destructive = false,
-    enabled = true,
-    onPress,
-}: SettingPageItemProps) {
-    return (
-        <Pressable
-            onPress={enabled ? onPress : undefined}
-            disabled={!enabled}
-            style={({ pressed }) => [
-                setitem.setItemBase,
-                {
-                    backgroundColor: themes.backgroundElement,
-                    borderBottomWidth: isLast ? 0 : 1,
-                    borderBottomColor: themes.divider,
-                    opacity: enabled ? (pressed ? 0.72 : 1) : 0.45,
-                }
+  iconName,
+  name,
+  value,
+  showChevron = false,
+  isLast = false,
+  destructive = false,
+  enabled = true,
+  onPress,
+}: Props) {
+  const themes = useTheme();
+  const styles = createStyles(themes);
+  const iconColor = destructive ? themes.warnBttn : themes.primaryBttn;
+
+  return (
+    <Pressable
+      onPress={enabled ? onPress : undefined}
+      disabled={!enabled}
+      style={({ pressed }) => [
+        styles.row,
+        { borderBottomWidth: isLast ? 0 : 1, opacity: enabled ? (pressed ? 0.72 : 1) : 0.45 },
+      ]}
+    >
+      <View style={styles.left}>
+        {iconName ? (
+          <View
+            style={[
+              styles.iconWrap,
+              {
+                backgroundColor: destructive ? (themes.mode === "dark" ? "rgba(255,103,111,0.10)" : "rgba(217,75,85,0.08)") : themes.primarySoft,
+                borderColor: destructive ? `${themes.warnBttn}66` : themes.primaryBorder,
+              },
             ]}
-        >
-            <View style={setitem.leftContainer}>
-                {/* 1. Render Icon natively only if iconName prop exists */}
-                {iconName && (
-                    <View style={[setitem.iconWrapper, { backgroundColor: destructive ? themes.warnBttn : themes.primaryBttn, padding: 6, borderRadius: 8 }]}>
-                        <Host style={{ width: 22, height: 22 }}>
-                            <Icon name={iconName} color={destructive ? themes.warnBttnText : themes.primaryBttnText} />
-                        </Host>
-                    </View>
-                )}
+          >
+            <Ionicons name={iconName} size={20} color={iconColor} />
+          </View>
+        ) : null}
+        <Text style={[styles.name, { color: destructive ? themes.warnBttn : themes.text }]}>{name}</Text>
+      </View>
 
-                {/* 2. Primary Label */}
-                <View style={{ borderWidth: 0, borderColor: "#fff" }}>
-                    <Text style={[setitem.settingName, { color: destructive ? themes.warnBttn : themes.text }]}>
-                        {name}
-                    </Text>
-                </View>
-            </View>
-
-            <View style={{ flexDirection: "row", flex: 1, justifyContent: "flex-end", gap: 6 }}>
-                {/* 3. Optional Right-Side Value String */}
-                {value && (
-                    <View style={setitem.rightContainer}>
-                        <Text style={[setitem.settingValue, { color: themes.textSecondary }]} numberOfLines={1} ellipsizeMode="tail" >
-                            {value}
-                        </Text>
-                    </View>
-                )}
-
-                {showChevron && 
-                    <View style={{ width: "auto" }}>
-                        <Host matchContents>
-                            <Icon name={Icon.select({
-                                ios: "chevron.right",
-                                android: chevronRightXml
-                            })} color={themes.textSecondary} />
-                        </Host>
-                    </View>
-                }
-            </View>
-        </Pressable>
-    );
+      <View style={styles.right}>
+        {value ? <Text style={styles.value} numberOfLines={1}>{value}</Text> : null}
+        {showChevron ? <Ionicons name="chevron-forward" size={19} color={themes.textSecondary} /> : null}
+      </View>
+    </Pressable>
+  );
 }
 
-const setitem = StyleSheet.create({
-    setItemBase: {
-        width: "100%",
-        flexDirection: "row",
-        alignItems: "center",
-        minHeight: 54,
-        padding: 12,
-    },
-    leftContainer: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "flex-start",
-        gap: 12,
-    },
-    rightContainer: {
-        width: "auto",
-        borderWidth: 0,
-        borderColor: "#fff",
-        flex: 0.9,
-        marginLeft: 10,
-        textAlign: "right",
-        justifyContent: "flex-end",
-        alignItems: "center",
-        flexDirection: "row"
-    },
-    iconWrapper: {
-        justifyContent: "center",
-        alignItems: "center",
-    },
-    settingName: {
-        fontSize: 16,
-        fontFamily: "Body-Medium",
-    },
-    settingValue: {
-        fontSize: 14,
-        fontFamily: "Body-Medium",
-    }
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
+  row: {
+    width: "100%",
+    minHeight: 62,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: themes.backgroundElement,
+    borderBottomColor: themes.divider,
+  },
+  left: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  right: {
+    maxWidth: "45%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 7,
+  },
+  iconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  name: {
+    fontSize: 15.5,
+    lineHeight: 21,
+    fontFamily: "Body-Medium",
+    flexShrink: 1,
+  },
+  value: {
+    fontSize: 13.5,
+    lineHeight: 19,
+    fontFamily: "Body-Medium",
+    color: themes.textSecondary,
+    textAlign: "right",
+    flexShrink: 1,
+  },
 });

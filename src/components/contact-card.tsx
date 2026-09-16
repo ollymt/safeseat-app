@@ -1,5 +1,7 @@
+import ThemedHost from "@/components/themed-host";
 import callXml from "@expo/material-symbols/call.xml";
-import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
+import { FontSize as fontsize, Spacing as spacing, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { Host, Icon } from "@expo/ui";
 import * as Haptics from "expo-haptics";
 import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
@@ -11,16 +13,18 @@ type ContactCardProps = {
   onPress?: () => void;
 };
 
-const ORDER_META = {
-  primary: { label: "1ST CONTACT", number: "1", color: themes.primaryBttn },
-  secondary: { label: "2ND CONTACT", number: "2", color: themes.info },
-  tertiary: { label: "3RD CONTACT", number: "3", color: themes.info },
-  quaternary: { label: "4TH CONTACT", number: "4", color: themes.textSecondary },
-  quinary: { label: "5TH CONTACT", number: "5", color: themes.textSecondary },
-  none: { label: "NO ORDER", number: "—", color: themes.textMuted },
-} as const;
-
 export default function ContactCard({ name, phone, order, onPress }: ContactCardProps) {
+
+  const themes = useTheme();
+  const styles = createStyles(themes);
+  const ORDER_META = {
+    primary: { label: "1ST CONTACT", number: "1", color: themes.primaryBttn },
+    secondary: { label: "2ND CONTACT", number: "2", color: themes.info },
+    tertiary: { label: "3RD CONTACT", number: "3", color: themes.info },
+    quaternary: { label: "4TH CONTACT", number: "4", color: themes.textSecondary },
+    quinary: { label: "5TH CONTACT", number: "5", color: themes.textSecondary },
+    none: { label: "NO ORDER", number: "—", color: themes.textMuted },
+  } as const;
   const meta = ORDER_META[order];
 
   const handleMakeCall = async () => {
@@ -62,16 +66,16 @@ export default function ContactCard({ name, phone, order, onPress }: ContactCard
         }}
         style={({ pressed }) => [styles.callButton, pressed && styles.callPressed]}
       >
-        <Host matchContents>
+        <ThemedHost matchContents>
           <Icon name={Icon.select({ ios: "phone.fill", android: callXml })} color={themes.primaryBttnText} size={22} />
-        </Host>
+        </ThemedHost>
         <Text style={styles.callText}>CALL</Text>
       </Pressable>
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
   card: {
     width: "100%",
     minHeight: 88,

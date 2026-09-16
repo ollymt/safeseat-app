@@ -1,8 +1,10 @@
 import Button from "@/components/button";
 import AssignCard from "@/components/assign-card";
 import AssignSeatModal from "@/components/assign-seat-modal";
+import SeatOptionsModal from "@/components/seat-options-modal";
 import GuidePulseOverlay from "@/components/guide-pulse-overlay";
-import { Spacing as spacing, Themes as themes } from "@/constants/theme";
+import { Spacing as spacing, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
 import { useDriverGuide } from "@/hooks/driver-guide-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -63,6 +65,8 @@ const SEATS = [
 ];
 
 export default function Assign() {
+  const themes = useTheme();
+  const styles = createStyles(themes);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { height: viewportHeight } = useWindowDimensions();
@@ -96,6 +100,8 @@ export default function Assign() {
   const [consents, setConsents] = useState<Record<number, ConsentState>>({});
   const [consentModalVisible, setConsentModalVisible] = useState(false);
   const [consentSeatNo, setConsentSeatNo] = useState<number | null>(null);
+  const [seatOptionsVisible, setSeatOptionsVisible] = useState(false);
+  const [seatOptionsSeatNo, setSeatOptionsSeatNo] = useState<number | null>(null);
 
   const assignedSeatCount = useMemo(
     () => SEATS.filter((seat) => Boolean(assignments[seat.seatNo])).length,
@@ -351,12 +357,22 @@ export default function Assign() {
     );
   };
 
-  const handleSeatAssigned = (seatNumber: number, profile: Profile | null) => {
+  const handleSeatAssigned = async (seatNumber: number, profile: Profile | null) => {
     const previousProfile = assignments[seatNumber];
     const updated = { ...assignments };
     if (profile) updated[seatNumber] = profile;
     else delete updated[seatNumber];
+
+    // Keep the rendered seat map and the persisted assignment in lockstep.
+    // Seat Options used to update only React state when removing a person,
+    // leaving a stale profile in AsyncStorage. The assignment picker then
+    // correctly (but confusingly) hid that profile as "already assigned".
     setAssignments(updated);
+    if (Object.keys(updated).length > 0) {
+      await AsyncStorage.setItem(SEAT_ASSIGNMENTS_KEY, JSON.stringify(updated));
+    } else {
+      await AsyncStorage.removeItem(SEAT_ASSIGNMENTS_KEY);
+    }
 
     const nextConsents = { ...consents };
     if (!profile || previousProfile?.id !== profile.id) {
@@ -370,13 +386,13 @@ export default function Assign() {
     if (profile && seatNumber === 1 && profile.isAccountOwner) {
       nextConsents[seatNumber] = "confirmed";
     }
-    void persistConsents(nextConsents);
+    await persistConsents(nextConsents);
 
     if (profile && hardwareSeatNo === null) {
-      void persistHardwareSeat(seatNumber);
+      await persistHardwareSeat(seatNumber);
     } else if (!profile && hardwareSeatNo === seatNumber) {
       const nextSeat = Number(Object.keys(updated)[0]) || null;
-      void persistHardwareSeat(nextSeat);
+      await persistHardwareSeat(nextSeat);
     }
 
     if (profile && !(seatNumber === 1 && profile.isAccountOwner)) {
@@ -413,14 +429,8 @@ export default function Assign() {
     }
 
     if (assignments[seatNo]) {
-      if (isAccountOwnerDriver(seatNo)) {
-        // Driver does not need a consent dialog. Tapping the card lets the
-        // driver change the person directly.
-        setSelectedSeat(seatNo);
-        setAssignModalVisible(true);
-      } else {
-        openConsentForSeat(seatNo);
-      }
+      setSeatOptionsSeatNo(seatNo);
+      setSeatOptionsVisible(true);
       return;
     }
 
@@ -560,9 +570,59 @@ export default function Assign() {
 
           <AssignSeatModal
             seat={selectedSeat}
+            assignments={assignments}
             visible={assignModalVisible}
             onClose={() => setAssignModalVisible(false)}
             onSuccess={handleSeatAssigned}
+          />
+
+          <SeatOptionsModal
+            visible={seatOptionsVisible && seatOptionsSeatNo !== null}
+            seatLabel={getSeatLabel(seatOptionsSeatNo)}
+            personName={seatOptionsSeatNo ? (getDisplayProfile(assignments[seatOptionsSeatNo])?.name ?? "Assigned person") : "Assigned person"}
+            isDriverOwner={seatOptionsSeatNo ? isAccountOwnerDriver(seatOptionsSeatNo) : false}
+            consent={seatOptionsSeatNo ? consents[seatOptionsSeatNo] : undefined}
+            onClose={() => setSeatOptionsVisible(false)}
+            onConsent={() => {
+              if (!seatOptionsSeatNo) return;
+              setSeatOptionsVisible(false);
+              setTimeout(() => openConsentForSeat(seatOptionsSeatNo), 120);
+            }}
+            onChangePerson={() => {
+              if (!seatOptionsSeatNo) return;
+              setSelectedSeat(seatOptionsSeatNo);
+              setSeatOptionsVisible(false);
+              setTimeout(() => setAssignModalVisible(true), 120);
+            }}
+            onRemove={() => {
+              if (!seatOptionsSeatNo) return;
+              const seatNo = seatOptionsSeatNo;
+              const person = getDisplayProfile(assignments[seatNo])?.name ?? "this person";
+              Alert.alert(
+                "Remove from seat?",
+                `${person} will be removed from ${getSeatLabel(seatNo)}. The saved profile will not be deleted.`,
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Remove",
+                    style: "destructive",
+                    onPress: () => {
+                      setSeatOptionsVisible(false);
+                      void (async () => {
+                        try {
+                          await handleSeatAssigned(seatNo, null);
+                          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                        } catch (error) {
+                          console.error("Failed to remove seat assignment:", error);
+                          Alert.alert("Could not remove person", "Please try again.");
+                          void loadState();
+                        }
+                      })();
+                    },
+                  },
+                ],
+              );
+            }}
           />
 
           <Modal
@@ -583,23 +643,23 @@ export default function Assign() {
                 {isStep("consent") && guideSeatNo === consentSeatNo ? (
                   <View style={styles.consentGuideCompact}>
                     <View style={styles.consentGuideDot} />
-                    <Text style={styles.consentGuideCompactText}>Guide: tap Confirm Consent to continue</Text>
+                    <Text style={styles.consentGuideCompactText}>Guide: choose the passenger's consent response to continue</Text>
                   </View>
                 ) : null}
-                <Text style={styles.consentEyebrow}>MONITORING CONSENT</Text>
-                <Text style={styles.consentTitle}>Has {consentSeatNo ? getDisplayProfile(assignments[consentSeatNo])?.name ?? "this person" : "this person"} agreed?</Text>
-                <Text style={styles.consentText}>Confirm whether they agreed to SafeSeat monitoring for this trip.</Text>
+                <Text style={styles.consentEyebrow}>TRIP CONSENT</Text>
+                <Text style={styles.consentTitle}>Did {consentSeatNo ? getDisplayProfile(assignments[consentSeatNo])?.name ?? "this person" : "this person"} agree to SafeSeat monitoring?</Text>
+                <Text style={styles.consentText}>{consentSeatNo && consents[consentSeatNo] === "confirmed" ? "Consent is currently marked as Agreed. You can leave it as is or choose a different response below." : "Choose the passenger's response for this trip."}</Text>
 
                 <View style={styles.guideButtonWrap}>
                   <Button
-                    label="Confirm Consent"
+                    label={consentSeatNo && consents[consentSeatNo] === "confirmed" ? "Agreed ✓" : "Agreed"}
                     variant="primary"
                     fullWidth
                     onPress={() => consentSeatNo && void setSeatConsent(consentSeatNo, "confirmed")}
                   />
                   <GuidePulseOverlay
                     active={isStep("consent") && guideSeatNo === consentSeatNo}
-                    label="CONFIRM"
+                    label="AGREED"
                     borderRadius={16}
                     inset={-3}
                     beaconPosition="top"
@@ -630,7 +690,7 @@ export default function Assign() {
                   }}
                   style={({ pressed }) => [styles.changePersonButton, pressed && styles.consentPressed]}
                 >
-                  <Text style={styles.changePersonText}>Change Person</Text>
+                  <Text style={styles.changePersonText}>Choose Different Person</Text>
                 </Pressable>
               </View>
             </View>
@@ -668,7 +728,7 @@ export default function Assign() {
             <Button label="End Monitoring" onPress={handleEndSession} variant="secondary" fullWidth style={styles.stickyButton} />
           ) : startReadiness === "consent" ? (
             <Button
-              label="Review Consent"
+              label="Passenger Consent"
               onPress={() => hardwareSeatNo && openConsentForSeat(hardwareSeatNo)}
               variant="primary"
               enabled={Boolean(hardwareSeatNo)}
@@ -691,7 +751,7 @@ export default function Assign() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: themes.background,
@@ -717,19 +777,19 @@ const styles = StyleSheet.create({
   },
   eyebrow: {
     color: themes.primaryBttn,
-    fontSize: 11,
-    letterSpacing: 1.5,
+    fontSize: 12.5,
+    letterSpacing: 1.35,
     fontFamily: "Body-Bold",
   },
   pageHeader: {
-    fontSize: 27,
+    fontSize: 31,
     fontFamily: "Logo-Font",
     color: themes.text,
   },
   pageSubhead: {
     color: themes.textSecondary,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 15,
+    lineHeight: 21,
     fontFamily: "Body-Regular",
   },
   sessionPill: {
@@ -746,8 +806,8 @@ const styles = StyleSheet.create({
   },
   sessionPillText: {
     color: themes.textMuted,
-    fontSize: 9,
-    letterSpacing: 0.8,
+    fontSize: 10.5,
+    letterSpacing: 0.7,
     fontFamily: "Body-Bold",
   },
   sessionPillTextLocked: {
@@ -784,9 +844,9 @@ const styles = StyleSheet.create({
   },
   sensorDot: { width: 11, height: 11, borderRadius: 6 },
   hardwareLinkCopy: { flex: 1, minWidth: 0 },
-  hardwareLinkEyebrow: { color: themes.textMuted, fontSize: 8, letterSpacing: 0.9, fontFamily: "Body-Bold" },
-  hardwareLinkTitle: { color: themes.text, fontSize: 14, marginTop: 2, fontFamily: "Body-Bold" },
-  hardwareLinkText: { color: themes.textSecondary, fontSize: 10, marginTop: 2, fontFamily: "Body-Regular" },
+  hardwareLinkEyebrow: { color: themes.textMuted, fontSize: 10, letterSpacing: 0.9, fontFamily: "Body-Bold" },
+  hardwareLinkTitle: { color: themes.text, fontSize: 16, marginTop: 2, fontFamily: "Body-Bold" },
+  hardwareLinkText: { color: themes.textSecondary, fontSize: 12, marginTop: 2, fontFamily: "Body-Regular" },
   changePill: {
     paddingHorizontal: spacing.one + 2,
     paddingVertical: 6,
@@ -796,7 +856,7 @@ const styles = StyleSheet.create({
     borderColor: themes.primaryBorder,
   },
   changePillLocked: { backgroundColor: themes.surfaceSoft, borderColor: themes.divider },
-  changePillText: { color: themes.primaryBttn, fontSize: 8.5, letterSpacing: 0.6, fontFamily: "Body-Bold" },
+  changePillText: { color: themes.primaryBttn, fontSize: 10, letterSpacing: 0.6, fontFamily: "Body-Bold" },
   changePillTextLocked: { color: themes.textMuted },
   carMap: {
     minHeight: 270,
@@ -806,7 +866,7 @@ const styles = StyleSheet.create({
     backgroundColor: themes.surfaceSoft,
     borderWidth: 1,
     borderColor: "rgba(117,184,255,0.18)",
-    shadowColor: "#000",
+    shadowColor: themes.shadow,
     shadowOpacity: 0.22,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
@@ -841,10 +901,10 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: spacing.two,
     paddingTop: 10,
-    backgroundColor: "rgba(11,18,32,0.97)",
+    backgroundColor: themes.mode === "dark" ? "rgba(11,18,32,0.97)" : "rgba(244,248,246,0.97)",
     borderTopWidth: 1,
-    borderTopColor: "rgba(38,54,76,0.75)",
-    shadowColor: "#000",
+    borderTopColor: themes.divider,
+    shadowColor: themes.shadow,
     shadowOpacity: 0.28,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: -8 },
@@ -863,7 +923,7 @@ const styles = StyleSheet.create({
   consentBackdrop: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(2,7,13,0.72)",
+    backgroundColor: themes.overlay,
     padding: spacing.two,
   },
   consentGuideCallout: {
@@ -880,12 +940,12 @@ const styles = StyleSheet.create({
   consentGuideText: { color: themes.textSecondary, fontSize: 11, lineHeight: 15, fontFamily: "Body-Regular" },
   consentCard: {
     borderRadius: 28,
-    backgroundColor: "#101D2B",
+    backgroundColor: themes.backgroundElevated,
     borderWidth: 1,
     borderColor: themes.divider,
     padding: spacing.two,
     gap: spacing.one,
-    shadowColor: "#000",
+    shadowColor: themes.shadow,
     shadowOpacity: 0.34,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: -8 },
@@ -900,8 +960,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   consentEyebrow: { color: themes.primaryBttn, fontSize: 9.5, letterSpacing: 1.15, fontFamily: "Body-Bold" },
-  consentTitle: { color: themes.text, fontSize: 22, lineHeight: 27, fontFamily: "Body-Bold" },
-  consentText: { color: themes.textSecondary, fontSize: 13, lineHeight: 18, fontFamily: "Body-Regular", marginBottom: 3 },
+  consentTitle: { color: themes.text, fontSize: 24, lineHeight: 27, fontFamily: "Body-Bold" },
+  consentText: { color: themes.textSecondary, fontSize: 15, lineHeight: 21, fontFamily: "Body-Regular", marginBottom: 3 },
   declineButton: {
     minHeight: 46,
     borderRadius: 16,
@@ -911,9 +971,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  declineButtonText: { color: themes.warnBttn, fontSize: 13, fontFamily: "Body-Bold" },
+  declineButtonText: { color: themes.warnBttn, fontSize: 15, fontFamily: "Body-Bold" },
   changePersonButton: { alignItems: "center", justifyContent: "center", paddingVertical: 8 },
-  changePersonText: { color: themes.textSecondary, fontSize: 12, fontFamily: "Body-Bold" },
+  changePersonText: { color: themes.textSecondary, fontSize: 14, fontFamily: "Body-Bold" },
   consentPressed: { opacity: 0.72, transform: [{ scale: 0.99 }] },
   guideTarget: {
     borderWidth: 2,

@@ -1,6 +1,8 @@
+import ThemedHost from "@/components/themed-host";
 import chatXml from "@expo/material-symbols/chat.xml";
 import callXml from "@expo/material-symbols/call.xml";
-import { FontSize as fontsize, Spacing as spacing, Themes as themes } from "@/constants/theme";
+import { FontSize as fontsize, Spacing as spacing, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { deleteDoc, doc, getDoc, updateDoc } from "firebase/firestore";
 import { useEffect, useState, useRef, useCallback } from "react";
@@ -41,7 +43,9 @@ const HIERARCHY_OPTIONS = [
 ];
 
 export default function Contact() {
-    const router = useRouter();
+
+  const themes = useTheme();
+  const styles = createStyles(themes);    const router = useRouter();
     const navigation = useNavigation();
     const insets = useSafeAreaInsets();
 
@@ -447,12 +451,12 @@ export default function Contact() {
                                                         gap: spacing.one,
                                                     }}
                                                 >
-                                                    <Host matchContents>
+                                                    <ThemedHost matchContents>
                                                         <Icon name={Icon.select({
                                                             ios: "message.fill",
                                                             android: chatXml
-                                                        })} size={spacing.six} />
-                                                    </Host>
+                                                        })} size={spacing.six} color={themes.text} />
+                                                    </ThemedHost>
                                                 </Button>
                                             </View>
                                             <View style={{ flex: 1 }}>
@@ -468,12 +472,12 @@ export default function Contact() {
                                                         gap: spacing.one,
                                                     }}
                                                 >
-                                                    <Host matchContents>
+                                                    <ThemedHost matchContents>
                                                         <Icon name={Icon.select({
                                                             ios: "phone.fill",
                                                             android: callXml
-                                                        })} size={spacing.six} />
-                                                    </Host>
+                                                        })} size={spacing.six} color={themes.primaryBttnText} />
+                                                    </ThemedHost>
                                                 </Button>
                                             </View>
                                         </View>
@@ -499,7 +503,7 @@ export default function Contact() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
     container: {
         flex: 1,
         width: "100%",

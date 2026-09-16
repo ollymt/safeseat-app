@@ -1,8 +1,10 @@
+import ThemedHost from "@/components/themed-host";
 import checkXml from "@expo/material-symbols/check.xml";
 import warningXml from "@expo/material-symbols/warning.xml";
 import sirenXml from "@expo/material-symbols/siren.xml";
 import circleXml from "@expo/material-symbols/circle.xml";
-import { Themes as themes, Spacing as spacing } from "@/constants/theme";
+import { Spacing as spacing, type ThemePalette } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { Host, Icon } from "@expo/ui";
 import { useEffect, useRef } from "react";
 import { Animated, Easing, Image, Pressable, StyleSheet, Text, View } from "react-native";
@@ -28,7 +30,7 @@ type SeatCardProps = {
   vitals?: SeatVitals;
 };
 
-const stateMeta = {
+const buildStateMeta = (themes: ThemePalette) => ({
   safe: { label: "SAFE", color: themes.green },
   warning: { label: "WARNING", color: themes.lightOrange },
   emergency: { label: "EMERGENCY", color: themes.warnBttn },
@@ -40,7 +42,7 @@ const stateMeta = {
   ready: { label: "READY", color: themes.green },
   monitoring: { label: "MONITORING", color: themes.green },
   empty: { label: "EMPTY", color: themes.textMuted },
-} as const;
+} as const);
 
 const stateDescription = {
   safe: "No unusual signs detected",
@@ -75,7 +77,15 @@ export default function SeatCard({
   animationCycle = 0,
   vitals,
 }: SeatCardProps) {
+  const themes = useTheme();
+  const styles = createStyles(themes);
+  const stateMeta = buildStateMeta(themes);
   const meta = stateMeta[state];
+  const displayStateLabel = compact && state === "consent"
+    ? "CONSENT"
+    : compact && state === "declined"
+      ? "DECLINED"
+      : meta.label;
   const imageUri = getFormattedImageUri(photo);
   const displayName = name === "empty" ? "Empty seat" : name;
   const motion = useRef(new Animated.Value(0)).current;
@@ -138,7 +148,7 @@ export default function SeatCard({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${role ?? `Seat ${seatNo}`}, ${displayName}, ${state === "unknown" ? "analyzing" : state === "consent" ? "consent needed" : state}`}
-      android_ripple={{ color: "rgba(255,255,255,0.05)" }}
+      android_ripple={{ color: themes.primarySoft }}
       style={({ pressed }) => [
         styles.baseCard,
         compact && styles.compactCard,
@@ -164,18 +174,18 @@ export default function SeatCard({
         <Text style={[styles.name, compact && styles.compactName, home && styles.homeName, state === "empty" && styles.emptyName]} numberOfLines={1}>{displayName}</Text>
         {home ? <Text style={[styles.description, { color: state === "empty" ? themes.textMuted : themes.textSecondary }]} numberOfLines={1}>{stateDescription[state]}</Text> : null}
         {home && (state === "warning" || state === "emergency") ? (
-          <View style={styles.vitalsLine}>
+          <View style={[styles.vitalsLine, home && styles.homeVitalsLine]}>
             {vitals?.trusted ? (
               <>
-                <Text style={styles.vitalsLabel}>VITALS</Text>
-                <Text style={styles.vitalValue}>HR {vitals.heartRateBpm ?? "—"} bpm</Text>
+                <Text style={[styles.vitalsLabel, home && styles.homeVitalsLabel]}>VITALS</Text>
+                <Text style={[styles.vitalValue, home && styles.homeVitalValue]}>HR {vitals.heartRateBpm ?? "—"} bpm</Text>
                 <View style={styles.vitalDivider} />
-                <Text style={styles.vitalValue}>RR {vitals.respirationRateBpm ?? "—"}/min</Text>
+                <Text style={[styles.vitalValue, home && styles.homeVitalValue]}>RR {vitals.respirationRateBpm ?? "—"}/min</Text>
               </>
             ) : (
               <>
-                <Text style={styles.vitalsLabel}>VITALS</Text>
-                <Text style={styles.vitalsPending}>{vitals?.statusLabel === "UNAVAILABLE" ? "Unavailable" : "Reacquiring signal"}</Text>
+                <Text style={[styles.vitalsLabel, home && styles.homeVitalsLabel]}>VITALS</Text>
+                <Text style={[styles.vitalsPending, home && styles.homeVitalsPending]}>{vitals?.statusLabel === "UNAVAILABLE" ? "Unavailable" : "Reacquiring signal"}</Text>
               </>
             )}
           </View>
@@ -184,13 +194,14 @@ export default function SeatCard({
 
       <View style={[styles.rightSide, compact && styles.compactRightSide, home && styles.homeRightSide]}>
         <View style={[styles.statePill, compact && styles.compactStatePill, home && styles.homeStatePill, { borderColor: `${meta.color}66`, backgroundColor: `${meta.color}12` }]}> 
-          <View key={`state-visual-${state}-${animationCycle}`} style={styles.stateIconStage}>
+          <View key={`state-visual-${state}-${animationCycle}`} style={[styles.stateIconStage, home && styles.homeStateIconStage]}>
             {state === "unknown" ? (
               <Animated.View
                 key={`spinner-${animationCycle}`}
                 pointerEvents="none"
                 style={[
                   styles.spinner,
+                  home && styles.homeSpinner,
                   {
                     borderColor: `${meta.color}38`,
                     borderTopColor: meta.color,
@@ -199,25 +210,25 @@ export default function SeatCard({
                 ]}
               />
             ) : state === "empty" ? (
-              <View style={[styles.emptyDot, { backgroundColor: meta.color }]} />
+              <View style={[styles.emptyDot, home && styles.homeEmptyDot, { backgroundColor: meta.color }]} />
             ) : (
               <>
                 {(state === "safe" || state === "warning" || state === "emergency") ? (
                   <Animated.View
                     key={`pulse-${animationCycle}`}
                     pointerEvents="none"
-                    style={[styles.iconPulseRing, { borderColor: meta.color, opacity: ringOpacity, transform: [{ scale: ringScale }] }]}
+                    style={[styles.iconPulseRing, home && styles.homeIconPulseRing, { borderColor: meta.color, opacity: ringOpacity, transform: [{ scale: ringScale }] }]}
                   />
                 ) : null}
-                <View pointerEvents="none" style={styles.staticStateIcon}>
-                  <Host matchContents>
-                    <Icon name={stateIcon} color={meta.color} size={compact ? 14 : 16} />
-                  </Host>
+                <View pointerEvents="none" style={[styles.staticStateIcon, home && styles.homeStaticStateIcon]}>
+                  <ThemedHost matchContents>
+                    <Icon name={stateIcon} color={meta.color} size={home ? 24 : compact ? 14 : 16} />
+                  </ThemedHost>
                 </View>
               </>
             )}
           </View>
-          <Text style={[styles.stateName, compact && styles.compactStateName, home && styles.homeStateName, { color: meta.color }]}>{meta.label}</Text>
+          <Text style={[styles.stateName, compact && styles.compactStateName, home && styles.homeStateName, { color: meta.color }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>{displayStateLabel}</Text>
         </View>
         {!compact && !home ? <Text style={styles.chevron}>›</Text> : null}
       </View>
@@ -225,7 +236,7 @@ export default function SeatCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themes: ThemePalette) => StyleSheet.create({
   baseCard: {
     width: "100%",
     minHeight: 80,
@@ -235,7 +246,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.one + 2,
     borderRadius: 21,
-    backgroundColor: "#101D2B",
+    backgroundColor: themes.backgroundElement,
     borderWidth: 1,
     paddingHorizontal: spacing.one + 4,
     paddingVertical: spacing.one,
@@ -272,31 +283,40 @@ const styles = StyleSheet.create({
   emptyDot: { width: 6, height: 6, borderRadius: 3, opacity: 0.7 },
   stateName: { fontSize: 9.5, letterSpacing: 0.45, fontFamily: "Body-Bold" },
   chevron: { color: themes.textMuted, fontSize: 25, lineHeight: 25, fontFamily: "Body-Regular", marginTop: -2 },
-  description: { fontSize: 10.5, lineHeight: 14, fontFamily: "Body-Regular", marginTop: 3 },
+  description: { fontSize: 13.5, lineHeight: 17, fontFamily: "Body-Medium", marginTop: 2 },
   vitalsLine: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3, minHeight: 13 },
-  vitalsLabel: { color: themes.textMuted, fontSize: 7.5, letterSpacing: 0.7, fontFamily: "Body-Bold" },
-  vitalValue: { color: themes.text, fontSize: 9, fontFamily: "Body-Bold" },
+  vitalsLabel: { color: themes.textMuted, fontSize: 8.5, letterSpacing: 0.65, fontFamily: "Body-Bold" },
+  vitalValue: { color: themes.text, fontSize: 10.5, fontFamily: "Body-Bold" },
   vitalDivider: { width: 2, height: 2, borderRadius: 1, backgroundColor: themes.textMuted, opacity: 0.7 },
-  vitalsPending: { color: themes.textSecondary, fontSize: 9, fontFamily: "Body-Medium" },
+  vitalsPending: { color: themes.textSecondary, fontSize: 10.5, fontFamily: "Body-Medium" },
   homeCard: {
     height: "100%",
     minHeight: 0,
     borderRadius: 20,
     paddingHorizontal: 14,
-    paddingVertical: 9,
-    gap: 11,
-    backgroundColor: "#101E2D",
+    paddingVertical: 8,
+    gap: 10,
+    backgroundColor: themes.backgroundElement,
     shadowOpacity: 0.075,
     shadowRadius: 13,
   },
-  homeAvatarShell: { width: 44, height: 44, borderRadius: 15 },
-  homeAvatar: { width: 38, height: 38, borderRadius: 13 },
-  homeMonogram: { fontSize: 15 },
-  homeRole: { fontSize: 8.5, letterSpacing: 0.7 },
-  homeName: { fontSize: 15.5, marginTop: 1 },
+  homeAvatarShell: { width: 50, height: 50, borderRadius: 16 },
+  homeAvatar: { width: 44, height: 44, borderRadius: 14 },
+  homeMonogram: { fontSize: 19 },
+  homeRole: { fontSize: 11.5, letterSpacing: 0.8 },
+  homeName: { fontSize: 20, lineHeight: 23, marginTop: 0 },
   homeRightSide: { gap: 0, flexShrink: 0 },
-  homeStatePill: { minWidth: 92, paddingHorizontal: 9, paddingVertical: 6 },
-  homeStateName: { fontSize: 8.5, letterSpacing: 0.35 },
+  homeStatePill: { minWidth: 124, paddingHorizontal: 11, paddingVertical: 9, borderWidth: 1.5, gap: 7 },
+  homeStateName: { fontSize: 14.5, lineHeight: 18, letterSpacing: 0.65 },
+  homeStateIconStage: { width: 28, height: 28 },
+  homeStaticStateIcon: { width: 28, height: 28 },
+  homeIconPulseRing: { width: 25, height: 25, borderRadius: 13, borderWidth: 1.5 },
+  homeSpinner: { width: 23, height: 23, borderRadius: 12, borderWidth: 3 },
+  homeEmptyDot: { width: 10, height: 10, borderRadius: 5 },
+  homeVitalsLine: { gap: 6, marginTop: 4, minHeight: 16 },
+  homeVitalsLabel: { fontSize: 9.5 },
+  homeVitalValue: { fontSize: 12.5 },
+  homeVitalsPending: { fontSize: 12 },
   compactCard: { minHeight: 58, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 7, gap: 9 },
   compactAvatarShell: { width: 34, height: 34, borderRadius: 12 },
   compactAvatar: { width: 30, height: 30, borderRadius: 10 },
