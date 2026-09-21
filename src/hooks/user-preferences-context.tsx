@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createContext, ReactNode, useContext, useEffect, useState } from "react";
+import { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 
 import { auth, db } from "../firebase";
@@ -15,6 +15,7 @@ export type UserPreferences = {
   emergencyEscalation: boolean;
   escalationWindowSeconds: 20 | 25 | 30;
   useMetric: boolean;
+  prototypeIndicator: boolean;
   themeMode: "dark" | "light";
 };
 
@@ -27,6 +28,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   emergencyEscalation: true,
   escalationWindowSeconds: 25,
   useMetric: true,
+  prototypeIndicator: true,
   themeMode: "dark",
 };
 
@@ -50,7 +52,9 @@ type UserPreferencesContextType = {
   setEscalationWindowSeconds: (value: 20 | 25 | 30) => Promise<void>;
   useMetric: boolean;
   setUseMetric: (value: boolean) => Promise<void>;
+  prototypeIndicator: boolean;
   themeMode: "dark" | "light";
+  setPrototypeIndicator: (value: boolean) => Promise<void>;
   setThemeMode: (value: "dark" | "light") => Promise<void>;
 };
 
@@ -66,6 +70,7 @@ function normalizePreferences(value: Partial<UserPreferences>): UserPreferences 
     ...DEFAULT_PREFERENCES,
     ...value,
     escalationWindowSeconds,
+    prototypeIndicator: typeof value.prototypeIndicator === "boolean" ? value.prototypeIndicator : true,
     themeMode: value.themeMode === "light" ? "light" : "dark",
   };
 }
@@ -73,6 +78,9 @@ function normalizePreferences(value: Partial<UserPreferences>): UserPreferences 
 export function UserPreferencesProvider({ children }: { children: ReactNode }) {
   const [preferences, setPreferences] = useState<UserPreferences>(DEFAULT_PREFERENCES);
   const [loading, setLoading] = useState(true);
+  const preferencesRef = useRef(preferences);
+  const localSaveQueue = useRef(Promise.resolve());
+  const pendingUpdates = useRef<Partial<UserPreferences>>({});
 
   useEffect(() => {
     void loadPreferences();
@@ -82,7 +90,9 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
     try {
       const cached = await AsyncStorage.getItem(STORAGE_KEY);
       if (cached !== null) {
-        setPreferences(normalizePreferences(JSON.parse(cached)));
+        const next = normalizePreferences({ ...JSON.parse(cached), ...pendingUpdates.current });
+        preferencesRef.current = next;
+        setPreferences(next);
       }
 
       const currentUser = auth.currentUser;
@@ -91,9 +101,12 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
         const prefsSnap = await getDoc(prefsRef);
 
         if (prefsSnap.exists()) {
-          const remoteValue = normalizePreferences(prefsSnap.data() as Partial<UserPreferences>);
+          const remoteValue = normalizePreferences({ ...prefsSnap.data(), ...pendingUpdates.current });
+          preferencesRef.current = remoteValue;
           setPreferences(remoteValue);
-          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(remoteValue));
+          const save = localSaveQueue.current.catch(() => {}).then(() => AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(remoteValue)));
+          localSaveQueue.current = save;
+          await save;
         }
       }
     } catch (error) {
@@ -104,10 +117,14 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
   };
 
   const updatePreferences = async (updates: Partial<UserPreferences>) => {
-    const merged = normalizePreferences({ ...preferences, ...updates });
+    pendingUpdates.current = { ...pendingUpdates.current, ...updates };
+    const merged = normalizePreferences({ ...preferencesRef.current, ...updates });
+    preferencesRef.current = merged;
 
     setPreferences(merged);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+    const save = localSaveQueue.current.catch(() => {}).then(() => AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(merged)));
+    localSaveQueue.current = save;
+    await save;
 
     const currentUser = auth.currentUser;
     if (currentUser) {
@@ -143,6 +160,8 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
         setEscalationWindowSeconds: (value) => updatePreferences({ escalationWindowSeconds: value }),
         useMetric: preferences.useMetric,
         setUseMetric: (value) => updatePreferences({ useMetric: value }),
+        prototypeIndicator: preferences.prototypeIndicator,
+        setPrototypeIndicator: (value) => updatePreferences({ prototypeIndicator: value }),
         themeMode: preferences.themeMode,
         setThemeMode: (value) => updatePreferences({ themeMode: value }),
       }}

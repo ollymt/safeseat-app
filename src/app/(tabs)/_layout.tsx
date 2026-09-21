@@ -94,7 +94,7 @@ function TabsInner() {
   const pathname = usePathname();
   const isNestedScreen = pathname.split("/").filter(Boolean).length > 1;
 
-  const tabIcon = (focused: boolean, iosOn: string, iosOff: string, android: any) => (
+  const tabIcon = (focused: boolean, iosOn: NonNullable<Parameters<typeof Icon.select>[0]["ios"]>, iosOff: NonNullable<Parameters<typeof Icon.select>[0]["ios"]>, android: any) => (
     <ThemedHost key={`tab-icon-${themes.mode}-${focused ? "on" : "off"}`} matchContents>
       <Icon name={Icon.select({ ios: focused ? iosOn : iosOff, android })} size={spacing.three} color={focused ? themes.primaryBttn : themes.textSecondary} />
     </ThemedHost>

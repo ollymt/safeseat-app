@@ -4,6 +4,7 @@ import { SeatVitals } from "@/components/seat-card";
 import HomeMonitorRow from "@/components/home-monitor-row";
 import GuidePulseOverlay from "@/components/guide-pulse-overlay";
 import { FontSize as fontsize, Spacing as spacing, type ThemePalette } from "@/constants/theme";
+import { getSeatDisplayState } from "@/utils/monitoring-presentation";
 import { useTheme } from "@/hooks/use-theme";
 import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
 import { useDriverGuide } from "@/hooks/driver-guide-context";
@@ -20,7 +21,6 @@ import {
   Easing,
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -84,13 +84,13 @@ const buildStatusCopy = (themes: ThemePalette) => ({
   warning: {
     label: "WARNING",
     headline: "SafeSeat detected something unusual",
-    detail: "Check on the passenger.",
+    detail: "Check on the person in this seat.",
     color: themes.lightOrange,
   },
   emergency: {
     label: "EMERGENCY",
-    headline: "Passenger may need immediate help",
-    detail: "Check the passenger and follow emergency guidance.",
+    headline: "This person may need immediate help",
+    detail: "Check this person and follow emergency guidance.",
     color: themes.warnBttn,
   },
   unknown: {
@@ -252,30 +252,12 @@ export default function Home() {
   }, [hubConnected, isLockedIn, livePulse, screenFocused]);
 
   const getSeatState = useCallback((seatNo: number): SeatState => {
-    const profile = assignments[seatNo];
-    if (!profile) return "empty";
-
-    const accountOwnerDriver = seatNo === 1 && Boolean(profile.isAccountOwner);
-    if (!accountOwnerDriver) {
-      const consent = consents[seatNo];
-      if (consent === "declined") return "declined";
-      if (consent !== "confirmed") return "consent";
-    }
-
-    // Only the physically linked prototype seat may enter ANALYZING or a
-    // Fusion state. Other conceptual cabin positions remain visibly offline.
-    if (seatNo !== hardwareSeatNo) return "offline";
-
-    if (!isLockedIn) {
-      if (!hubConnected || !telemetryReady) return "offline";
-      return "ready";
-    }
-
-    // OFFLINE always wins. The hidden UAT Warning is display-only and is
-    // allowed only while real telemetry is still connected and ready.
-    if (!hubConnected || !telemetryReady) return "offline";
-    if (simulationActive) return hubSeatState;
-    return hubSeatState;
+    return getSeatDisplayState({
+      assigned: Boolean(assignments[seatNo]),
+      ownerDriver: seatNo === 1 && Boolean(assignments[seatNo]?.isAccountOwner),
+      consent: consents[seatNo], linked: seatNo === hardwareSeatNo,
+      connected: hubConnected, ready: telemetryReady, active: isLockedIn, liveState: hubSeatState,
+    });
   }, [assignments, consents, hardwareSeatNo, hubConnected, hubSeatState, isLockedIn, simulationActive, telemetryReady]);
 
   const getDisplayName = (profile?: Profile): string | undefined => {
@@ -420,7 +402,7 @@ export default function Home() {
       offline: { label: "OFFLINE", headline: "SafeSeat is not receiving monitoring data for this seat." },
       ready: { label: "READY", headline: "This seat is ready to be monitored." },
       monitoring: { label: "MONITORING", headline: "Monitoring is active for this seat." },
-      assigned: { label: "READY", headline: "This seat is ready to be monitored." },
+      assigned: { label: "NOT MONITORED", headline: "A person is assigned here, but no sensor is linked to this seat." },
     };
     const stateCopy = state === "safe" || state === "warning" || state === "emergency" || state === "unknown"
       ? STATUS_COPY[state]
@@ -429,7 +411,7 @@ export default function Home() {
     const message = [person, stateCopy.headline, stateCopy.detail].filter(Boolean).join("\n\n");
 
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    recordLiveSeatOpened(seatNo);
+    if (seatNo === hardwareSeatNo) recordLiveSeatOpened(seatNo);
     Alert.alert(`${SEAT_ROLES[seatNo]} · ${stateCopy.label}`, message);
   };
 
@@ -612,7 +594,7 @@ export default function Home() {
                   <View style={[styles.liveDot, !hubConnected && styles.liveDotOffline]} />
                 </View>
                 <Text style={[styles.liveText, !hubConnected && styles.liveTextOffline]}>
-                  {hubConnected ? (telemetryReady ? "LIVE" : "CONNECTING") : "OFFLINE"}
+                  {simulationActive ? "DEMO" : hubConnected ? (telemetryReady ? "LIVE" : "CONNECTING") : "OFFLINE"}
                 </Text>
               </View>
             </View>
@@ -713,7 +695,7 @@ export default function Home() {
                       name={getDisplayName(profile)}
                       photo={getProfilePhoto(profile)}
                       state={setupState}
-                      isHardwareSeat={seatNo === hardwareSeatNo}
+                    isHardwareSeat={seatNo === hardwareSeatNo}
                       onPress={() => {
                         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         router.push("/assign");
@@ -868,7 +850,7 @@ const createStyles = (themes: ThemePalette) => StyleSheet.create({
     position: "relative",
     overflow: "hidden",
   },
-  backgroundArt: { ...StyleSheet.absoluteFillObject, overflow: "hidden" },
+  backgroundArt: { ...StyleSheet.absoluteFill, overflow: "hidden" },
   backgroundGlowTop: {
     position: "absolute",
     width: 350,
@@ -938,7 +920,7 @@ const createStyles = (themes: ThemePalette) => StyleSheet.create({
 
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   eyebrow: { color: themes.primaryBttn, fontSize: 11.5, letterSpacing: 1.25, fontFamily: "Body-Bold" },
-  pageHeader: { fontSize: fontsize.pageHeader + 2, fontFamily: "Logo-Font", color: themes.text, marginTop: 1 },
+  pageHeader: { fontSize: 28, fontFamily: "Logo-Font", color: themes.text, marginTop: 1 },
   liveBadge: {
     flexDirection: "row",
     alignItems: "center",

@@ -41,6 +41,9 @@ export default function SettingSwitch({
 
   return (
     <Pressable
+      accessibilityRole="switch"
+      accessibilityLabel={name}
+      accessibilityState={{ checked: selected, disabled: !enabled }}
       onPress={toggle}
       disabled={!enabled}
       style={({ pressed }) => [

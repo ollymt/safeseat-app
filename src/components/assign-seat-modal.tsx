@@ -475,7 +475,6 @@ const createStyles = (themes: ThemePalette) => StyleSheet.create({
   },
   listWrap: {
     position: "relative",
-    overflow: "visible",
     maxHeight: 260,
     width: "100%",
     borderRadius: 16,

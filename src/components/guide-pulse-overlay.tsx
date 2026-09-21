@@ -101,10 +101,10 @@ const styles = StyleSheet.create({
     overflow: "visible",
   },
   softFill: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   innerFrame: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderWidth: 2.5,
     shadowOpacity: 0.75,
     shadowRadius: 11,

@@ -83,7 +83,7 @@ export default function DriverGuideOverlay() {
           ) : step.actionHint ? (
             <View style={styles.doRow}>
               <View style={styles.doArrow}><Text style={styles.doArrowText}>↓</Text></View>
-              <Text style={styles.doText} numberOfLines={2}>{step.actionHint}</Text>
+              <Text style={styles.doText}>{step.actionHint}</Text>
             </View>
           ) : null}
 
@@ -119,7 +119,7 @@ export default function DriverGuideOverlay() {
 const createStyles = (themes: ThemePalette) => StyleSheet.create({
   safeArea: { flex: 1 },
   scrim: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: themes.mode === "dark" ? "rgba(4,10,20,0.70)" : "rgba(16,32,51,0.28)",
   },
   coachCard: {

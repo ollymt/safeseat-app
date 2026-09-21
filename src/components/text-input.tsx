@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, type Ref } from "react";
 import { StyleSheet, TextInput as RNTextInput, KeyboardTypeOptions } from "react-native";
 
 import { Spacing as spacing, FontSize as fontsize, type ThemePalette } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 
 type TextInputProps = {
+    ref?: Ref<RNTextInput>;
     type?: "text" | "email" | "phone" | "number" | "password";
     variant?: "regular" | "warn";
     placeholder?: string;
@@ -14,6 +15,7 @@ type TextInputProps = {
 };
 
 export default function TextInput({
+    ref,
     type = "text",
     variant = "regular",
     placeholder,
@@ -42,6 +44,7 @@ export default function TextInput({
 
     return (
         <RNTextInput
+            ref={ref}
             style={[
                 styles.input,
                 variant === "warn" && styles.warnInput,

@@ -4,15 +4,19 @@ import AssignSeatModal from "@/components/assign-seat-modal";
 import SeatOptionsModal from "@/components/seat-options-modal";
 import GuidePulseOverlay from "@/components/guide-pulse-overlay";
 import { Spacing as spacing, type ThemePalette } from "@/constants/theme";
+import { getSeatDisplayState } from "@/utils/monitoring-presentation";
 import { useTheme } from "@/hooks/use-theme";
 import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
+import { useUserPreferences } from "@/hooks/user-preferences-context";
 import { useDriverGuide } from "@/hooks/driver-guide-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Image,
   ImageBackground,
   Modal,
   Pressable,
@@ -68,10 +72,14 @@ export default function Assign() {
   const themes = useTheme();
   const styles = createStyles(themes);
   const router = useRouter();
+  const { prototypeIndicator } = useUserPreferences();
+  const [sensorPickerVisible, setSensorPickerVisible] = useState(false);
+  const [savingSensor, setSavingSensor] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const startingRef = useRef(false);
   const insets = useSafeAreaInsets();
-  const { height: viewportHeight } = useWindowDimensions();
-  const compactViewport = viewportHeight < 760;
-  const carMapHeight = compactViewport ? 282 : 318;
+  const { height: viewportHeight, width: viewportWidth } = useWindowDimensions();
+  const carMapHeight = Math.max(360, Math.min(560, viewportHeight * 0.56));
   const bottomPad = 138 + insets.bottom;
   const {
     isStep,
@@ -148,25 +156,11 @@ export default function Assign() {
     isAccountOwnerDriver(seatNo) || consents[seatNo] === "confirmed";
 
   const getCardState = (seatNo: number): SeatState => {
-    const profile = assignments[seatNo];
-    if (!profile) return "empty";
-
-    // The authenticated account owner is actively operating SafeSeat when
-    // assigned to Driver, so there is no redundant second consent prompt.
-    // Any other person in Driver is still treated like a passenger.
-    if (!isAccountOwnerDriver(seatNo)) {
-      const consent = consents[seatNo];
-      if (consent === "declined") return "declined";
-      if (consent !== "confirmed") return "consent";
-    }
-
-    // This UAT build has one physical SafeSeat sensor assembly. Assigned
-    // conceptual seats that are not linked must never look like they are
-    // actively being analyzed.
-    if (seatNo !== hardwareSeatNo) return "offline";
-    if (!hubConnected || !telemetryReady) return "offline";
-
-    return isLockedIn ? "monitoring" : "ready";
+    return getSeatDisplayState({
+      assigned: Boolean(assignments[seatNo]), ownerDriver: isAccountOwnerDriver(seatNo),
+      consent: consents[seatNo], linked: seatNo === hardwareSeatNo,
+      connected: hubConnected, ready: telemetryReady, active: isLockedIn, liveState: "monitoring",
+    });
   };
 
   const getSeatLabel = (seatNo: number | null) => {
@@ -177,13 +171,12 @@ export default function Assign() {
   };
 
   const persistHardwareSeat = async (seatNo: number | null) => {
-    setHardwareSeatNo(seatNo);
     if (seatNo) {
       await AsyncStorage.setItem(HARDWARE_SEAT_KEY, JSON.stringify(seatNo));
-      recordSensorSelected(seatNo);
     } else {
       await AsyncStorage.removeItem(HARDWARE_SEAT_KEY);
     }
+    setHardwareSeatNo(seatNo);
   };
 
   const persistConsents = async (next: Record<number, ConsentState>) => {
@@ -231,25 +224,30 @@ export default function Assign() {
       return;
     }
 
-    Alert.alert(
-      "Which seat is being monitored?",
-      "Choose the seat that has the SafeSeat hardware installed.",
-      [
-        ...assigned.map((seat) => ({
-          text: `${seat.seatNo === hardwareSeatNo ? "✓ " : ""}${getSeatLabel(seat.seatNo)}`,
-          onPress: () => {
-            void persistHardwareSeat(seat.seatNo);
-            void Haptics.selectionAsync();
-          },
-        })),
-        { text: "Cancel", style: "cancel" as const },
-      ],
-    );
+    setSensorPickerVisible(true);
+  };
+
+  const selectHardwareSeat = async (seatNo: number) => {
+    if (savingSensor || isLockedIn || !assignments[seatNo]) return;
+    setSavingSensor(true);
+    try {
+      await persistHardwareSeat(seatNo);
+      recordSensorSelected(seatNo, !hasEffectiveConsent(seatNo));
+      setSensorPickerVisible(false);
+      void Haptics.selectionAsync();
+      if (!hasEffectiveConsent(seatNo)) setTimeout(() => openConsentForSeat(seatNo), 180);
+    } catch {
+      Alert.alert("Could not select seat", "Please try again.");
+    } finally {
+      setSavingSensor(false);
+    }
   };
 
   const handleLockIn = async () => {
-    if (!hasAssignedSeats) return;
-
+    if (!hasAssignedSeats || startingRef.current) return;
+    startingRef.current = true;
+    setStarting(true);
+    try {
     let linkedSeat = hardwareSeatNo;
     if (!linkedSeat || !assignments[linkedSeat]) {
       linkedSeat = Number(Object.keys(assignments)[0]) || null;
@@ -257,6 +255,8 @@ export default function Assign() {
     }
 
     if (!linkedSeat) return;
+    // Persist fallback selection too, so Home and alert routing use the same seat.
+    await persistHardwareSeat(linkedSeat);
 
     if (!hasEffectiveConsent(linkedSeat)) {
       openConsentForSeat(linkedSeat);
@@ -285,7 +285,6 @@ export default function Assign() {
       else initialStatuses[seatNum] = "offline";
     });
 
-    try {
       // A new monitoring session must begin from ANALYZING until the Main Hub
       // produces its first decisive SAFE/WARNING/EMERGENCY result. Clear any
       // previous trip latch and any local UAT simulation before starting.
@@ -305,6 +304,9 @@ export default function Assign() {
     } catch (error) {
       console.error("Failed to start monitoring:", error);
       Alert.alert("Could not start monitoring", "SafeSeat could not save the current seat setup. Please try again.");
+    } finally {
+      startingRef.current = false;
+      setStarting(false);
     }
   };
 
@@ -484,7 +486,7 @@ export default function Assign() {
                 </Text>
               </View>
             </View>
-            <Text style={styles.pageSubhead}>{isLockedIn ? "Monitoring is active. End monitoring before changing seats." : "Choose a seat, then select who is sitting there."}</Text>
+            <Text style={styles.pageSubhead}>{isLockedIn ? "Monitoring active" : "Tap a seat to assign."}</Text>
           </View>
 
           <ImageBackground
@@ -495,7 +497,13 @@ export default function Assign() {
             ]}
             imageStyle={styles.carImage}
           >
-            <View style={styles.frontRow}>
+            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+              <Image source={require("../../../../assets/images/appImgs/car-cropped.png")} blurRadius={12} style={[StyleSheet.absoluteFill, { opacity: 0.16, transform: [{ scale: 1.08 }] }]} resizeMode="cover" />
+              <LinearGradient colors={[themes.background, "transparent"]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.leftFade} />
+              <LinearGradient colors={["transparent", themes.background]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.rightFade} />
+              <LinearGradient colors={["transparent", themes.background]} style={styles.bottomFade} />
+            </View>
+            <View style={[styles.frontRow, { left: viewportWidth < 360 ? 28 : 38, right: viewportWidth < 360 ? 28 : 38 }]}>
               {SEATS.slice(0, 2).map((seat) => (
                 <AssignCard
                   key={seat.seatNo}
@@ -530,9 +538,9 @@ export default function Assign() {
             </View>
           </ImageBackground>
 
-          <Pressable
+          {prototypeIndicator ? <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Choose the seat linked to the SafeSeat sensor"
+            accessibilityLabel="SafeSeat Sensor, one physical prototype. Choose monitored seat"
             onPress={chooseHardwareSeat}
             style={({ pressed }) => [
               styles.hardwareLinkCard,
@@ -548,7 +556,7 @@ export default function Assign() {
               />
             </View>
             <View style={styles.hardwareLinkCopy}>
-              <Text style={styles.hardwareLinkEyebrow}>SAFESEAT SENSOR</Text>
+              <Text style={styles.hardwareLinkEyebrow}>SAFESEAT SENSOR · 1 PROTOTYPE</Text>
               <Text style={styles.hardwareLinkTitle}>{getSeatLabel(hardwareSeatNo)}</Text>
               <Text style={styles.hardwareLinkText}>
                 {hubConnected ? (telemetryReady ? "Connected and ready" : "Connecting") : "Offline"}
@@ -566,7 +574,26 @@ export default function Assign() {
               inset={-3}
               beaconPosition="top"
             />
-          </Pressable>
+          </Pressable> : null}
+
+          <Modal visible={prototypeIndicator && sensorPickerVisible} transparent animationType="fade" onRequestClose={() => { if (!savingSensor) setSensorPickerVisible(false); }}>
+            <View style={styles.pickerBackdrop}>
+              <View style={styles.pickerSheet} accessibilityViewIsModal>
+                <Text style={styles.hardwareLinkEyebrow}>{prototypeIndicator ? "ONE PHYSICAL PROTOTYPE" : "MONITORING SETUP"}</Text>
+                <Text style={styles.pickerTitle}>Which seat has the sensor?</Text>
+                <Text style={styles.hardwareLinkText}>Choose the actual hardware location. Other seats stay unmonitored.</Text>
+                <ScrollView style={{ maxHeight: 360 }} contentContainerStyle={{ gap: 8 }}>
+                  {SEATS.filter((seat) => Boolean(assignments[seat.seatNo])).map((seat) => (
+                    <Pressable key={seat.seatNo} accessibilityRole="button" accessibilityState={{ selected: seat.seatNo === hardwareSeatNo, disabled: savingSensor }} disabled={savingSensor} onPress={() => void selectHardwareSeat(seat.seatNo)} style={[styles.pickerOption, seat.seatNo === hardwareSeatNo && { borderColor: themes.primaryBttn, backgroundColor: themes.primarySoft }]}>
+                      <View style={{ flex: 1 }}><Text style={styles.hardwareLinkTitle}>{getSeatLabel(seat.seatNo)}</Text><Text style={styles.hardwareLinkText}>{getDisplayProfile(assignments[seat.seatNo])?.name}{hasEffectiveConsent(seat.seatNo) ? "" : " · Consent needed"}</Text></View>
+                      <Text style={styles.changePillText}>{seat.seatNo === hardwareSeatNo ? "SELECTED" : "SELECT"}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+                <Pressable accessibilityRole="button" disabled={savingSensor} onPress={() => setSensorPickerVisible(false)} style={styles.pickerOption}><Text style={styles.hardwareLinkTitle}>{savingSensor ? "Saving…" : "Cancel"}</Text></Pressable>
+              </View>
+            </View>
+          </Modal>
 
           <AssignSeatModal
             seat={selectedSeat}
@@ -740,7 +767,8 @@ export default function Assign() {
               label={startReadiness === "ready" ? "Start Monitoring" : startReadiness === "offline" ? "Offline" : "Assign a Person"}
               onPress={() => void handleLockIn()}
               variant="primary"
-              enabled={startReadiness === "ready"}
+              loading={starting}
+              enabled={startReadiness === "ready" && !starting}
               fullWidth
               style={styles.stickyButton}
             />
@@ -752,6 +780,10 @@ export default function Assign() {
 }
 
 const createStyles = (themes: ThemePalette) => StyleSheet.create({
+  pickerBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", padding: 20 },
+  pickerSheet: { maxHeight: "90%", padding: 20, gap: 14, borderRadius: 24, backgroundColor: themes.backgroundElement, borderWidth: 1, borderColor: themes.divider },
+  pickerTitle: { fontSize: 22, lineHeight: 28, color: themes.text, fontFamily: "Body-Bold" },
+  pickerOption: { minHeight: 64, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: themes.divider, flexDirection: "row", alignItems: "center", gap: 10 },
   screen: {
     flex: 1,
     backgroundColor: themes.background,
@@ -858,8 +890,11 @@ const createStyles = (themes: ThemePalette) => StyleSheet.create({
   changePillLocked: { backgroundColor: themes.surfaceSoft, borderColor: themes.divider },
   changePillText: { color: themes.primaryBttn, fontSize: 10, letterSpacing: 0.6, fontFamily: "Body-Bold" },
   changePillTextLocked: { color: themes.textMuted },
+  leftFade: { position: "absolute", left: 0, top: 0, bottom: 0, width: 40 },
+  rightFade: { position: "absolute", right: 0, top: 0, bottom: 0, width: 40 },
+  bottomFade: { position: "absolute", left: 0, right: 0, bottom: 0, height: 36 },
   carMap: {
-    minHeight: 270,
+    minHeight: 360,
     marginTop: 0,
     borderRadius: 26,
     overflow: "hidden",
@@ -878,21 +913,21 @@ const createStyles = (themes: ThemePalette) => StyleSheet.create({
   },
   frontRow: {
     position: "absolute",
-    top: "19%",
+    top: "22%",
     left: 52,
     right: 52,
     gap: spacing.one + 4,
     flexDirection: "row",
-    height: "29%",
+    height: "27%",
   },
   backRow: {
     position: "absolute",
-    top: "59%",
-    left: 26,
-    right: 26,
+    top: "61%",
+    left: 14,
+    right: 14,
     gap: spacing.one,
     flexDirection: "row",
-    height: "28%",
+    height: "26%",
   },
   stickyActionWrap: {
     position: "absolute",

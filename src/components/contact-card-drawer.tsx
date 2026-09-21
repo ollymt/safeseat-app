@@ -77,7 +77,7 @@ export default function ContactCardDrawer({ visible, onClose, name, number, orde
                                 buttonBorderShape("roundedRectangle")
                             ]}
                             onPress={() => Alert.alert("Action 2")}
-                            style={{ flex: 1, height: 100 }}
+                            style={{ height: 100 }}
                         >
                             <Column alignment="center" spacing={4}>
                                 <Icon name={Icon.select({
@@ -94,7 +94,7 @@ export default function ContactCardDrawer({ visible, onClose, name, number, orde
                                 buttonBorderShape("roundedRectangle")
                             ]}
                             onPress={() => Alert.alert("Action 2")}
-                            style={{ flex: 1, height: 100 }}
+                            style={{ height: 100 }}
                         >
                             <Column alignment="center" spacing={4}>
                                 <Icon name={Icon.select({

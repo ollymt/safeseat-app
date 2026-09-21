@@ -76,10 +76,10 @@ export default function AssignCard({
         : state === "unknown" ? "ANALYZING"
           : state === "consent" ? "CONSENT NEEDED"
             : state === "declined" ? "NOT MONITORED"
-              : state === "offline" ? "OFFLINE"
+              : state === "offline" ? (hardwareLinked ? "OFFLINE" : "NOT MONITORED")
                 : state === "ready" ? "READY"
                   : state === "monitoring" ? "MONITORING"
-                    : displayName ? "ASSIGNED" : "";
+                    : displayName ? (hardwareLinked ? "ASSIGNED" : "NOT MONITORED") : "";
 
   const stateIcon = state === "safe" || state === "ready" || state === "monitoring"
     ? Icon.select({ ios: "checkmark.circle.fill", android: checkXml })

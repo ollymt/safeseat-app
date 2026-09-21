@@ -16,7 +16,6 @@ import { Alert, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, 
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 
-import ChangeEmailModal from "@/components/change-email-modal";
 import ChangePasswordModal from "@/components/change-password-modal";
 import ChangePhoneModal from "@/components/change-phone-modal";
 import EscalationWindowControl from "@/components/escalation-window-control";
@@ -49,7 +48,6 @@ export default function Settings() {
   const [userPhone, setUserPhone] = useState("Not set");
   const [isLockedIn, setIsLockedIn] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionKey>("account");
-  const [changeEmailVisible, setChangeEmailVisible] = useState(false);
   const [changePhoneVisible, setChangePhoneVisible] = useState(false);
   const [changePassVisible, setChangePassVisible] = useState(false);
 
@@ -58,6 +56,7 @@ export default function Settings() {
     escalationWindowSeconds, setEscalationWindowSeconds,
     useMetric, setUseMetric,
     themeMode, setThemeMode,
+    prototypeIndicator, setPrototypeIndicator, loading: preferencesLoading,
   } = useUserPreferences();
 
   const loadAllUserData = useCallback(async () => {
@@ -66,11 +65,10 @@ export default function Settings() {
       setIsLockedIn(rawLockedIn ? JSON.parse(rawLockedIn) : false);
       const currentUser = auth.currentUser;
       if (!currentUser) return;
-      if (currentUser.email) setUserEmail(currentUser.email);
+      setUserEmail(currentUser.email ?? "Not set");
       const snap = await getDoc(doc(db, "users", currentUser.uid));
       if (snap.exists()) {
         const data = snap.data();
-        if (data.email) setUserEmail(data.email);
         if (data.phone) setUserPhone(data.phone);
       }
     } catch (error) {
@@ -186,7 +184,7 @@ export default function Settings() {
           <View onLayout={(e) => { sectionY.current.account = e.nativeEvent.layout.y; }} style={styles.section}>
             <Text style={styles.sectionTitle}>ACCOUNT</Text>
             <View style={styles.settingGroup}>
-              <SettingPageItem name="Email" iconName="mail-outline" value={userEmail} onPress={() => setChangeEmailVisible(true)} showChevron />
+              <View style={{ paddingHorizontal: 16, paddingVertical: 12, gap: 4 }} accessible accessibilityLabel={`Email, ${userEmail}`}><Text style={styles.infoTitle}>Email</Text><Text selectable style={styles.infoCopy}>{userEmail}</Text></View>
               <SettingPageItem name="Phone" iconName="call-outline" value={userPhone} onPress={() => setChangePhoneVisible(true)} showChevron />
               <SettingPageItem name="Password" iconName="key-outline" onPress={() => setChangePassVisible(true)} showChevron isLast />
             </View>
@@ -194,20 +192,12 @@ export default function Settings() {
 
           <View onLayout={(e) => { sectionY.current.alerts = e.nativeEvent.layout.y; }} style={styles.section}>
             <Text style={styles.sectionTitle}>ALERTS & EMERGENCY</Text>
-            <View style={styles.infoCard}>
-              <View style={styles.infoIcon}>
-                <Ionicons name="shield-checkmark-outline" size={21} color={themes.primaryBttn} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.infoTitle}>Monitoring runs automatically</Text>
-                <Text style={styles.infoCopy}>Sensor modules are managed by the Main Hub. Settings only control app behavior that is actually configurable.</Text>
-              </View>
-            </View>
+
 
             <View style={styles.settingGroup}>
               <SettingSwitch name="Driver Emergency SMS" iconName="chatbubble-ellipses-outline" value={emergencyEscalation} onValueChange={(v) => void setEmergencyEscalation(v)} isLast />
             </View>
-            <Text style={styles.note}>Automated SMS is eligible only for a confirmed <Text style={styles.noteStrong}>Driver-seat</Text> emergency. Passenger emergencies still alert the driver with SafeSeat sound, haptics, and the Emergency screen.</Text>
+            <Text style={styles.note}>SMS applies to Driver emergencies only.</Text>
             <EscalationWindowControl value={escalationWindowSeconds} enabled={emergencyEscalation} onValueChange={(v) => void setEscalationWindowSeconds(v)} />
             <View style={styles.settingGroup}>
               <SettingPageItem name="Profiles & Emergency Contacts" iconName="people-outline" onPress={() => router.push("/(tabs)/everyone" as any)} showChevron isLast />
@@ -219,6 +209,12 @@ export default function Settings() {
             <View style={styles.settingGroup}>
               <SettingSwitch name="Light Mode" iconName="sunny-outline" value={themeMode === "light"} onValueChange={(v) => void setThemeMode(v ? "light" : "dark")} />
               <SettingSwitch name="Use Metric Units" iconName="speedometer-outline" value={useMetric} onValueChange={(v) => void setUseMetric(v)} isLast />
+            </View>
+
+            <View style={styles.settingGroup}>
+              <SettingSwitch name="Prototype indicator" iconName="hardware-chip-outline" value={prototypeIndicator} enabled={!preferencesLoading} onValueChange={(v) => {
+                void setPrototypeIndicator(v).catch(() => Alert.alert("Could not save setting", "Please try again before closing the app."));
+              }} isLast />
             </View>
 
             <View style={styles.settingGroup}>
@@ -248,7 +244,6 @@ export default function Settings() {
         </View>
       </ScrollView>
 
-      <ChangeEmailModal visible={changeEmailVisible} onClose={() => setChangeEmailVisible(false)} onSuccess={() => { void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); setChangeEmailVisible(false); void loadAllUserData(); }} />
       <ChangePhoneModal visible={changePhoneVisible} onClose={() => setChangePhoneVisible(false)} onSuccess={() => { void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); setChangePhoneVisible(false); void loadAllUserData(); }} />
       <ChangePasswordModal visible={changePassVisible} onClose={() => setChangePassVisible(false)} onSuccess={() => { void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); setChangePassVisible(false); void loadAllUserData(); }} />
     </SafeAreaView>

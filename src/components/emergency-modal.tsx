@@ -82,7 +82,7 @@ export default function EmergencyModal({
   const [contactMenuVisible, setContactMenuVisible] = useState(false);
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(escalationWindowSeconds);
+  const [secondsLeft, setSecondsLeft] = useState<number>(escalationWindowSeconds);
   const [windowElapsed, setWindowElapsed] = useState(false);
   const [holdingCancel, setHoldingCancel] = useState(false);
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

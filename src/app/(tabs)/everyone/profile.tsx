@@ -1139,7 +1139,6 @@ const createStyles = (themes: ThemePalette) => StyleSheet.create({
 		margin: spacing.none,
 	},
 	caption: {
-		fontFeatureSettings: "Body-Medium",
 		opacity: 0.8,
 		fontSize: fontsize.caption
 	},

@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useUserPreferences } from "@/hooks/user-preferences-context";
 import { auth } from "@/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { usePathname, useRouter } from "expo-router";
@@ -39,7 +40,7 @@ export const DRIVER_GUIDE_STEPS: Record<DriverGuideStepId, DriverGuideStep> = {
     id: "dashboard",
     eyebrow: "STEP 1 · HOME",
     title: "Start from the cabin dashboard",
-    body: "Home is where you’ll see all five seats during monitoring.",
+    body: "Home separates the Driver from passenger seats. All five seats stay visible. Only the linked seat receives live readings.",
     actionHint: "Tap the Seats tab below to continue.",
     placement: "top",
   },
@@ -87,8 +88,8 @@ export const DRIVER_GUIDE_STEPS: Record<DriverGuideStepId, DriverGuideStep> = {
     id: "alerts",
     eyebrow: "STEP 7 · LIVE STATUS",
     title: "Check a seat’s live status",
-    body: "Each seat shows its own Safe, Warning, Emergency, Analyzing, or Offline state.",
-    actionHint: "Tap an assigned seat on Home to open its live details.",
+    body: "Only the linked seat shows live safety readings. Other assigned seats show Not monitored, Consent needed, or Declined.",
+    actionHint: "Tap the highlighted monitored seat on Home to view its details.",
     placement: "top",
   },
   complete: {
@@ -116,7 +117,7 @@ type DriverGuideContextValue = {
   recordSeatTapped: (seatNo: number, outcome: SeatTapOutcome) => void;
   recordAssignmentSaved: (seatNo: number, needsConsent: boolean) => void;
   recordConsentConfirmed: (seatNo: number) => void;
-  recordSensorSelected: (seatNo: number) => void;
+  recordSensorSelected: (seatNo: number, needsConsent?: boolean) => void;
   recordMonitoringStarted: () => void;
   recordLiveSeatOpened: (seatNo: number) => void;
 };
@@ -125,6 +126,7 @@ const DriverGuideContext = createContext<DriverGuideContextValue | null>(null);
 
 export function DriverGuideProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const { prototypeIndicator } = useUserPreferences();
   const pathname = usePathname();
   const [uid, setUid] = useState<string | null>(auth.currentUser?.uid ?? null);
   const [stepId, setStepId] = useState<DriverGuideStepId | null>(null);
@@ -175,7 +177,24 @@ export function DriverGuideProvider({ children }: { children: React.ReactNode })
   }, [completionKey, initialCheckDone, uid]);
 
   const active = stepId !== null;
-  const step = stepId ? DRIVER_GUIDE_STEPS[stepId] : null;
+  const step = useMemo(() => {
+    if (!stepId) return null;
+    const base = DRIVER_GUIDE_STEPS[stepId];
+    if (stepId === "sensor") return {
+      ...base,
+      eyebrow: "STEP 5 · PROTOTYPE SENSOR",
+      body: "Tap SafeSeat Sensor and choose the seat with the prototype.",
+      actionHint: "Tap SafeSeat Sensor, then select its actual seat.",
+    };
+    if (stepId === "start" && !prototypeIndicator) return { ...base, eyebrow: "START MONITORING" };
+    if (stepId === "complete" && !prototypeIndicator) return { ...base, body: "You assigned seats, confirmed consent when needed, and checked the live seat status." };
+    return base;
+  }, [stepId, prototypeIndicator]);
+
+  // Hiding the selector must never leave the guide waiting for an invisible control.
+  useEffect(() => {
+    if (!prototypeIndicator && stepId === "sensor") setStepId("start");
+  }, [prototypeIndicator, stepId]);
 
   // Any real navigation into Seats counts, whether it came from the bottom tab,
   // the Home "Choose Seats" action, or a swipe gesture.
@@ -224,25 +243,25 @@ export function DriverGuideProvider({ children }: { children: React.ReactNode })
   const recordSeatTapped = useCallback((seatNo: number, outcome: SeatTapOutcome) => {
     if (stepId !== "seats") return;
     setSelectedSeatNo(seatNo);
-    setStepId(outcome);
-  }, [stepId]);
+    setStepId(outcome === "sensor" && !prototypeIndicator ? "start" : outcome);
+  }, [stepId, prototypeIndicator]);
 
   const recordAssignmentSaved = useCallback((seatNo: number, needsConsent: boolean) => {
     if (stepId !== "assign") return;
     setSelectedSeatNo(seatNo);
-    setStepId(needsConsent ? "consent" : "sensor");
-  }, [stepId]);
+    setStepId(needsConsent ? "consent" : prototypeIndicator ? "sensor" : "start");
+  }, [stepId, prototypeIndicator]);
 
   const recordConsentConfirmed = useCallback((seatNo: number) => {
     if (stepId !== "consent") return;
     setSelectedSeatNo(seatNo);
-    setStepId("sensor");
-  }, [stepId]);
+    setStepId(prototypeIndicator ? "sensor" : "start");
+  }, [stepId, prototypeIndicator]);
 
-  const recordSensorSelected = useCallback((seatNo: number) => {
+  const recordSensorSelected = useCallback((seatNo: number, needsConsent = false) => {
     if (stepId !== "sensor") return;
     setSelectedSeatNo(seatNo);
-    setStepId("start");
+    setStepId(needsConsent ? "consent" : "start");
   }, [stepId]);
 
   const recordMonitoringStarted = useCallback(() => {

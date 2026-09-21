@@ -1,4 +1,5 @@
 import { FontSize as fontsize, Spacing as spacing, type ThemePalette } from "@/constants/theme";
+import { useUserPreferences } from "@/hooks/user-preferences-context";
 import { useTheme } from "@/hooks/use-theme";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,13 +12,16 @@ const STEPS = [
 ];
 
 export default function QuickHelp() {
+  const { prototypeIndicator } = useUserPreferences();
   const themes=useTheme(); const styles=createStyles(themes); const insets=useSafeAreaInsets();
   const states=[
-    ["SAFE","No unusual signs detected",themes.green],["WARNING","Check the person in that seat",themes.lightOrange],["EMERGENCY","Immediate attention may be needed",themes.warnBttn],["ANALYZING","SafeSeat is still checking",themes.info],["OFFLINE","Monitoring data is not available",themes.textMuted],
+    ["NOT MONITORED","A person is assigned, but no sensor is linked",themes.textMuted],["CONSENT","This person must agree before monitoring",themes.lightOrange],["DECLINED","Monitoring was declined for this trip",themes.textMuted],["SAFE","No unusual signs detected for the monitored seat",themes.green],["WARNING","Check the person in that seat",themes.lightOrange],["EMERGENCY","Immediate attention may be needed",themes.warnBttn],["ANALYZING","SafeSeat is still checking",themes.info],["OFFLINE","Monitoring data is not available",themes.textMuted],
   ];
   return <SafeAreaView style={styles.screen} edges={["left","right","bottom"]}><ScrollView contentContainerStyle={[styles.content,{paddingBottom:90+insets.bottom}]} showsVerticalScrollIndicator={false}>
     <View style={styles.header}><Text style={styles.eyebrow}>QUICK HELP</Text><Text style={styles.title}>Using SafeSeat</Text></View>
     <Text style={styles.sectionLabel}>START A TRIP</Text><View style={styles.card}>{STEPS.map(([n,t,d],i)=><View key={n} style={[styles.stepRow,i<STEPS.length-1&&styles.divider]}><View style={styles.number}><Text style={styles.numberText}>{n}</Text></View><View style={{flex:1}}><Text style={styles.stepTitle}>{t}</Text><Text style={styles.stepDetail}>{d}</Text></View></View>)}</View>
+    <Text style={styles.sectionLabel}>MONITORED SEAT</Text><View style={styles.cardCompact}><Text style={styles.stepTitle}>{prototypeIndicator ? "SafeSeat Sensor · 1 prototype" : "Monitored seat"}</Text><Text style={styles.stepDetail}>{prototypeIndicator ? "In Seats, tap the SafeSeat Sensor card and choose the seat with the hardware." : "The selector is hidden. Enable Prototype indicator in Settings to change the sensor seat."} Only the linked, consenting seat receives live monitoring. Other seats remain unmonitored. Change Prototype indicator in Settings → System to show or hide the sensor selector.</Text></View>
+    <Text style={styles.sectionLabel}>HOME AT A GLANCE</Text><View style={styles.cardCompact}><Text style={styles.stepDetail}>All five seats stay visible on Home. Tap a card for details. Safe applies only to the linked seat.</Text></View>
     <Text style={styles.sectionLabel}>STATUS GUIDE</Text><View style={styles.card}>{states.map(([l,d,c],i)=><View key={String(l)} style={[styles.stateRow,i<states.length-1&&styles.divider]}><View style={[styles.dot,{backgroundColor:String(c)}]}/><View style={{flex:1}}><Text style={[styles.stateLabel,{color:String(c)}]}>{l}</Text><Text style={styles.stepDetail}>{d}</Text></View></View>)}</View>
     <Text style={styles.sectionLabel}>DURING AN ALERT</Text><View style={styles.cardCompact}><Text style={styles.alertText}>Check the affected seat, review available heart-rate and breathing-rate indicators, and respond to the person’s condition. Passenger emergencies alert the driver; automated SMS is Driver-seat only.</Text></View>
   </ScrollView></SafeAreaView>
