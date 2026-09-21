@@ -79,7 +79,8 @@ export default function Assign() {
   const insets = useSafeAreaInsets();
   const { height: viewportHeight, width: viewportWidth } = useWindowDimensions();
   const carMapHeight = Math.max(360, Math.min(560, viewportHeight * 0.56));
-  const bottomPad = 138 + insets.bottom;
+  const [stickyActionHeight, setStickyActionHeight] = useState(0);
+  const bottomPad = stickyActionHeight + spacing.one;
   const {
     isStep,
     stepId: guideStepId,
@@ -472,7 +473,9 @@ export default function Assign() {
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
         showsVerticalScrollIndicator={false}
-        bounces
+        bounces={false}
+        alwaysBounceVertical={false}
+        overScrollMode="never"
       >
         <View style={styles.container}>
           <View style={styles.headerBlock}>
@@ -726,10 +729,18 @@ export default function Assign() {
         </View>
       </ScrollView>
 
-      <View style={[
-        styles.stickyActionWrap,
-        { paddingBottom: Math.max(insets.bottom, 8) },
-      ]}>
+      <View
+        onLayout={(event) => {
+          const nextHeight = Math.ceil(event.nativeEvent.layout.height);
+          setStickyActionHeight((currentHeight) =>
+            currentHeight === nextHeight ? currentHeight : nextHeight,
+          );
+        }}
+        style={[
+          styles.stickyActionWrap,
+          { paddingBottom: Math.max(insets.bottom, 8) },
+        ]}
+      >
         <View style={styles.stickyActionInner}>
           <GuidePulseOverlay
             active={isStep("start")}
@@ -794,7 +805,6 @@ const createStyles = (themes: ThemePalette) => StyleSheet.create({
     paddingTop: spacing.one,
   },
   container: {
-    flex: 1,
     width: "100%",
     paddingHorizontal: spacing.two,
     gap: spacing.one + 4,
