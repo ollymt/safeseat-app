@@ -1,302 +1,348 @@
+import AuthBackground from "@/components/auth-background";
 import Button from "@/components/button";
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
-import { Column, FieldGroup, Host, Icon } from "@expo/ui";
-import {
-	autocorrectionDisabled,
-	frame,
-	keyboardType,
-	onSubmit,
-	scrollDisabled,
-	submitLabel,
-} from "@expo/ui/swift-ui/modifiers";
-
-import TextInput from "@/components/text-input"
-
+import TextInput from "@/components/text-input";
+import { Spacing as spacing } from "@/constants/theme";
+import visibilityXml from "@expo/material-symbols/visibility.xml";
+import visibilityOffXml from "@expo/material-symbols/visibility_off.xml";
+import { Host, Icon } from "@expo/ui";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import {
-	Alert,
-	Dimensions,
-	KeyboardAvoidingView,
-	Platform,
-	ScrollView,
-	StyleSheet,
-	Text,
-	useColorScheme,
-	View,
-	ImageBackground
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../firebase";
 
-const { width: screenWidth } = Dimensions.get("window");
+const hasValidOptionalPhone = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return true;
+  if (!/^[+()\d\s.-]+$/.test(trimmed)) return false;
+  const digitCount = trimmed.replace(/\D/g, "").length;
+  return digitCount >= 7 && digitCount <= 15;
+};
 
-import visibilityXml from "@expo/material-symbols/visibility.xml";
-import visibilityOffXml from "@expo/material-symbols/visibility_off.xml";
+export default function Signup() {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
+  const router = useRouter();
 
-export default function Login() {
-	// 2. Setup state variables to store the user input values
-	const [name, setName] = useState("");
-	const [email, setEmail] = useState("");
-	const [phone, setPhone] = useState("");
-	const [password, setPassword] = useState("");
-	const [confirmPassword, setConfirmPassword] = useState("");
-	const [isSubmitting, setIsSubmitting] = useState(false);
+  const handleSignUp = async () => {
+    const cleanName = name.trim();
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanPhone = phone.trim();
 
-	const [passVisible, setPassVisible] = useState(false);
+    if (!cleanName || !cleanEmail || !password || !confirmPassword) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert("Missing fields", "Name, email, password, and confirm password are required.");
+      return;
+    }
 
-	const emailInputRef = useRef<any>(null);
-	const phoneInputRef = useRef<any>(null);
-	const passwordInputRef = useRef<any>(null);
-	const confirmPasswordInputRef = useRef<any>(null);
+    if (!hasValidOptionalPhone(cleanPhone)) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert("Check phone number", "Enter a valid phone number, or leave the optional field blank.");
+      return;
+    }
 
-	const router = useRouter();
+    if (password !== confirmPassword) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert("Passwords don't match", "Please enter the same password in both fields.");
+      return;
+    }
 
-	// 3. The Account Creation Function
-	const handleSignUp = async () => {
-		// Basic Validation
-		if (!name || !email || !phone || !password || !confirmPassword) {
-			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-			Alert.alert("Error", "Please fill out all fields.");
-			return;
-		}
+    if (password.length < 6) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert("Password too short", "Password must be at least 6 characters.");
+      return;
+    }
 
-		if (password !== confirmPassword) {
-			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-			Alert.alert("Error", "Passwords do not match.");
-			return;
-		}
+    setIsSubmitting(true);
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+      const uid = userCredential.user.uid;
 
-		if (password.length < 6) {
-			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-			Alert.alert("Error", "Password must be at least 6 characters.");
-			return;
-		}
+      await setDoc(doc(db, "users", uid), {
+        name: cleanName,
+        email: cleanEmail,
+        phone: cleanPhone,
+        createdAt: new Date().toISOString(),
+      });
 
-		setIsSubmitting(true);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Account created", "Your SafeSeat account is ready. You can log in now.", [
+        { text: "Continue", onPress: () => router.replace("/(auth)/login") },
+      ]);
+    } catch (error: any) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      let message = "Something went wrong. Please try again.";
+      if (error.code === "auth/email-already-in-use") message = "An account with this email already exists.";
+      else if (error.code === "auth/invalid-email") message = "Please enter a valid email address.";
+      else if (error.code === "auth/weak-password") message = "Password is too weak. Use at least 6 characters.";
+      Alert.alert("Sign-up failed", message);
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-		try {
-			const cleanEmail = email.toLowerCase().trim();
+  const PasswordEye = ({ visible, onPress, label }: { visible: boolean; onPress: () => void; label: string }) => (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => [styles.eyeButton, pressed && styles.pressed]}
+    >
+      <Host>
+        <Icon
+          name={Icon.select({
+            ios: visible ? "eye.slash.fill" : "eye.fill",
+            android: visible ? visibilityOffXml : visibilityXml,
+          })}
+        />
+      </Host>
+    </Pressable>
+  );
 
-			// 1. Create the account in Firebase Authentication (handles email + password securely)
-			const userCredential = await createUserWithEmailAndPassword(
-				auth,
-				cleanEmail,
-				password,
-			);
-			const uid = userCredential.user.uid;
+  return (
+    <AuthBackground>
+      <StatusBar style="light" />
+      <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.flex}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.content}>
+              <View style={styles.brandBlock}>
+                <Text style={styles.brand}>SafeSeat</Text>
+                <Text style={styles.eyebrow}>DRIVER ACCOUNT</Text>
+              </View>
 
-			// 2. Save the rest of the profile (name, phone) in Firestore, linked by the same uid
-			await setDoc(doc(db, "users", uid), {
-				name,
-				email: cleanEmail,
-				phone,
-				createdAt: new Date().toISOString(),
-			});
+              <View style={styles.card}>
+                <Text style={styles.title}>Create your account</Text>
+                <Text style={styles.subtitle}>Set up your profile for SafeSeat monitoring and vehicle access.</Text>
 
-			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-			Alert.alert("Success", "Account created successfully!", [
-				{
-					text: "OK",
-					onPress: () => router.replace("/(auth)/login"), // Route them to login screen
-				},
-			]);
-		} catch (error: any) {
-			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                <View style={styles.fields}>
+                  <View>
+                    <Text style={styles.fieldLabel}>Name</Text>
+                    <TextInput
+                      variant="regular"
+                      placeholder="Full name"
+                      type="text"
+                      value={name}
+                      onChangeText={setName}
+                    />
+                  </View>
 
-			// Translate common Firebase error codes into friendlier messages
-			let message = "Something went wrong. Please try again.";
-			if (error.code === "auth/email-already-in-use") {
-				message = "An account with this email already exists.";
-			} else if (error.code === "auth/invalid-email") {
-				message = "Please enter a valid email address.";
-			} else if (error.code === "auth/weak-password") {
-				message = "Password is too weak. Use at least 6 characters.";
-			}
+                  <View>
+                    <Text style={styles.fieldLabel}>Email</Text>
+                    <TextInput
+                      variant="regular"
+                      placeholder="name@example.com"
+                      type="email"
+                      value={email}
+                      onChangeText={setEmail}
+                    />
+                  </View>
 
-			Alert.alert("Sign-up Failed", message);
-			console.error(error);
-		} finally {
-			setIsSubmitting(false);
-		}
-	};
+                  <View>
+                    <View style={styles.labelRow}>
+                      <Text style={styles.fieldLabel}>Phone number</Text>
+                      <Text style={styles.optionalLabel}>OPTIONAL</Text>
+                    </View>
+                    <TextInput
+                      variant="regular"
+                      placeholder="e.g. +63 912 345 6789"
+                      type="phone"
+                      value={phone}
+                      onChangeText={setPhone}
+                    />
+                    <Text style={styles.helper}>You can add or change this later in your profile.</Text>
+                  </View>
 
-	return (
-		<ImageBackground
-			source={{
-				uri: "https://images.stockcake.com/public/f/4/6/f46a0b7f-157f-4ba7-a89a-da22a67672ee_large/busy-night-traffic-stockcake.jpg",
-			}}
-			style={{ flex: 1 }}
-			blurRadius={5}
-		>
-			<SafeAreaView
-				style={{
-					flex: 1,
-					backgroundColor: "#000000CC",
-				}}
-			>
-				<KeyboardAvoidingView
-					behavior={Platform.OS === "ios" ? "padding" : "height"}
-					style={{ flex: 1 }}
-				>
-					<ScrollView
-						contentContainerStyle={{ flexGrow: 1 }}
-						bounces={false}
-						keyboardShouldPersistTaps="handled"
-					>
-						<View style={styles.container}>
-							{/* Logo Context Title Layout Area */}
-							<View style={styles.logoSection}>
-								<Text style={[styles.loginlogo, { color: themes.text }]}>
-									Sign-up
-								</Text>
-							</View>
+                  <View>
+                    <Text style={styles.fieldLabel}>Password</Text>
+                    <View style={styles.passwordRow}>
+                      <View style={styles.passwordInput}>
+                        <TextInput
+                          variant="regular"
+                          placeholder="At least 6 characters"
+                          type={passwordVisible ? "text" : "password"}
+                          value={password}
+                          onChangeText={setPassword}
+                        />
+                      </View>
+                      <PasswordEye
+                        visible={passwordVisible}
+                        onPress={() => setPasswordVisible((value) => !value)}
+                        label={passwordVisible ? "Hide password" : "Show password"}
+                      />
+                    </View>
+                  </View>
 
-							{/* Main Form Context Window Layout Area */}
-							<View style={styles.formSection}>
-								<View style={{ width: "100%" }}>
-									<View style={{ flexDirection: "column", gap: spacing.two }}>
-										<View style={{ flexDirection: "column", gap: spacing.one }}>
-											<TextInput
-												variant="regular"
-												placeholder="Name"
-												type="text"
-												value={name}
-												onChangeText={setName}
-											/>
-											<TextInput
-												variant="regular"
-												placeholder="Email"
-												type="email"
-												value={email}
-												onChangeText={setEmail}
-											/>
-											<TextInput
-												variant="regular"
-												placeholder="Phone Number"
-												type="phone"
-												value={phone}
-												onChangeText={setPhone}
-											/>
-											<View style={{ flexDirection: "row", gap: spacing.one }}>
-												<View style={{ flex: 1 }}>
-													<TextInput
-														variant="regular"
-														placeholder="Password"
-														type={!passVisible ? "password" : "text"}
-														value={password}
-														onChangeText={setPassword}
-													/>
-												</View>
-												<Button
-													variant={!passVisible ? "secondary" : "primary"}
-													onPress={() => setPassVisible(!passVisible)}
-												>
-													<View style={{ paddingHorizontal: spacing.two, paddingVertical: spacing.one }}>
-														<Host>
-															{!passVisible ? (
-																<Icon name={Icon.select({
-																	ios: "eye.fill",
-																	android: visibilityXml
-																})} />
-															) : (
-																<Icon name={Icon.select({
-																	ios: "eye.slash.fill",
-																	android: visibilityOffXml
-																})} />
-															)
-															}
-														</Host>
-													</View>
-												</Button>
-											</View>
-											<View style={{ flexDirection: "row", gap: spacing.one }}>
-												<View style={{ flex: 1 }}>
-													<TextInput
-														variant="regular"
-														placeholder="Confirm Password"
-														type={!passVisible ? "password" : "text"}
-														value={confirmPassword}
-														onChangeText={setConfirmPassword}
-													/>
-												</View>
-												<Button
-													variant={!passVisible ? "secondary" : "primary"}
-													onPress={() => setPassVisible(!passVisible)}
-												>
-													<View style={{ paddingHorizontal: spacing.two, paddingVertical: spacing.one }}>
-														<Host>
-															{!passVisible ? (
-																<Icon name={Icon.select({
-																	ios: "eye.fill",
-																	android: visibilityXml
-																})} />
-															) : (
-																<Icon name={Icon.select({
-																	ios: "eye.slash.fill",
-																	android: visibilityOffXml
-																})} />
-															)
-															}
-														</Host>
-													</View>
-												</Button>
-											</View>
-										</View>
-									</View>
-								</View>
+                  <View>
+                    <Text style={styles.fieldLabel}>Confirm password</Text>
+                    <View style={styles.passwordRow}>
+                      <View style={styles.passwordInput}>
+                        <TextInput
+                          variant="regular"
+                          placeholder="Re-enter your password"
+                          type={confirmPasswordVisible ? "text" : "password"}
+                          value={confirmPassword}
+                          onChangeText={setConfirmPassword}
+                        />
+                      </View>
+                      <PasswordEye
+                        visible={confirmPasswordVisible}
+                        onPress={() => setConfirmPasswordVisible((value) => !value)}
+                        label={confirmPasswordVisible ? "Hide confirm password" : "Show confirm password"}
+                      />
+                    </View>
+                  </View>
+                </View>
 
-								<View
-									style={{
-										width: "100%",
-										alignSelf: "center",
-										marginTop: spacing.two,
-										gap: spacing.none,
-										borderColor: themes.text,
-										borderWidth: spacing.none
-									}}
-								>
-									<Button
-										label={"Sign-up"}
-										onPress={() => {
-											if (!isSubmitting) handleSignUp();
-										}}
-										enabled={!isSubmitting}
-										fullWidth={true}
-										loading={isSubmitting}
-									/>
-								</View>
-							</View>
-						</View>
-					</ScrollView>
-				</KeyboardAvoidingView>
-			</SafeAreaView>
-		</ImageBackground>
-	);
+                <Button
+                  label="Create account"
+                  onPress={() => {
+                    if (!isSubmitting) void handleSignUp();
+                  }}
+                  enabled={!isSubmitting}
+                  fullWidth
+                  loading={isSubmitting}
+                />
+              </View>
+
+              <View style={styles.switchRow}>
+                <Text style={styles.switchText}>Already have an account?</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.replace("/(auth)/login")}
+                  style={({ pressed }) => pressed && styles.pressed}
+                >
+                  <Text style={styles.switchLink}>Log in</Text>
+                </Pressable>
+              </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </AuthBackground>
+  );
 }
 
 const styles = StyleSheet.create({
-	container: {
-		flex: 1,
-		width: "100%",
-		padding: spacing.two,
-		gap: spacing.two,
-	},
-	logoSection: {
-		height: "25%",
-		alignItems: "center",
-		justifyContent: "flex-end",
-	},
-	formSection: {
-		width: "100%",
-		flex: 1,
-	},
-	loginlogo: {
-		fontSize: fontsize.giant,
-		fontFamily: "Logo-Font",
-		textAlign: "center",
-	},
+  flex: { flex: 1 },
+  safeArea: { flex: 1 },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingVertical: spacing.four,
+  },
+  content: {
+    width: "100%",
+    maxWidth: 540,
+    alignSelf: "center",
+    paddingHorizontal: spacing.three,
+  },
+  brandBlock: { marginBottom: spacing.three },
+  brand: {
+    color: "#F8FAFC",
+    fontFamily: "Logo-Font",
+    fontSize: 38,
+    lineHeight: 44,
+  },
+  eyebrow: {
+    color: "#66E3A0",
+    fontFamily: "Body-Bold",
+    fontSize: 11,
+    letterSpacing: 1.4,
+    marginTop: 2,
+  },
+  card: {
+    borderRadius: 24,
+    padding: spacing.three,
+    backgroundColor: "rgba(8,18,30,0.90)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+    shadowColor: "#000000",
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  },
+  title: { color: "#F8FAFC", fontFamily: "Body-Bold", fontSize: 25 },
+  subtitle: {
+    color: "#A9B7C8",
+    fontFamily: "Body-Medium",
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 6,
+    marginBottom: spacing.three,
+  },
+  fields: { gap: spacing.two, marginBottom: spacing.three },
+  labelRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  fieldLabel: {
+    color: "#D7E0EA",
+    fontFamily: "Body-Bold",
+    fontSize: 13,
+    marginBottom: 7,
+  },
+  optionalLabel: {
+    color: "#7D8EA3",
+    fontFamily: "Body-Bold",
+    fontSize: 10,
+    letterSpacing: 1,
+    marginBottom: 7,
+  },
+  helper: {
+    color: "#7D8EA3",
+    fontFamily: "Body-Medium",
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 6,
+  },
+  passwordRow: { flexDirection: "row", gap: spacing.one, alignItems: "stretch" },
+  passwordInput: { flex: 1 },
+  eyeButton: {
+    width: 54,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#26364C",
+    backgroundColor: "#172437",
+  },
+  switchRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 7,
+    marginTop: spacing.three,
+    flexWrap: "wrap",
+  },
+  switchText: { color: "#A9B7C8", fontFamily: "Body-Medium", fontSize: 14 },
+  switchLink: { color: "#66E3A0", fontFamily: "Body-Bold", fontSize: 14 },
+  pressed: { opacity: 0.72 },
 });

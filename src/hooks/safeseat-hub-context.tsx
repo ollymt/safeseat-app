@@ -67,7 +67,6 @@ const SafeSeatHubContext = createContext<SafeSeatHubContextValue | undefined>(un
 
 const CONNECTED_POLL_MS = 1000;
 const DISCONNECTED_POLL_MS = 3000;
-const UAT_WARNING_HOLD_MS = 10_000;
 const IS_LOCKED_IN_KEY = "isLockedIn";
 const WARNING_ALERT_INTERVAL_MS = 3_000;
 const WARNING_ALERT_DURATION_MS = 10_000;
@@ -99,7 +98,6 @@ export function SafeSeatHubProvider({ children }: { children: ReactNode }) {
   const activeRequestRef = useRef<Promise<SafeSeatStatusPayload | null> | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const uatWarningDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const uatWarningHoldRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const liveReadinessRef = useRef({ connected: false, telemetryReady: false });
   const warningAlertIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const warningAlertStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -270,10 +268,6 @@ export function SafeSeatHubProvider({ children }: { children: ReactNode }) {
       clearTimeout(uatWarningDelayRef.current);
       uatWarningDelayRef.current = null;
     }
-    if (uatWarningHoldRef.current) {
-      clearTimeout(uatWarningHoldRef.current);
-      uatWarningHoldRef.current = null;
-    }
   }, []);
 
   const cancelUatWarning = useCallback(() => {
@@ -292,11 +286,10 @@ export function SafeSeatHubProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // UAT warnings intentionally persist until the researcher explicitly
+      // stops them. A real Main Hub emergency still takes priority in the
+      // driver-facing state below.
       setSimulationStateValue("warning");
-      uatWarningHoldRef.current = setTimeout(() => {
-        setSimulationStateValue("off");
-        uatWarningHoldRef.current = null;
-      }, UAT_WARNING_HOLD_MS);
     };
 
     uatWarningDelayRef.current = setTimeout(tryTrigger, Math.max(0, delayMs));
@@ -343,13 +336,19 @@ export function SafeSeatHubProvider({ children }: { children: ReactNode }) {
         if (driverFacingSeatState === "warning") {
           replayWarningCue();
           warningAlertIntervalRef.current = setInterval(replayWarningCue, WARNING_ALERT_INTERVAL_MS);
-          warningAlertStopRef.current = setTimeout(() => {
-            if (warningAlertIntervalRef.current) {
-              clearInterval(warningAlertIntervalRef.current);
-              warningAlertIntervalRef.current = null;
-            }
-            warningAlertStopRef.current = null;
-          }, WARNING_ALERT_DURATION_MS);
+
+          // Keep researcher-triggered UAT Warning feedback running until the
+          // hidden control explicitly stops the simulation. Real sensor-driven
+          // Warning retains the normal 10-second feedback cap.
+          if (simulationState !== "warning") {
+            warningAlertStopRef.current = setTimeout(() => {
+              if (warningAlertIntervalRef.current) {
+                clearInterval(warningAlertIntervalRef.current);
+                warningAlertIntervalRef.current = null;
+              }
+              warningAlertStopRef.current = null;
+            }, WARNING_ALERT_DURATION_MS);
+          }
           return;
         }
 
@@ -366,7 +365,7 @@ export function SafeSeatHubProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       clearAlertFeedbackTimers();
     };
-  }, [clearAlertFeedbackTimers, driverFacingSeatState, replayEmergencyCue, replayWarningCue]);
+  }, [clearAlertFeedbackTimers, driverFacingSeatState, replayEmergencyCue, replayWarningCue, simulationState]);
 
   useEffect(() => () => silenceAlertFeedback(), [silenceAlertFeedback]);
 

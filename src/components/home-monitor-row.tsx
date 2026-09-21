@@ -1,5 +1,6 @@
 import { type ThemePalette } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
+import { useRef } from "react";
 import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 export type MonitorSeatState =
@@ -31,6 +32,8 @@ type Props = {
   isHardwareSeat?: boolean;
   vitals?: MonitorVitals;
   onPress?: () => void;
+  onLongPress?: () => void;
+  delayLongPress?: number;
 };
 
 type StateMeta = {
@@ -76,13 +79,14 @@ const stateMeta = (
 };
 
 export default function HomeMonitorRow({
-  seatNo, role, name, photo, state, isHardwareSeat = false, vitals, onPress,
+  seatNo, role, name, photo, state, isHardwareSeat = false, vitals, onPress, onLongPress, delayLongPress,
 }: Props) {
   const themes = useTheme();
   const { width, height } = useWindowDimensions();
   const compact = height < 720;
   const styles = createStyles(themes);
   const meta = stateMeta(themes, state, isHardwareSeat);
+  const longPressConsumed = useRef(false);
   const displayName = name || "Unassigned";
   const showVitals = isHardwareSeat && (state === "warning" || state === "emergency");
   const roleLabel = seatNo === 1 ? "DRIVER" : role.toUpperCase();
@@ -91,8 +95,20 @@ export default function HomeMonitorRow({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${role}, ${displayName}, ${meta.label}`}
-      accessibilityHint="Opens seat details or setup"
-      onPress={onPress}
+      accessibilityHint={onLongPress ? "Tap for seat details. Press and hold for researcher control." : "Opens seat details or setup"}
+      onPressIn={() => { longPressConsumed.current = false; }}
+      onPress={() => {
+        if (longPressConsumed.current) {
+          longPressConsumed.current = false;
+          return;
+        }
+        onPress?.();
+      }}
+      onLongPress={onLongPress ? () => {
+        longPressConsumed.current = true;
+        onLongPress();
+      } : undefined}
+      delayLongPress={delayLongPress}
       style={({ pressed }) => [styles.row, compact && styles.compactRow,
         { borderColor: `${meta.color}50` }, pressed && { opacity: 0.8 }]}
     >

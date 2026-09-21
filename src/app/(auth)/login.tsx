@@ -1,249 +1,271 @@
+import AuthBackground from "@/components/auth-background";
 import Button from "@/components/button";
-import { Themes as themes, Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
-import { Column, FieldGroup, Host, Icon } from "@expo/ui";
-
 import TextInput from "@/components/text-input";
-import {
-	autocorrectionDisabled,
-	frame,
-	keyboardType,
-	onSubmit,
-	scrollDisabled,
-	submitLabel,
-} from "@expo/ui/swift-ui/modifiers";
-import { useRouter } from "expo-router";
-import { sendPasswordResetEmail, signInWithEmailAndPassword } from "firebase/auth";
-import { useRef, useState } from "react";
-import {
-	Alert,
-	Dimensions,
-	KeyboardAvoidingView,
-	Platform,
-	ScrollView,
-	StyleSheet,
-	Text,
-	useColorScheme,
-	View,
-	ImageBackground
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-
-import * as Haptics from "expo-haptics";
-import * as SecureStore from "expo-secure-store";
-import { auth } from "../../firebase";
-
-const { width: screenWidth } = Dimensions.get("window");
-
+import { Spacing as spacing } from "@/constants/theme";
 import visibilityXml from "@expo/material-symbols/visibility.xml";
 import visibilityOffXml from "@expo/material-symbols/visibility_off.xml";
+import { Host, Icon } from "@expo/ui";
+import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
+import * as SecureStore from "expo-secure-store";
+import { StatusBar } from "expo-status-bar";
+import { sendPasswordResetEmail, signInWithEmailAndPassword } from "firebase/auth";
+import { useState } from "react";
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { auth } from "../../firebase";
 
 export default function Login() {
-	const passwordInputRef = useRef<any>(null);
-	const router = useRouter();
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
 
-	// 2. Setup standard React state variables to hold typed credentials
-	const [email, setEmail] = useState("");
-	const [password, setPassword] = useState("");
-	const [isSubmitting, setIsSubmitting] = useState(false);
+  const handleLogin = async () => {
+    if (!email.trim() || !password) {
+      Alert.alert("Missing fields", "Please enter your email and password.");
+      return;
+    }
 
-	const [passVisible, setPassVisible] = useState(false);
+    setIsSubmitting(true);
+    try {
+      const cleanEmail = email.toLowerCase().trim();
+      await signInWithEmailAndPassword(auth, cleanEmail, password);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await SecureStore.setItemAsync("is_logged_in", "true");
+      router.replace("/(tabs)/home");
+    } catch (error: any) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      let message = "Incorrect email or password combination.";
+      if (error.code === "auth/invalid-email") message = "Please enter a valid email address.";
+      else if (error.code === "auth/user-not-found") message = "No account was found with this email.";
+      else if (error.code === "auth/too-many-requests") message = "Too many failed attempts. Please try again later.";
+      Alert.alert("Authentication failed", message);
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-	// 3. The Authentication Validation Function
-	const handleLogin = async () => {
-		// Basic structural validation checks
-		if (!email || !password) {
-			Alert.alert("Missing Fields", "Please enter your email and password.");
-			return;
-		}
+  const handleForgotPassword = async () => {
+    const cleanEmail = email.toLowerCase().trim();
+    if (!cleanEmail) {
+      Alert.alert("Enter your email", "Type your account email first, then tap Forgot password.");
+      return;
+    }
 
-		setIsSubmitting(true);
+    try {
+      await sendPasswordResetEmail(auth, cleanEmail);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Reset email sent", "Check your inbox and follow the password reset link.");
+    } catch (error: any) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      let message = "We couldn't send a password reset email. Please try again.";
+      if (error?.code === "auth/invalid-email") message = "Please enter a valid email address.";
+      if (error?.code === "auth/too-many-requests") message = "Too many requests. Please try again later.";
+      Alert.alert("Password reset unavailable", message);
+    }
+  };
 
-		try {
-			const cleanEmail = email.toLowerCase().trim();
+  return (
+    <AuthBackground>
+      <StatusBar style="light" />
+      <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.flex}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.content}>
+              <View style={styles.brandBlock}>
+                <Text style={styles.brand}>SafeSeat</Text>
+                <Text style={styles.eyebrow}>SECURE DRIVER ACCESS</Text>
+              </View>
 
-			// Sign in via Firebase Authentication
-			await signInWithEmailAndPassword(auth, cleanEmail, password);
+              <View style={styles.card}>
+                <Text style={styles.title}>Welcome back</Text>
+                <Text style={styles.subtitle}>Log in to continue to your SafeSeat cabin monitor.</Text>
 
-			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                <View style={styles.fields}>
+                  <View>
+                    <Text style={styles.fieldLabel}>Email</Text>
+                    <TextInput
+                      variant="regular"
+                      placeholder="name@example.com"
+                      type="email"
+                      value={email}
+                      onChangeText={setEmail}
+                    />
+                  </View>
 
-			// Save an active login flag for the local navigation guard in _layout.tsx
-			await SecureStore.setItemAsync("is_logged_in", "true");
+                  <View>
+                    <Text style={styles.fieldLabel}>Password</Text>
+                    <View style={styles.passwordRow}>
+                      <View style={styles.passwordInput}>
+                        <TextInput
+                          variant="regular"
+                          placeholder="Enter your password"
+                          type={passwordVisible ? "text" : "password"}
+                          value={password}
+                          onChangeText={setPassword}
+                        />
+                      </View>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={passwordVisible ? "Hide password" : "Show password"}
+                        onPress={() => setPasswordVisible((value) => !value)}
+                        style={({ pressed }) => [styles.eyeButton, pressed && styles.pressed]}
+                      >
+                        <Host>
+                          <Icon
+                            name={Icon.select({
+                              ios: passwordVisible ? "eye.slash.fill" : "eye.fill",
+                              android: passwordVisible ? visibilityOffXml : visibilityXml,
+                            })}
+                          />
+                        </Host>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
 
-			router.replace("/(tabs)/home");
-		} catch (error: any) {
-			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                <Button
+                  variant="primary"
+                  enabled={!isSubmitting}
+                  label="Log in"
+                  onPress={() => {
+                    if (!isSubmitting) void handleLogin();
+                  }}
+                  fullWidth
+                  loading={isSubmitting}
+                />
 
-			// Translate common Firebase error codes into friendlier messages
-			let message = "Incorrect email or password combination.";
-			if (error.code === "auth/invalid-email") {
-				message = "Please enter a valid email address.";
-			} else if (error.code === "auth/user-not-found") {
-				message = "No account found with this email. Please sign up first!";
-			} else if (error.code === "auth/too-many-requests") {
-				message = "Too many failed attempts. Please try again later.";
-			}
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => void handleForgotPassword()}
+                  disabled={isSubmitting}
+                  style={({ pressed }) => [styles.textButton, pressed && styles.pressed]}
+                >
+                  <Text style={styles.textButtonLabel}>Forgot password?</Text>
+                </Pressable>
+              </View>
 
-			Alert.alert("Authentication Failed", message);
-			console.error(error);
-		} finally {
-			setIsSubmitting(false);
-		}
-	};
-
-	const handleForgotPassword = async () => {
-		const cleanEmail = email.toLowerCase().trim();
-		if (!cleanEmail) {
-			Alert.alert("Enter your email", "Type your account email first, then tap Forgot Password.");
-			return;
-		}
-
-		try {
-			await sendPasswordResetEmail(auth, cleanEmail);
-			void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-			Alert.alert("Reset email sent", "Check your inbox and follow the password reset link.");
-		} catch (error: any) {
-			void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-			let message = "We couldn't send a password reset email. Please try again.";
-			if (error?.code === "auth/invalid-email") message = "Please enter a valid email address.";
-			if (error?.code === "auth/too-many-requests") message = "Too many requests. Please try again later.";
-			Alert.alert("Password reset unavailable", message);
-		}
-	};
-
-	return (
-		<ImageBackground
-			source={{
-				uri: "https://images.stockcake.com/public/f/4/6/f46a0b7f-157f-4ba7-a89a-da22a67672ee_large/busy-night-traffic-stockcake.jpg",
-			}}
-			style={{ flex: 1 }}
-			blurRadius={5}
-		>
-			<SafeAreaView
-				style={{
-					flex: 1,
-					backgroundColor: "#000000CC",
-				}}
-			>
-				<KeyboardAvoidingView
-					behavior={Platform.OS === "ios" ? "padding" : "height"}
-					style={{ flex: 1 }}
-				>
-					{/* 2. ScrollView absorbs the squeeze and allows scrolling if elements overflow */}
-					<ScrollView
-						contentContainerStyle={{ flexGrow: 1 }}
-						bounces={false}
-						keyboardShouldPersistTaps="handled"
-					>
-						<View style={styles.container}>
-							{/* Header logo area */}
-							<View style={styles.logoSection}>
-								<Text style={[styles.loginlogo, { color: themes.text }]}>
-									Log-in
-								</Text>
-							</View>
-
-							{/* Input Form area */}
-							<View style={styles.formSection}>
-								<View style={{ width: "100%" }}>
-									<View style={{ flexDirection: "column", gap: spacing.two }}>
-										<View style={{ flexDirection: "column", gap: spacing.one }}>
-											<TextInput
-												variant="regular"
-												placeholder="Email"
-												type="email"
-												value={email}
-												onChangeText={setEmail}
-											/>
-											<View style={{ flexDirection: "row", gap: spacing.one }}>
-												<View style={{ flex: 1 }}>
-													<TextInput
-														variant="regular"
-														placeholder="Password"
-														type={!passVisible ? "password" : "text"}
-														value={password}
-														onChangeText={setPassword}
-													/>
-												</View>
-												<Button
-													variant={!passVisible ? "secondary" : "primary"}
-													onPress={() => setPassVisible(!passVisible)}
-												>
-													<View style={{ paddingHorizontal: spacing.two, paddingVertical: spacing.one}}>
-														<Host>
-															{!passVisible ? (
-																<Icon name={Icon.select({
-																	ios: "eye.fill",
-																	android: visibilityXml
-																})} /> 
-															) : (
-																<Icon name={Icon.select({
-																	ios: "eye.slash.fill",
-																	android: visibilityOffXml
-																})} />
-															)
-															}
-														</Host>
-													</View>
-												</Button>
-											</View>
-										</View>
-									</View>
-								</View>
-								<View
-									style={{
-										width: "100%",
-										alignSelf: "center",
-										marginTop: spacing.two,
-										gap: spacing.none,
-										borderColor: themes.text,
-										borderWidth: spacing.none
-									}}
-								>
-									<Button
-										variant={"primary"}
-										enabled={!isSubmitting}
-										label={"Log-in"}
-										onPress={() => {
-											if (!isSubmitting) handleLogin();
-										}}
-										fullWidth={true}
-										loading={isSubmitting}
-									/>
-									<Button
-										label="Forgot Password"
-										onPress={handleForgotPassword}
-										variant="tertiary"
-										enabled={!isSubmitting}
-									/>
-								</View>
-							</View>
-						</View>
-					</ScrollView>
-				</KeyboardAvoidingView>
-			</SafeAreaView>
-		</ImageBackground>
-	);
+              <View style={styles.switchRow}>
+                <Text style={styles.switchText}>Don't have an account?</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.replace("/(auth)/signup")}
+                  style={({ pressed }) => pressed && styles.pressed}
+                >
+                  <Text style={styles.switchLink}>Create account</Text>
+                </Pressable>
+              </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </AuthBackground>
+  );
 }
 
 const styles = StyleSheet.create({
-	container: {
-		flex: 1,
-		width: "100%",
-		padding: spacing.two,
-		gap: spacing.two,
-	},
-	logoSection: {
-		height: "35%", // Reduced slightly to give more room for keyboard space
-		alignItems: "center",
-		justifyContent: "flex-end",
-	},
-	formSection: {
-		width: "100%",
-		flex: 1,
-	},
-	loginlogo: {
-		fontSize: fontsize.giant,
-		fontFamily: "Logo-Font",
-		textAlign: "center",
-	},
+  flex: { flex: 1 },
+  safeArea: { flex: 1 },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingVertical: spacing.four,
+  },
+  content: {
+    width: "100%",
+    maxWidth: 520,
+    alignSelf: "center",
+    paddingHorizontal: spacing.three,
+  },
+  brandBlock: { marginBottom: spacing.three },
+  brand: {
+    color: "#F8FAFC",
+    fontFamily: "Logo-Font",
+    fontSize: 40,
+    lineHeight: 46,
+  },
+  eyebrow: {
+    color: "#66E3A0",
+    fontFamily: "Body-Bold",
+    fontSize: 11,
+    letterSpacing: 1.4,
+    marginTop: 2,
+  },
+  card: {
+    borderRadius: 24,
+    padding: spacing.three,
+    backgroundColor: "rgba(8,18,30,0.88)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+    shadowColor: "#000000",
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  },
+  title: {
+    color: "#F8FAFC",
+    fontFamily: "Body-Bold",
+    fontSize: 26,
+  },
+  subtitle: {
+    color: "#A9B7C8",
+    fontFamily: "Body-Medium",
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 6,
+    marginBottom: spacing.three,
+  },
+  fields: { gap: spacing.two, marginBottom: spacing.three },
+  fieldLabel: {
+    color: "#D7E0EA",
+    fontFamily: "Body-Bold",
+    fontSize: 13,
+    marginBottom: 7,
+  },
+  passwordRow: { flexDirection: "row", gap: spacing.one, alignItems: "stretch" },
+  passwordInput: { flex: 1 },
+  eyeButton: {
+    width: 54,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#26364C",
+    backgroundColor: "#172437",
+  },
+  textButton: { alignSelf: "center", padding: 10, marginTop: 4 },
+  textButtonLabel: { color: "#66E3A0", fontFamily: "Body-Bold", fontSize: 14 },
+  switchRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 7,
+    marginTop: spacing.three,
+    flexWrap: "wrap",
+  },
+  switchText: { color: "#A9B7C8", fontFamily: "Body-Medium", fontSize: 14 },
+  switchLink: { color: "#66E3A0", fontFamily: "Body-Bold", fontSize: 14 },
+  pressed: { opacity: 0.72 },
 });

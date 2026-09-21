@@ -4,6 +4,7 @@ import { SeatVitals } from "@/components/seat-card";
 import HomeMonitorRow from "@/components/home-monitor-row";
 import GuidePulseOverlay from "@/components/guide-pulse-overlay";
 import { FontSize as fontsize, Spacing as spacing, type ThemePalette } from "@/constants/theme";
+import { UAT_RESEARCHER_LONG_PRESS_MS } from "@/constants/uat";
 import { getSeatDisplayState } from "@/utils/monitoring-presentation";
 import { useTheme } from "@/hooks/use-theme";
 import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
@@ -472,7 +473,6 @@ export default function Home() {
   };
 
   const openUatControl = () => {
-    if (!isLockedIn) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setUatControlVisible(true);
   };
@@ -575,14 +575,7 @@ export default function Home() {
           <View style={styles.activeContainer}>
             <View style={styles.headerRow}>
               <View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="SafeSeat"
-                  delayLongPress={1800}
-                  onLongPress={openUatControl}
-                >
-                  <Text style={styles.eyebrow}>SAFESEAT ACTIVE</Text>
-                </Pressable>
+                <Text style={styles.eyebrow}>SAFESEAT ACTIVE</Text>
                 <Text style={styles.pageHeader}>Cabin Monitor</Text>
               </View>
 
@@ -611,6 +604,8 @@ export default function Home() {
                     isHardwareSeat={seatNo === hardwareSeatNo}
                     vitals={seatNo === hardwareSeatNo ? vitalSigns : undefined}
                     onPress={() => assignments[seatNo] ? showSeatDetails(seatNo) : router.push("/assign")}
+                    onLongPress={seatNo === hardwareSeatNo && assignments[seatNo] ? openUatControl : undefined}
+                    delayLongPress={seatNo === hardwareSeatNo ? UAT_RESEARCHER_LONG_PRESS_MS : undefined}
                   />
                   <GuidePulseOverlay
                     active={isStep("alerts") && seatNo === (hardwareSeatNo ?? SEAT_NUMBERS.find((n) => Boolean(assignments[n])) ?? 1)}
@@ -739,30 +734,47 @@ export default function Home() {
             <View style={styles.uatModalCard}>
               <View style={styles.endModalHandle} />
               <Text style={styles.uatModalEyebrow}>RESEARCHER CONTROL</Text>
-              <Text style={styles.uatModalTitle}>Schedule Warning</Text>
-              <Text style={styles.uatModalText}>The linked monitored seat will show Warning once, then return to live monitoring.</Text>
+              <Text style={styles.uatModalTitle}>{simulationActive ? "Simulated Warning Active" : "Schedule Warning"}</Text>
+              <Text style={styles.uatModalText}>
+                {simulationActive
+                  ? "Warning will stay active until you stop it. Real Main Hub Emergency still takes priority."
+                  : "The linked monitored seat will enter Warning after the selected delay and stay there until you stop it."}
+              </Text>
 
-              <View style={styles.uatDelayRow}>
-                <Pressable onPress={() => armWarning(10_000)} style={({ pressed }) => [styles.uatDelayButton, pressed && styles.modalButtonPressed]}>
-                  <Text style={styles.uatDelayTime}>10s</Text>
-                  <Text style={styles.uatDelayLabel}>Warning</Text>
+              {simulationActive ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Stop simulated warning"
+                  onPress={() => { cancelUatWarning(); setUatControlVisible(false); void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }}
+                  style={({ pressed }) => [styles.uatCancelButton, pressed && styles.modalButtonPressed]}
+                >
+                  <Text style={styles.uatCancelText}>Stop Warning</Text>
                 </Pressable>
-                <Pressable onPress={() => armWarning(30_000)} style={({ pressed }) => [styles.uatDelayButton, pressed && styles.modalButtonPressed]}>
-                  <Text style={styles.uatDelayTime}>30s</Text>
-                  <Text style={styles.uatDelayLabel}>Warning</Text>
-                </Pressable>
-                <Pressable onPress={() => armWarning(60_000)} style={({ pressed }) => [styles.uatDelayButton, pressed && styles.modalButtonPressed]}>
-                  <Text style={styles.uatDelayTime}>60s</Text>
-                  <Text style={styles.uatDelayLabel}>Warning</Text>
-                </Pressable>
-              </View>
+              ) : (
+                <>
+                  <View style={styles.uatDelayRow}>
+                    <Pressable onPress={() => armWarning(10_000)} style={({ pressed }) => [styles.uatDelayButton, pressed && styles.modalButtonPressed]}>
+                      <Text style={styles.uatDelayTime}>10s</Text>
+                      <Text style={styles.uatDelayLabel}>Warning</Text>
+                    </Pressable>
+                    <Pressable onPress={() => armWarning(30_000)} style={({ pressed }) => [styles.uatDelayButton, pressed && styles.modalButtonPressed]}>
+                      <Text style={styles.uatDelayTime}>30s</Text>
+                      <Text style={styles.uatDelayLabel}>Warning</Text>
+                    </Pressable>
+                    <Pressable onPress={() => armWarning(60_000)} style={({ pressed }) => [styles.uatDelayButton, pressed && styles.modalButtonPressed]}>
+                      <Text style={styles.uatDelayTime}>60s</Text>
+                      <Text style={styles.uatDelayLabel}>Warning</Text>
+                    </Pressable>
+                  </View>
 
-              <Pressable
-                onPress={() => { cancelUatWarning(); setUatControlVisible(false); void Haptics.selectionAsync(); }}
-                style={({ pressed }) => [styles.uatCancelButton, pressed && styles.modalButtonPressed]}
-              >
-                <Text style={styles.uatCancelText}>Cancel Armed Warning</Text>
-              </Pressable>
+                  <Pressable
+                    onPress={() => { cancelUatWarning(); setUatControlVisible(false); void Haptics.selectionAsync(); }}
+                    style={({ pressed }) => [styles.uatCancelButton, pressed && styles.modalButtonPressed]}
+                  >
+                    <Text style={styles.uatCancelText}>Cancel Armed Warning</Text>
+                  </Pressable>
+                </>
+              )}
               <Pressable onPress={() => setUatControlVisible(false)} style={({ pressed }) => [styles.uatCloseButton, pressed && styles.modalButtonPressed]}>
                 <Text style={styles.uatCloseText}>Close</Text>
               </Pressable>

@@ -1,100 +1,140 @@
+import AuthBackground from "@/components/auth-background";
 import Button from "@/components/button";
-import { Spacing as spacing, FontSize as fontsize } from "@/constants/theme";
-
+import { FontSize as fontsize, Spacing as spacing } from "@/constants/theme";
 import { useRouter } from "expo-router";
-import {
-	Dimensions,
-	ImageBackground,
-	StyleSheet,
-	Text,
-	View,
-	useColorScheme,
-} from "react-native";
+import { StatusBar } from "expo-status-bar";
+import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const { width: screenWidth } = Dimensions.get("window");
-
 export default function SplashScreen() {
-	const router = useRouter();
+  const router = useRouter();
 
-	return (
-		<ImageBackground
-			source={{
-				uri: "https://images.stockcake.com/public/f/4/6/f46a0b7f-157f-4ba7-a89a-da22a67672ee_large/busy-night-traffic-stockcake.jpg",
-			}}
-			style={{ flex: 1 }}
-			blurRadius={5}
-		>
-			<SafeAreaView
-				style={{
-					flex: 1,
-					justifyContent: "center",
-					alignItems: "center",
-					backgroundColor: "#000000CC",
-				}}
-			>
-				<View style={styles.container}>
-					<View
-						style={{
-							flex: 9,
-							alignItems: "center",
-							justifyContent: "center",
-							borderWidth: 0,
-							borderColor: "#0000ff",
-						}}
-					>
-						<Text style={styles.loginlogo}>SafeSeat</Text>
-					</View>
+  return (
+    <AuthBackground>
+      <StatusBar style="light" />
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <View style={styles.hero}>
+            <View style={styles.brandPill}>
+              <View style={styles.brandDot} />
+              <Text style={styles.brandPillText}>IN-CABIN SAFETY</Text>
+            </View>
 
-					<View
-						style={{
-							width: "100%",
-							flex: 1,
-							borderColor: "#ff0000",
-							borderWidth: 0,
-						}}
-					>
-						<View style={{ width: "100%", flexDirection: "row", gap: 5 }}>
-							<Button
-								label="Sign-up"
-								onPress={() => {
-									router.push("/(auth)/signup");
-								}}
-								variant="secondary"
-								style={{ flex: 1 }}
-							/>
-							<Button
-								label="Log-in"
-								onPress={() => {
-									router.push("/(auth)/login");
-								}}
-								style={{ flex: 1 }}
-							/>
-						</View>
-					</View>
-				</View>
-			</SafeAreaView>
-		</ImageBackground>
-	);
+            <Text style={styles.logo}>SafeSeat</Text>
+            <Text style={styles.tagline}>
+              Intelligent seat monitoring built for a safer ride.
+            </Text>
+          </View>
+
+          <View style={styles.actionCard}>
+            <Text style={styles.actionTitle}>Ready when you are</Text>
+            <Text style={styles.actionCopy}>
+              Sign in to continue monitoring, or create an account to get started.
+            </Text>
+
+            <View style={styles.actions}>
+              <Button
+                label="Create account"
+                onPress={() => router.push("/(auth)/signup")}
+                variant="secondary"
+                style={styles.actionButton}
+              />
+              <Button
+                label="Log in"
+                onPress={() => router.push("/(auth)/login")}
+                style={styles.actionButton}
+              />
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+    </AuthBackground>
+  );
 }
 
 const styles = StyleSheet.create({
-	container: {
-		flex: 1,
-		width: "100%",
-		borderColor: "#000",
-		borderWidth: 0,
-		padding: spacing.two
-	},
-	loginlogo: {
-		fontSize: fontsize.giant,
-		fontFamily: "Logo-Font",
-		textAlign: "center",
-		color: "#ffffff",
-	},
-	backgroundImage: {
-		...StyleSheet.absoluteFill,
-		width: "100%",
-		height: "100%",
-	}
+  safeArea: { flex: 1 },
+  container: {
+    flex: 1,
+    width: "100%",
+    maxWidth: 620,
+    alignSelf: "center",
+    paddingHorizontal: spacing.three,
+    paddingVertical: spacing.two,
+    justifyContent: "space-between",
+  },
+  hero: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "flex-start",
+    paddingTop: spacing.four,
+  },
+  brandPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "rgba(102,227,160,0.28)",
+    backgroundColor: "rgba(18,56,39,0.42)",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    marginBottom: spacing.two,
+  },
+  brandDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: "#66E3A0",
+  },
+  brandPillText: {
+    color: "#9EF0C1",
+    fontSize: 11,
+    letterSpacing: 1.3,
+    fontFamily: "Body-Bold",
+  },
+  logo: {
+    fontSize: fontsize.giant + 8,
+    lineHeight: fontsize.giant + 14,
+    fontFamily: "Logo-Font",
+    color: "#F8FAFC",
+  },
+  tagline: {
+    marginTop: spacing.one,
+    maxWidth: 360,
+    color: "#A9B7C8",
+    fontSize: 17,
+    lineHeight: 25,
+    fontFamily: "Body-Medium",
+  },
+  actionCard: {
+    borderRadius: 24,
+    padding: spacing.three,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+    backgroundColor: "rgba(8,18,30,0.84)",
+    shadowColor: "#000000",
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  },
+  actionTitle: {
+    color: "#F8FAFC",
+    fontSize: 20,
+    fontFamily: "Body-Bold",
+  },
+  actionCopy: {
+    color: "#A9B7C8",
+    fontSize: 14,
+    lineHeight: 21,
+    fontFamily: "Body-Medium",
+    marginTop: 6,
+    marginBottom: spacing.two,
+  },
+  actions: {
+    flexDirection: "row",
+    gap: spacing.one,
+  },
+  actionButton: { flex: 1 },
 });
