@@ -182,8 +182,8 @@ export function DriverGuideProvider({ children }: { children: React.ReactNode })
     const base = DRIVER_GUIDE_STEPS[stepId];
     if (stepId === "sensor") return {
       ...base,
-      eyebrow: "STEP 5 · PROTOTYPE SENSOR",
-      body: "Tap SafeSeat Sensor and choose the seat with the prototype.",
+      eyebrow: "STEP 5 · SENSOR SEAT",
+      body: "Tap SafeSeat Sensor and choose the seat connected to the hardware.",
       actionHint: "Tap SafeSeat Sensor, then select its actual seat.",
     };
     if (stepId === "start" && !prototypeIndicator) return { ...base, eyebrow: "START MONITORING" };

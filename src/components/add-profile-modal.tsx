@@ -3,7 +3,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { useUserPreferences } from "@/hooks/user-preferences-context";
 import * as Haptics from "expo-haptics";
 import { addDoc, collection } from "firebase/firestore";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Keyboard,
@@ -29,6 +29,7 @@ type Props = {
 };
 
 const bloodTypes = [
+  { label: "Not known", value: "" },
   { label: "A+", value: "a+" },
   { label: "A-", value: "a-" },
   { label: "B+", value: "b+" },
@@ -43,10 +44,16 @@ const isLeapYear = (year: number): boolean =>
   (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
 
 const isValidDate = (year: number, month: number, day: number): boolean => {
-  const currentYear = new Date().getFullYear();
+  const today = new Date();
+  const currentYear = today.getFullYear();
   if (year < 1900 || year > currentYear || month < 1 || month > 12) return false;
   const daysInMonths = [31, isLeapYear(year) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  return day >= 1 && day <= daysInMonths[month - 1];
+  if (day < 1 || day > daysInMonths[month - 1]) return false;
+  if (year === currentYear) {
+    const currentMonth = today.getMonth() + 1;
+    if (month > currentMonth || (month === currentMonth && day > today.getDate())) return false;
+  }
+  return true;
 };
 
 function FieldHeader({ label, optional = false, hint }: { label: string; optional?: boolean; hint?: string }) {
@@ -94,20 +101,23 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
   const parsedYear = parseInt(birthYear, 10);
   const parsedMonth = parseInt(birthMonth, 10);
   const parsedDate = parseInt(birthDate, 10);
-  const isValidDateInput = isValidDate(parsedYear, parsedMonth, parsedDate);
+  const hasBirthdayInput = [birthYear, birthMonth, birthDate].some((value) => value.trim() !== "");
+  const hasCompleteBirthday = [birthYear, birthMonth, birthDate].every((value) => value.trim() !== "");
+  const isValidDateInput = hasCompleteBirthday && isValidDate(parsedYear, parsedMonth, parsedDate);
+  const isBirthdayInvalid = hasBirthdayInput && !isValidDateInput;
 
-  const isUnder18 = useMemo(() => {
-    if (!isValidDateInput) return true;
-    const today = new Date();
-    let age = today.getFullYear() - parsedYear;
-    const birthdayPassed = parsedMonth < today.getMonth() + 1 || (parsedMonth === today.getMonth() + 1 && parsedDate <= today.getDate());
-    if (!birthdayPassed) age -= 1;
-    return age < 18;
-  }, [isValidDateInput, parsedDate, parsedMonth, parsedYear]);
+  const metricHeightProvided = heightCm.trim() !== "";
+  const imperialHeightProvided = heightFt.trim() !== "" || heightIn.trim() !== "";
+  const metricWeightProvided = weightKg.trim() !== "";
+  const imperialWeightProvided = weightLb.trim() !== "";
 
-  const isHeightInvalid = isMetric ? parseNum(heightCm) <= 0 : parseNum(heightFt) <= 0;
-  const isWeightInvalid = isMetric ? parseNum(weightKg) <= 0 : parseNum(weightLb) <= 0;
-  const isFormInvalid = name.trim() === "" || !isValidDateInput || isUnder18 || bloodType.trim() === "" || isHeightInvalid || isWeightInvalid;
+  const isHeightInvalid = isMetric
+    ? metricHeightProvided && parseNum(heightCm) <= 0
+    : imperialHeightProvided && (heightFt.trim() === "" || parseNum(heightFt) < 0 || parseNum(heightFt) > 10 || parseNum(heightIn || "0") < 0 || parseNum(heightIn || "0") >= 12 || (parseNum(heightFt) * 12 + parseNum(heightIn || "0")) <= 0);
+  const isWeightInvalid = isMetric
+    ? metricWeightProvided && parseNum(weightKg) <= 0
+    : imperialWeightProvided && parseNum(weightLb) <= 0;
+  const isFormInvalid = name.trim() === "" || isBirthdayInvalid || isHeightInvalid || isWeightInvalid;
 
   const handleResetAndClose = () => {
     setName(""); setIcon(""); setBirthYear(""); setBirthMonth(""); setBirthDate("");
@@ -132,35 +142,37 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
     const currentUser = auth.currentUser;
     if (!currentUser) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Authentication Error", "You must be signed in to add profiles.");
+      Alert.alert("Sign-in required", "You must be signed in to add a person.");
       return;
     }
 
     setIsLoading(true);
     try {
-      let finalHeightCm = 0;
-      let finalWeightKg = 0;
+      let finalHeightCm: number | null = null;
+      let finalWeightKg: number | null = null;
       if (isMetric) {
-        finalHeightCm = parseNum(heightCm);
-        finalWeightKg = parseNum(weightKg);
+        if (metricHeightProvided) finalHeightCm = parseNum(heightCm);
+        if (metricWeightProvided) finalWeightKg = parseNum(weightKg);
       } else {
-        const totalInches = parseNum(heightFt) * 12 + parseNum(heightIn);
-        finalHeightCm = Math.round(totalInches * 2.54 * 10) / 10;
-        finalWeightKg = Math.round(parseNum(weightLb) * 0.45359237 * 10) / 10;
+        if (imperialHeightProvided) {
+          const totalInches = parseNum(heightFt) * 12 + parseNum(heightIn || "0");
+          finalHeightCm = Math.round(totalInches * 2.54 * 10) / 10;
+        }
+        if (imperialWeightProvided) finalWeightKg = Math.round(parseNum(weightLb) * 0.45359237 * 10) / 10;
       }
 
       await addDoc(collection(db, "users", currentUser.uid, "profiles"), {
         name: name.trim(),
         icon: icon.trim() || null,
-        birthYear: parsedYear,
-        birthMonth: parsedMonth,
-        birthDate: parsedDate,
-        bloodType,
+        birthYear: isValidDateInput ? parsedYear : null,
+        birthMonth: isValidDateInput ? parsedMonth : null,
+        birthDate: isValidDateInput ? parsedDate : null,
+        bloodType: bloodType.trim() || null,
         allergies: allergies.trim() || null,
         heightCm: finalHeightCm,
         weightKg: finalWeightKg,
-        displayHeight: isMetric ? `${heightCm} cm` : `${heightFt} ft ${heightIn || "0"} in`,
-        displayWeight: isMetric ? `${weightKg} kg` : `${weightLb} lb`,
+        displayHeight: finalHeightCm === null ? null : (isMetric ? `${heightCm} cm` : `${heightFt} ft ${heightIn || "0"} in`),
+        displayWeight: finalWeightKg === null ? null : (isMetric ? `${weightKg} kg` : `${weightLb} lb`),
         createdAt: new Date().toISOString(),
       });
 
@@ -170,7 +182,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
     } catch (error) {
       console.error("Error saving profile to Firestore:", error);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Save Error", "Failed to create this profile. Please try again.");
+      Alert.alert("Could not save person", "Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -187,9 +199,14 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                 <View style={{ flex: 1 }}>
                   <Text style={styles.eyebrow}>SAVED PERSON</Text>
                   <Text style={styles.header}>Add a person</Text>
+                  <Text style={styles.subhead}>Create a reusable profile for seat assignment.</Text>
                 </View>
               </View>
 
+              <View style={styles.requiredNotice}>
+                <View style={styles.requiredNoticeDot} />
+                <Text style={styles.requiredNoticeText}>Only the person’s name is required. All other details are optional and can be added later.</Text>
+              </View>
 
               <ScrollView style={styles.formScroll} contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
                 <View style={styles.fieldGroup}>
@@ -198,19 +215,19 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <FieldHeader label="Birthday" hint="Profiles in this prototype must be for someone 18 or older." />
+                  <FieldHeader label="Birthday" optional hint="Add this only if known." />
                   <View style={styles.dateRow}>
                     <View style={{ flex: 0.8 }}><TextInput type="number" variant="regular" placeholder="MM" enabled={!isLoading} value={birthMonth} onChangeText={setBirthMonth} /></View>
                     <View style={{ flex: 0.8 }}><TextInput type="number" variant="regular" placeholder="DD" enabled={!isLoading} value={birthDate} onChangeText={setBirthDate} /></View>
                     <View style={{ flex: 1.2 }}><TextInput type="number" variant="regular" placeholder="YYYY" enabled={!isLoading} value={birthYear} onChangeText={setBirthYear} /></View>
                   </View>
-                  {(birthMonth || birthDate || birthYear) && (!isValidDateInput || isUnder18) ? (
-                    <Text style={styles.validationText}>{!isValidDateInput ? "Enter a valid birthday." : "This profile must be for someone 18 or older."}</Text>
+                  {isBirthdayInvalid ? (
+                    <Text style={styles.validationText}>Enter a complete, valid birthday or leave all three fields blank.</Text>
                   ) : null}
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <FieldHeader label="Height & weight" />
+                  <FieldHeader label="Height & weight" optional hint="Optional reference information; not required for seat monitoring." />
                   {isMetric ? (
                     <View style={styles.splitRow}>
                       <View style={{ flex: 1 }}><TextInput type="number" variant="regular" placeholder="Height (cm)" enabled={!isLoading} value={heightCm} onChangeText={setHeightCm} /></View>
@@ -225,10 +242,13 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
                       <TextInput type="number" variant="regular" placeholder="Weight (lb)" enabled={!isLoading} value={weightLb} onChangeText={setWeightLb} />
                     </View>
                   )}
+                  {isHeightInvalid || isWeightInvalid ? (
+                    <Text style={styles.validationText}>Enter valid positive height/weight values, or leave them blank.</Text>
+                  ) : null}
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <FieldHeader label="Blood type" />
+                  <FieldHeader label="Blood type" optional hint="Only add this if it is known." />
                   <Dropdown
                     mode="default"
                     data={bloodTypes}
@@ -259,7 +279,7 @@ export default function AddProfileModal({ visible, onClose, onSuccess }: Props) 
               <View style={styles.actionRow}>
                 <Button variant={hasUnsavedChanges ? "warn" : "secondary"} label={hasUnsavedChanges ? "Discard" : "Cancel"} enabled={!isLoading} onPress={requestClose} />
                 <View style={{ flex: 1 }}>
-                  <Button variant="primary" label="Create Profile" onPress={() => void handleSave()} enabled={!isFormInvalid && !isLoading} loading={isLoading} fullWidth />
+                  <Button variant="primary" label="Save Person" onPress={() => void handleSave()} enabled={!isFormInvalid && !isLoading} loading={isLoading} fullWidth />
                 </View>
               </View>
             </View>

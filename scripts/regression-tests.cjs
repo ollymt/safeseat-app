@@ -134,7 +134,7 @@ test('Seats completely removes the selector when the indicator is off', () => {
     const { default: Assign } = load('src/app/(tabs)/assign/index.tsx', mocks);
     const tree = Assign();
     const json = JSON.stringify(tree);
-    assert.equal(json.includes('SafeSeat Sensor, one physical prototype. Choose monitored seat'), prototypeIndicator);
+    assert.equal(json.includes('SafeSeat Sensor. Choose the seat connected to the hardware'), prototypeIndicator);
     assert.equal(json.includes('Monitored seat:'), false);
   }
 });

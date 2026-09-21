@@ -35,6 +35,7 @@ import { useNavigation } from "expo-router";
 const { width: screenWidth } = Dimensions.get("window");
 
 const bloodTypes = [
+	{ label: "Not known", value: "" },
 	{ label: "A+", value: "a+" },
 	{ label: "A-", value: "a-" },
 	{ label: "B+", value: "b+" },
@@ -62,26 +63,6 @@ const isValidDateParts = (year: number, month: number, day: number): boolean => 
 	if (month < 1 || month > 12) return false;
 	if (day < 1 || day > daysInMonth(year, month)) return false;
 	return true;
-};
-
-// Pure arithmetic age check — no Date object round-trips for the birthday itself.
-const isUnder18Parts = (year: number, month: number, day: number): boolean => {
-	if (!isValidDateParts(year, month, day)) return true;
-
-	const today = new Date();
-	const currentYear = today.getFullYear();
-	const currentMonth = today.getMonth() + 1;
-	const currentDay = today.getDate();
-
-	const age = currentYear - year;
-
-	if (age > 18) return false;
-	if (age < 18) return true;
-
-	if (month < currentMonth) return false;
-	if (month > currentMonth) return true;
-
-	return day > currentDay;
 };
 
 // Birthday is stored as three separate int64 fields in Firestore: birthYear,
@@ -217,10 +198,10 @@ export default function Profile() {
 					birthYear: bdayParts ? bdayParts.year : null,
 					birthMonth: bdayParts ? bdayParts.month : null,
 					birthDate: bdayParts ? bdayParts.day : null,
-					height: localData.height || "Not Set",
-					weight: localData.weight || "Not Set",
-					bloodType: localData.bloodType || "Not Set",
-					allergies: localData.allergies || "None Stored",
+					height: localData.height || (localData.heightCm != null ? String(localData.heightCm) : ""),
+					weight: localData.weight || (localData.weightKg != null ? String(localData.weightKg) : ""),
+					bloodType: localData.bloodType || "",
+					allergies: localData.allergies || "",
 				};
 
 				originalDataRef.current = loadedData;
@@ -271,10 +252,10 @@ export default function Profile() {
 
 				const bdayParts = extractBirthdayParts(cloudData);
 
-				const heightVal = cloudData.heightCm !== undefined ? `${cloudData.heightCm}` : (cloudData.height || "Not Set");
-				const weightVal = cloudData.weightKg !== undefined ? `${cloudData.weightKg}` : (cloudData.weight || "Not Set");
-				const bloodVal = cloudData.bloodType || "Not Set";
-				const allergyVal = cloudData.allergies || "None Stored";
+				const heightVal = cloudData.heightCm != null ? `${cloudData.heightCm}` : (cloudData.height || "");
+				const weightVal = cloudData.weightKg != null ? `${cloudData.weightKg}` : (cloudData.weight || "");
+				const bloodVal = cloudData.bloodType || "";
+				const allergyVal = cloudData.allergies || "";
 
 				const loadedCloudData = {
 					name: nameVal,
@@ -369,44 +350,45 @@ export default function Profile() {
 
 	const validateForm = () => {
 		if (userName.trim() === "") return false;
-		if (birthYear.trim() === "" || birthMonth.trim() === "" || birthDate.trim() === "") return false;
-
-		if (isMetric) {
-			if (height.trim() === "" || height === "Not Set") return false;
-			if (weight.trim() === "" || weight === "Not Set") return false;
-		} else {
-			if (tempFeet.trim() === "" || tempInches.trim() === "") return false;
-			if (weight.trim() === "" || weight === "Not Set") return false;
-		}
 
 		const yVal = birthYear.trim();
 		const mVal = birthMonth.trim();
 		const dVal = birthDate.trim();
+		const hasBirthday = yVal !== "" || mVal !== "" || dVal !== "";
 
-		if (yVal !== "" || mVal !== "" || dVal !== "") {
+		if (hasBirthday) {
+			if (yVal === "" || mVal === "" || dVal === "") return false;
 			const y = parseInt(yVal, 10);
 			const m = parseInt(mVal, 10);
 			const d = parseInt(dVal, 10);
-
 			if (!isValidDateParts(y, m, d)) return false;
-
-			const currentYear = new Date().getFullYear();
+			const today = new Date();
+			const currentYear = today.getFullYear();
 			if (y < 1900 || y > currentYear) return false;
-
-			if (isUnder18Parts(y, m, d)) return false;
+			if (y === currentYear) {
+				const currentMonth = today.getMonth() + 1;
+				if (m > currentMonth || (m === currentMonth && d > today.getDate())) return false;
+			}
 		}
 
-		if (!isMetric) {
+		if (isMetric) {
+			const hVal = height.trim();
+			const wVal = weight.trim();
+			if (hVal !== "" && hVal !== "Not Set" && (isNaN(parseFloat(hVal)) || parseFloat(hVal) <= 0)) return false;
+			if (wVal !== "" && wVal !== "Not Set" && (isNaN(parseFloat(wVal)) || parseFloat(wVal) <= 0)) return false;
+		} else {
 			const fVal = tempFeet.trim();
 			const iVal = tempInches.trim();
-
 			if (fVal !== "" || iVal !== "") {
+				if (fVal === "") return false;
 				const f = parseFloat(fVal);
 				const i = parseFloat(iVal || "0");
-
 				if (isNaN(f) || f < 0 || f > 10) return false;
 				if (isNaN(i) || i < 0 || i >= 12) return false;
+				if ((f * 12) + i <= 0) return false;
 			}
+			const lbsVal = tempLbs.trim();
+			if (lbsVal !== "" && (isNaN(parseFloat(lbsVal)) || parseFloat(lbsVal) <= 0)) return false;
 		}
 
 		return true;
@@ -479,45 +461,44 @@ export default function Profile() {
 			const d = parseInt(birthDate, 10);
 			const validBday = isValidDateParts(y, m, d);
 
+			const normalizedBloodType = bloodType === "Not Set" ? "" : bloodType.trim();
+			const normalizedAllergies = allergies === "None Stored" ? "" : allergies.trim();
+			const cleanHeightNum = height && height !== "Not Set" ? parseFloat(height.replace(/[^0-9.]/g, "")) : null;
+			const cleanWeightNum = weight && weight !== "Not Set" ? parseFloat(weight.replace(/[^0-9.]/g, "")) : null;
+			const validHeightNum = cleanHeightNum !== null && !isNaN(cleanHeightNum) ? cleanHeightNum : null;
+			const validWeightNum = cleanWeightNum !== null && !isNaN(cleanWeightNum) ? cleanWeightNum : null;
+
 			const updatedProfile = {
-				name: userName,
+				name: userName.trim(),
 				icon: userIcon,
 				email: userEmail,
 				phone: userPhone,
 				birthYear: validBday ? y : null,
 				birthMonth: validBday ? m : null,
 				birthDate: validBday ? d : null,
-				height: height,
-				weight: weight,
-				bloodType: bloodType,
-				allergies: allergies,
+				height: validHeightNum !== null ? String(validHeightNum) : "",
+				weight: validWeightNum !== null ? String(validWeightNum) : "",
+				bloodType: normalizedBloodType,
+				allergies: normalizedAllergies,
 			};
 
 			await SecureStore.setItemAsync(cacheKey, JSON.stringify(updatedProfile));
 
-			const cleanHeightNum = height !== "Not Set" ? parseFloat(height.replace(/[^0-9.]/g, "")) : null;
-			const cleanWeightNum = weight !== "Not Set" ? parseFloat(weight.replace(/[^0-9.]/g, "")) : null;
-
 			const firestorePayload: any = {
-				name: userName,
+				name: userName.trim(),
 				icon: userIcon,
 				email: userEmail,
 				phone: userPhone,
-				bloodType: bloodType,
-				allergies: allergies,
+				bloodType: normalizedBloodType || null,
+				allergies: normalizedAllergies || null,
 				birthYear: validBday ? y : null,
 				birthMonth: validBday ? m : null,
 				birthDate: validBday ? d : null,
+				heightCm: validHeightNum,
+				height: validHeightNum !== null ? String(validHeightNum) : null,
+				weightKg: validWeightNum,
+				weight: validWeightNum !== null ? String(validWeightNum) : null,
 			};
-
-			if (cleanHeightNum !== null && !isNaN(cleanHeightNum)) {
-				firestorePayload.heightCm = cleanHeightNum;
-				firestorePayload.height = String(cleanHeightNum);
-			}
-			if (cleanWeightNum !== null && !isNaN(cleanWeightNum)) {
-				firestorePayload.weightKg = cleanWeightNum;
-				firestorePayload.weight = String(cleanWeightNum);
-			}
 
 			const profileDocRef = isSubProfile
 				? doc(db, "users", currentUser.uid, "profiles", profileId as string)
@@ -590,27 +571,6 @@ export default function Profile() {
 		return age.toString();
 	};
 
-	const getZodiacSign = () => {
-		const y = parseInt(birthYear, 10);
-		const month = parseInt(birthMonth, 10);
-		const day = parseInt(birthDate, 10);
-		if (!isValidDateParts(y, month, day)) return "Not Set";
-
-		if ((month === 3 && day >= 21) || (month === 4 && day <= 19)) return "Aries";
-		if ((month === 4 && day >= 20) || (month === 5 && day <= 20)) return "Taurus";
-		if ((month === 5 && day >= 21) || (month === 6 && day <= 20)) return "Gemini";
-		if ((month === 6 && day >= 21) || (month === 7 && day <= 22)) return "Cancer";
-		if ((month === 7 && day >= 23) || (month === 8 && day <= 22)) return "Leo";
-		if ((month === 8 && day >= 23) || (month === 9 && day <= 22)) return "Virgo";
-		if ((month === 9 && day >= 23) || (month === 10 && day <= 22)) return "Libra";
-		if ((month === 10 && day >= 23) || (month === 11 && day <= 21)) return "Scorpio";
-		if ((month === 11 && day >= 22) || (month === 12 && day <= 21)) return "Sagittarius";
-		if ((month === 12 && day >= 22) || (month === 1 && day <= 19)) return "Capricorn";
-		if ((month === 1 && day >= 20) || (month === 2 && day <= 18)) return "Aquarius";
-		if ((month === 2 && day >= 19) || (month === 3 && day <= 20)) return "Pisces";
-
-		return "Not Set";
-	};
 
 	const [keyboardHeight, setKeyboardHeight] = useState(0);
 
@@ -761,7 +721,7 @@ export default function Profile() {
 							<View style={styles.heroCopy}>
 								<Text style={styles.heroEyebrow}>{isSubProfile ? "SAVED PERSON" : "MY DRIVER PROFILE"}</Text>
 								<Text style={styles.pageHeader} numberOfLines={2}>{userName}</Text>
-								<Text style={styles.heroSubhead}>{editMode ? "Edit the fields below, then save your changes." : isSubProfile ? "Reusable passenger profile" : "Used when you assign yourself to the Driver seat."}</Text>
+								<Text style={styles.heroSubhead}>{editMode ? "Edit the fields below, then save your changes." : isSubProfile ? "Saved passenger profile" : "Used when you assign yourself to the Driver seat."}</Text>
 							</View>
 						</View>
 
@@ -785,12 +745,13 @@ export default function Profile() {
 								}}>
 									Basic Information
 								</Text>
+								<Text style={styles.sectionHint}>Name is required. Birthday is optional.</Text>
 
 								<View style={styles.fieldGroup}>
 
 									<View style={[styles.fixedFieldContainer, !editMode && styles.notLast, { backgroundColor: editMode ? themes.background : themes.backgroundElement }]}>
 										<Text style={[styles.fixedInfoLabel, { color: themes.primaryBttn }]}>
-											Name:
+											Name · Required:
 										</Text>
 										{editMode ? (
 											<View style={{ flex: 1 }}>
@@ -811,7 +772,7 @@ export default function Profile() {
 
 									<View style={[styles.fixedFieldContainer, !editMode && styles.notLast, { backgroundColor: editMode ? themes.background : themes.backgroundElement }]}>
 										<Text style={[styles.fixedInfoLabel, { color: themes.primaryBttn }]}>
-											Birthday:
+											Birthday · Optional:
 										</Text>
 										{editMode ? (
 											<View style={{ flex: 1, flexDirection: "row", gap: spacing.one }}>
@@ -850,7 +811,7 @@ export default function Profile() {
 										)}
 									</View>
 
-									<View style={[styles.fixedFieldContainer, styles.notLast, { backgroundColor: themes.backgroundElement, borderTopLeftRadius: editMode ? spacing.edge : spacing.none, borderTopRightRadius: editMode ? spacing.edge : spacing.none }]}>
+									<View style={[styles.fixedFieldContainer, { backgroundColor: themes.backgroundElement, borderTopLeftRadius: editMode ? spacing.edge : spacing.none, borderTopRightRadius: editMode ? spacing.edge : spacing.none }]}>
 										<Text style={[styles.fixedInfoLabel, { color: themes.primaryBttn }]}>
 											Age:
 										</Text>
@@ -859,14 +820,6 @@ export default function Profile() {
 										</Text>
 									</View>
 
-									<View style={[styles.fixedFieldContainer, { backgroundColor: themes.backgroundElement }]}>
-										<Text style={[styles.fixedInfoLabel, { color: themes.primaryBttn }]}>
-											Sun Sign:
-										</Text>
-										<Text style={{ color: themes.text, fontFamily: "Body-Medium", fontSize: fontsize.body }}>
-											{getZodiacSign()}
-										</Text>
-									</View>
 								</View>
 							</View>
 
@@ -877,14 +830,15 @@ export default function Profile() {
 									fontSize: fontsize.header,
 									marginTop: spacing.one,
 								}}>
-									Health Information
+									Optional Health Information
 								</Text>
+								<Text style={styles.sectionHint}>These details are optional and are not required for seat assignment or monitoring.</Text>
 
 								<View style={styles.fieldGroup}>
 
 									<View style={[styles.fixedFieldContainer, !editMode && styles.notLast, { backgroundColor: editMode ? themes.background : themes.backgroundElement }]}>
 										<Text style={[styles.fixedInfoLabel, { color: themes.primaryBttn }]}>
-											Height:
+											Height · Optional:
 										</Text>
 
 										{editMode ? (
@@ -932,7 +886,7 @@ export default function Profile() {
 
 									<View style={[styles.fixedFieldContainer, !editMode && styles.notLast, { backgroundColor: editMode ? themes.background : themes.backgroundElement }]}>
 										<Text style={[styles.fixedInfoLabel, { color: themes.primaryBttn }]}>
-											Weight:
+											Weight · Optional:
 										</Text>
 										{editMode ? (
 											<View style={{ flex: 1 }}>
@@ -966,7 +920,7 @@ export default function Profile() {
 
 									<View style={[styles.fixedFieldContainer, !editMode && styles.notLast, { backgroundColor: editMode ? themes.background : themes.backgroundElement }]}>
 										<Text style={[styles.fixedInfoLabel, { color: themes.primaryBttn }]}>
-											Blood Type:
+											Blood Type · Optional:
 										</Text>
 										{editMode ? (
 											<View style={{ flex: 1 }}>
@@ -1021,7 +975,7 @@ export default function Profile() {
 
 									<View style={[styles.fixedFieldContainer, { backgroundColor: editMode ? themes.background : themes.backgroundElement }]}>
 										<Text style={[styles.fixedInfoLabel, { color: themes.primaryBttn }]}>
-											Allergies:
+											Allergies · Optional:
 										</Text>
 										{editMode ? (
 											<View style={{ flex: 1 }}>
@@ -1035,12 +989,16 @@ export default function Profile() {
 											</View>
 										) : (
 											<Text style={{ color: themes.text, fontFamily: "Body-Medium", fontSize: fontsize.body }}>
-												{allergies}
+												{allergies.trim() || "Not Set"}
 											</Text>
 										)}
 									</View>
 								</View>
 							</View>
+
+							{editMode && !isFormValid ? (
+								<Text style={styles.formValidationText}>Name is required. If you enter optional details, make sure they are complete and valid.</Text>
+							) : null}
 
 							<View style={{ flexDirection: "column", gap: spacing.one }}>
 								<View style={{ flexDirection: "row", gap: spacing.one }}>
@@ -1068,7 +1026,7 @@ export default function Profile() {
 												}
 											}}
 											loading={saving}
-											enabled={!saving}
+											enabled={!saving && (!editMode || isFormValid)}
 										/>
 									</View>
 								</View>
@@ -1115,6 +1073,8 @@ const createStyles = (themes: ThemePalette) => StyleSheet.create({
 	heroCopy: { flex: 1, minWidth: 0, gap: 3 },
 	heroEyebrow: { color: themes.primaryBttn, fontSize: 10.5, letterSpacing: 1, fontFamily: "Body-Bold" },
 	heroSubhead: { color: themes.textSecondary, fontSize: 12.5, lineHeight: 18, fontFamily: "Body-Regular" },
+	sectionHint: { color: themes.textMuted, fontSize: 10, lineHeight: 14, fontFamily: "Body-Regular", marginTop: -4 },
+	formValidationText: { color: themes.lightOrange, fontSize: 10, lineHeight: 14, fontFamily: "Body-Medium" },
 	fieldContainer: {
 		gap: 4,
 		width: "100%",

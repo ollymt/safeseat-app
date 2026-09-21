@@ -212,7 +212,7 @@ export default function Settings() {
             </View>
 
             <View style={styles.settingGroup}>
-              <SettingSwitch name="Prototype indicator" iconName="hardware-chip-outline" value={prototypeIndicator} enabled={!preferencesLoading} onValueChange={(v) => {
+              <SettingSwitch name="Sensor setup card" iconName="hardware-chip-outline" value={prototypeIndicator} enabled={!preferencesLoading} onValueChange={(v) => {
                 void setPrototypeIndicator(v).catch(() => Alert.alert("Could not save setting", "Please try again before closing the app."));
               }} isLast />
             </View>

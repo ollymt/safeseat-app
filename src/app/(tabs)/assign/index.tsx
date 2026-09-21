@@ -544,7 +544,7 @@ export default function Assign() {
 
           {prototypeIndicator ? <Pressable
             accessibilityRole="button"
-            accessibilityLabel="SafeSeat Sensor, one physical prototype. Choose monitored seat"
+            accessibilityLabel="SafeSeat Sensor. Choose the seat connected to the hardware"
             onPress={chooseHardwareSeat}
             style={({ pressed }) => [
               styles.hardwareLinkCard,
@@ -560,7 +560,7 @@ export default function Assign() {
               />
             </View>
             <View style={styles.hardwareLinkCopy}>
-              <Text style={styles.hardwareLinkEyebrow}>SAFESEAT SENSOR · 1 PROTOTYPE</Text>
+              <Text style={styles.hardwareLinkEyebrow}>SAFESEAT SENSOR</Text>
               <Text style={styles.hardwareLinkTitle}>{getSeatLabel(hardwareSeatNo)}</Text>
               <Text style={styles.hardwareLinkText}>
                 {hubConnected ? (telemetryReady ? "Connected and ready" : "Connecting") : "Offline"}
@@ -583,7 +583,7 @@ export default function Assign() {
           <Modal visible={prototypeIndicator && sensorPickerVisible} transparent animationType="fade" onRequestClose={() => { if (!savingSensor) setSensorPickerVisible(false); }}>
             <View style={styles.pickerBackdrop}>
               <View style={styles.pickerSheet} accessibilityViewIsModal>
-                <Text style={styles.hardwareLinkEyebrow}>{prototypeIndicator ? "ONE PHYSICAL PROTOTYPE" : "MONITORING SETUP"}</Text>
+                <Text style={styles.hardwareLinkEyebrow}>{prototypeIndicator ? "SENSOR SEAT" : "MONITORING SETUP"}</Text>
                 <Text style={styles.pickerTitle}>Which seat has the sensor?</Text>
                 <Text style={styles.hardwareLinkText}>Choose the actual hardware location. Other seats stay unmonitored.</Text>
                 <ScrollView style={{ maxHeight: 360 }} contentContainerStyle={{ gap: 8 }}>
