@@ -17,7 +17,6 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Image,
-  ImageBackground,
   Modal,
   Pressable,
   ScrollView,
@@ -489,16 +488,18 @@ export default function Assign() {
             <Text style={styles.pageSubhead}>{isLockedIn ? "Monitoring active" : "Tap a seat to assign."}</Text>
           </View>
 
-          <ImageBackground
-            source={require("../../../../assets/images/appImgs/car-cropped.png")}
+          <View
             style={[
               styles.carMap,
               { height: carMapHeight },
             ]}
-            imageStyle={styles.carImage}
           >
+            <Image
+              source={require("../../../../assets/images/appImgs/car-cropped.png")}
+              style={styles.carBackgroundImage}
+              resizeMode="cover"
+            />
             <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-              <Image source={require("../../../../assets/images/appImgs/car-cropped.png")} blurRadius={12} style={[StyleSheet.absoluteFill, { opacity: 0.16, transform: [{ scale: 1.08 }] }]} resizeMode="cover" />
               <LinearGradient colors={[themes.background, "transparent"]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.leftFade} />
               <LinearGradient colors={["transparent", themes.background]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.rightFade} />
               <LinearGradient colors={["transparent", themes.background]} style={styles.bottomFade} />
@@ -536,7 +537,7 @@ export default function Assign() {
                 />
               ))}
             </View>
-          </ImageBackground>
+          </View>
 
           {prototypeIndicator ? <Pressable
             accessibilityRole="button"
@@ -907,9 +908,14 @@ const createStyles = (themes: ThemePalette) => StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 5,
   },
-  carImage: {
-    opacity: 1,
-    resizeMode: "cover",
+  carBackgroundImage: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
   },
   frontRow: {
     position: "absolute",
