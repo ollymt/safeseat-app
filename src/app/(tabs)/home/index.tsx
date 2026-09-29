@@ -130,7 +130,9 @@ export default function Home() {
     telemetryReady,
     status: hubStatus,
     seatState: hubSeatState,
+    rawSeatState,
     simulationActive,
+    simulationState,
     resetDecisionLatch,
     setSimulationState,
     armUatWarning,
@@ -483,6 +485,22 @@ export default function Home() {
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
+  const triggerTestEmergency = () => {
+    // Researcher-only local simulation. This does not alter rawSeatState, so it
+    // can never masquerade as a real Main Hub emergency for SMS escalation.
+    cancelUatWarning();
+    setSimulationState("emergency");
+    setUatControlVisible(false);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  };
+
+  const stopResearcherSimulation = () => {
+    cancelUatWarning();
+    setSimulationState("off");
+    setUatControlVisible(false);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
   const emergencySeatNo = isLockedIn
     ? SEAT_NUMBERS.find(
         (seatNo) => getSeatState(seatNo) === "emergency" && assignments[seatNo] && !dismissedSeats.has(seatNo),
@@ -734,21 +752,34 @@ export default function Home() {
             <View style={styles.uatModalCard}>
               <View style={styles.endModalHandle} />
               <Text style={styles.uatModalEyebrow}>RESEARCHER CONTROL</Text>
-              <Text style={styles.uatModalTitle}>{simulationActive ? "Simulated Warning Active" : "Schedule Warning"}</Text>
+              <Text style={styles.uatModalTitle}>
+                {simulationState === "emergency"
+                  ? "Test Emergency Active"
+                  : simulationState === "warning"
+                    ? "Simulated Warning Active"
+                    : "Simulation Controls"}
+              </Text>
               <Text style={styles.uatModalText}>
-                {simulationActive
-                  ? "Warning will stay active until you stop it. Real Main Hub Emergency still takes priority."
-                  : "The linked monitored seat will enter Warning after the selected delay and stay there until you stop it."}
+                {simulationState === "emergency"
+                  ? "The linked seat is showing a local Emergency test. No real SMS is sent. Hold the same seat again when you are ready to stop it."
+                  : simulationState === "warning"
+                    ? "Warning will stay active until you stop it. A real Main Hub Emergency still takes priority."
+                    : "Schedule a persistent Warning or trigger a local Emergency test for the linked monitored seat. Researcher simulations never count as real SMS events."}
               </Text>
 
               {simulationActive ? (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Stop simulated warning"
-                  onPress={() => { cancelUatWarning(); setUatControlVisible(false); void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }}
-                  style={({ pressed }) => [styles.uatCancelButton, pressed && styles.modalButtonPressed]}
+                  accessibilityLabel={simulationState === "emergency" ? "Stop test emergency" : "Stop simulated warning"}
+                  onPress={stopResearcherSimulation}
+                  style={({ pressed }) => [
+                    simulationState === "emergency" ? styles.uatEmergencyStopButton : styles.uatCancelButton,
+                    pressed && styles.modalButtonPressed,
+                  ]}
                 >
-                  <Text style={styles.uatCancelText}>Stop Warning</Text>
+                  <Text style={simulationState === "emergency" ? styles.uatEmergencyStopText : styles.uatCancelText}>
+                    {simulationState === "emergency" ? "Stop Test Emergency" : "Stop Warning"}
+                  </Text>
                 </Pressable>
               ) : (
                 <>
@@ -766,6 +797,16 @@ export default function Home() {
                       <Text style={styles.uatDelayLabel}>Warning</Text>
                     </Pressable>
                   </View>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Trigger local test emergency"
+                    onPress={triggerTestEmergency}
+                    style={({ pressed }) => [styles.uatEmergencyButton, pressed && styles.modalButtonPressed]}
+                  >
+                    <Text style={styles.uatEmergencyButtonTitle}>Trigger Test Emergency</Text>
+                    <Text style={styles.uatEmergencyButtonCaption}>Local simulation · no SMS</Text>
+                  </Pressable>
 
                   <Pressable
                     onPress={() => { cancelUatWarning(); setUatControlVisible(false); void Haptics.selectionAsync(); }}
@@ -848,6 +889,7 @@ export default function Home() {
             vitals={vitalSigns}
             alertAcknowledged={emergencyAlertAcknowledged}
             onAcknowledgeAlert={acknowledgeEmergencyAlert}
+            isRealEmergency={rawSeatState === "emergency"}
           />
         ) : null}
       </SafeAreaView>
@@ -1372,6 +1414,29 @@ const createStyles = (themes: ThemePalette) => StyleSheet.create({
   },
   uatDelayTime: { color: themes.text, fontSize: 20, fontFamily: "Body-Bold" },
   uatDelayLabel: { color: themes.primaryBttn, fontSize: 10, marginTop: 3, fontFamily: "Body-Bold", letterSpacing: 0.5 },
+  uatEmergencyButton: {
+    minHeight: 62,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: themes.warnBttn,
+    backgroundColor: themes.mode === "dark" ? "rgba(255,103,111,0.10)" : "rgba(217,75,85,0.08)",
+    marginTop: 4,
+  },
+  uatEmergencyButtonTitle: { color: themes.warnBttn, fontSize: 14, fontFamily: "Body-Bold" },
+  uatEmergencyButtonCaption: { color: themes.textMuted, fontSize: 10, marginTop: 3, fontFamily: "Body-Regular" },
+  uatEmergencyStopButton: {
+    minHeight: 50,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: themes.warnBttn,
+    backgroundColor: themes.mode === "dark" ? "rgba(255,103,111,0.12)" : "rgba(217,75,85,0.10)",
+    marginTop: 4,
+  },
+  uatEmergencyStopText: { color: themes.warnBttn, fontSize: 12, fontFamily: "Body-Bold" },
   uatCancelButton: {
     minHeight: 46,
     borderRadius: 15,
