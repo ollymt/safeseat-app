@@ -2,6 +2,7 @@ import { FontSize as fontsize, Spacing as spacing, type ThemePalette } from "@/c
 import { useTheme } from "@/hooks/use-theme";
 import { useUserPreferences } from "@/hooks/user-preferences-context";
 import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
+import { endCurrentCloudSession } from "@/services/admin-cloud-sync";
 import { useDriverGuide } from "@/hooks/driver-guide-context";
 import { clearSession } from "@/utils/securitySession";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -117,6 +118,7 @@ export default function Settings() {
       { text: "Cancel", style: "cancel" },
       { text: "Log out", style: "destructive", onPress: async () => {
         try {
+          await endCurrentCloudSession().catch(() => undefined);
           await signOut(auth);
           await clearSession();
           await AsyncStorage.multiRemove([SEAT_ASSIGNMENTS_KEY, SEAT_STATUSES_KEY, IS_LOCKED_IN_KEY, HARDWARE_SEAT_KEY, SEAT_CONSENTS_KEY, "app_emergency_contacts", "userPreferences"]);

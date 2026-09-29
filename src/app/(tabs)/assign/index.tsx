@@ -7,6 +7,7 @@ import { Spacing as spacing, type ThemePalette } from "@/constants/theme";
 import { getSeatDisplayState } from "@/utils/monitoring-presentation";
 import { useTheme } from "@/hooks/use-theme";
 import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
+import { endCurrentCloudSession } from "@/services/admin-cloud-sync";
 import { useUserPreferences } from "@/hooks/user-preferences-context";
 import { useDriverGuide } from "@/hooks/driver-guide-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -325,7 +326,7 @@ export default function Assign() {
           onPress: async () => {
             try {
               const persistentAssignments: Record<number, Profile> = {};
-              Object.entries(assignments).forEach(([seatNo, profile]) => {
+              (Object.entries(assignments) as Array<[string, Profile]>).forEach(([seatNo, profile]) => {
                 if (!profile.sessionOnly && !profile.isGuest) {
                   persistentAssignments[Number(seatNo)] = profile;
                 }
@@ -337,6 +338,9 @@ export default function Assign() {
                 AsyncStorage.setItem(SEAT_STATUSES_KEY, JSON.stringify({})),
                 AsyncStorage.removeItem(SEAT_CONSENTS_KEY),
               ]);
+              await endCurrentCloudSession().catch((error) => {
+                console.warn("SafeSeat cloud session will be reconciled later:", error);
+              });
 
               setIsLockedIn(false);
               cancelUatWarning();

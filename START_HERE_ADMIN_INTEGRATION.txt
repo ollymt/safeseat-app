@@ -1,0 +1,29 @@
+SAFESEAT MOBILE — ADMIN FIREBASE INTEGRATION
+============================================
+
+1) Deploy the Firestore rules from the paired SafeSeat Admin V1.5 package first.
+
+2) Copy .env.example to .env (or merge the new values into your existing .env).
+   The shared deployment identity in this build is:
+
+   EXPO_PUBLIC_SAFESEAT_VEHICLE_ID=SS-CAV-8151
+   EXPO_PUBLIC_SAFESEAT_VEHICLE_PLATE=CAV 8151
+   EXPO_PUBLIC_SAFESEAT_VEHICLE_LABEL=Toyota Vios Lumina Jade
+   EXPO_PUBLIC_SAFESEAT_HUB_ID=SAFESEAT-MAIN-HUB
+
+3) Install and start as usual:
+   npm install
+   npx expo start -c
+
+4) Sign in to the mobile app. Assign a person to the physical SafeSeat hardware
+   seat. Once configured, the app creates/updates the Admin-safe account,
+   vehicle, and hardware records. Starting monitoring also creates a live
+   monitoring_sessions record.
+
+5) End Monitoring marks the cloud session inactive. A real Main Hub emergency
+   creates one Admin incident. Researcher/UAT simulated warning/emergency states
+   stay local and do not create real Admin incidents.
+
+The Main Hub remains the local authority. Admin cloud sync is supplementary and
+contains only derived states / hardware health, never exact sensor readings or
+camera frames.

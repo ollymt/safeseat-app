@@ -128,6 +128,7 @@ test('Seats completely removes the selector when the indicator is off', () => {
       '@/hooks/driver-guide-context': { useDriverGuide: () => ({ isStep: () => false }) },
       '@/hooks/safeseat-hub-context': { useSafeSeatHub: () => ({ connected: false, telemetryReady: false }) },
       '@/utils/monitoring-presentation': { getSeatDisplayState: state },
+      '@/services/admin-cloud-sync': { endCurrentCloudSession: async () => {} },
       '../../../../assets/images/appImgs/car-cropped.png': 'car.png',
     };
     for (const name of ['button','assign-card','assign-seat-modal','seat-options-modal','guide-pulse-overlay']) mocks[`@/components/${name}`] = name;

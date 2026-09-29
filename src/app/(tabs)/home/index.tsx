@@ -8,6 +8,7 @@ import { UAT_RESEARCHER_LONG_PRESS_MS } from "@/constants/uat";
 import { getSeatDisplayState } from "@/utils/monitoring-presentation";
 import { useTheme } from "@/hooks/use-theme";
 import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
+import { endCurrentCloudSession } from "@/services/admin-cloud-sync";
 import { useDriverGuide } from "@/hooks/driver-guide-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Host, Icon } from "@expo/ui";
@@ -429,7 +430,7 @@ export default function Home() {
 
     try {
       const persistentAssignments: Record<number, Profile> = {};
-      Object.entries(assignments).forEach(([seatNo, profile]) => {
+      (Object.entries(assignments) as Array<[string, Profile]>).forEach(([seatNo, profile]) => {
         if (!profile.sessionOnly && !profile.isGuest) {
           persistentAssignments[Number(seatNo)] = profile;
         }
@@ -454,6 +455,9 @@ export default function Home() {
       }
 
       await Promise.all(writes);
+      await endCurrentCloudSession().catch((error) => {
+        console.warn("SafeSeat cloud session will be reconciled later:", error);
+      });
 
       setIsLockedIn(false);
       cancelUatWarning();

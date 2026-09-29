@@ -3,6 +3,7 @@ import { FontSize as fontsize, Spacing as spacing, type ThemePalette } from "@/c
 import { useTheme } from "@/hooks/use-theme";
 import { useUserPreferences } from "@/hooks/user-preferences-context";
 import { sendEmergencySms } from "@/services/sms-escalation";
+import { markCurrentIncidentSmsEscalated } from "@/services/admin-cloud-sync";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -149,6 +150,7 @@ export default function EmergencyModal({
             console.log(`SafeSeat SMS skipped: ${result.skipped}`);
           } else {
             console.log(`SafeSeat SMS sent to ${result.sentTo} (ID: ${result.messageId})`);
+            void markCurrentIncidentSmsEscalated();
           }
         } else {
           console.warn("SafeSeat SMS failed:", result.error);
