@@ -7,9 +7,9 @@ import { Spacing as spacing, type ThemePalette } from "@/constants/theme";
 import { getSeatDisplayState } from "@/utils/monitoring-presentation";
 import { useTheme } from "@/hooks/use-theme";
 import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
-import { endCurrentCloudSession } from "@/services/admin-cloud-sync";
 import { useUserPreferences } from "@/hooks/user-preferences-context";
 import { useDriverGuide } from "@/hooks/driver-guide-context";
+import { useSeatSessions } from "@/hooks/seat-session-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
@@ -91,6 +91,7 @@ export default function Assign() {
     recordSensorSelected,
     recordMonitoringStarted,
   } = useDriverGuide();
+  const { activeSessions, startSeatSessions } = useSeatSessions();
   const {
     connected: hubConnected,
     telemetryReady,
@@ -114,10 +115,6 @@ export default function Assign() {
 
   const assignedSeatCount = useMemo(
     () => SEATS.filter((seat) => Boolean(assignments[seat.seatNo])).length,
-    [assignments],
-  );
-  const guestSeatCount = useMemo(
-    () => SEATS.filter((seat) => Boolean(assignments[seat.seatNo]?.sessionOnly)).length,
     [assignments],
   );
   const hasAssignedSeats = assignedSeatCount > 0;
@@ -160,7 +157,7 @@ export default function Assign() {
     return getSeatDisplayState({
       assigned: Boolean(assignments[seatNo]), ownerDriver: isAccountOwnerDriver(seatNo),
       consent: consents[seatNo], linked: seatNo === hardwareSeatNo,
-      connected: hubConnected, ready: telemetryReady, active: isLockedIn, liveState: "monitoring",
+      connected: hubConnected, ready: telemetryReady, active: Boolean(activeSessions[seatNo]), liveState: "monitoring",
     });
   };
 
@@ -202,6 +199,11 @@ export default function Assign() {
     await persistConsents(next);
     if (value === "confirmed") {
       recordConsentConfirmed(seatNo);
+      // During an ongoing ride, an inactive seat can accept a new passenger
+      // without restarting the sessions that are already running.
+      if (isLockedIn && assignments[seatNo] && !activeSessions[seatNo]) {
+        await startSeatSessions({ assignments, hardwareSeatNo, consents: next });
+      }
     }
     void Haptics.notificationAsync(
       value === "confirmed"
@@ -298,6 +300,7 @@ export default function Assign() {
         AsyncStorage.setItem(IS_LOCKED_IN_KEY, JSON.stringify(true)),
         AsyncStorage.setItem(SEAT_STATUSES_KEY, JSON.stringify(initialStatuses)),
       ]);
+      await startSeatSessions({ assignments, hardwareSeatNo: linkedSeat, consents });
       setIsLockedIn(true);
       recordMonitoringStarted();
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -314,51 +317,11 @@ export default function Assign() {
   const handleEndSession = () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert(
-      "End monitoring session?",
-      guestSeatCount > 0
-        ? `This unlocks the deployment and permanently removes ${guestSeatCount} session-only guest assignment${guestSeatCount === 1 ? "" : "s"}.`
-        : "This unlocks the deployment and clears the current safety states. Saved occupant assignments remain available for the next trip.",
+      "Manage passenger sessions",
+      "Sessions now end per seat so one passenger can get off while the other seats continue. Open Home to choose the specific seat to end.",
       [
-        { text: "Keep Monitoring", style: "cancel" },
-        {
-          text: "End Session",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const persistentAssignments: Record<number, Profile> = {};
-              (Object.entries(assignments) as Array<[string, Profile]>).forEach(([seatNo, profile]) => {
-                if (!profile.sessionOnly && !profile.isGuest) {
-                  persistentAssignments[Number(seatNo)] = profile;
-                }
-              });
-
-              await Promise.all([
-                AsyncStorage.setItem(IS_LOCKED_IN_KEY, JSON.stringify(false)),
-                AsyncStorage.setItem(SEAT_ASSIGNMENTS_KEY, JSON.stringify(persistentAssignments)),
-                AsyncStorage.setItem(SEAT_STATUSES_KEY, JSON.stringify({})),
-                AsyncStorage.removeItem(SEAT_CONSENTS_KEY),
-              ]);
-              await endCurrentCloudSession().catch((error) => {
-                console.warn("SafeSeat cloud session will be reconciled later:", error);
-              });
-
-              setIsLockedIn(false);
-              cancelUatWarning();
-              silenceAlertFeedback();
-              resetDecisionLatch();
-              setSimulationState("off");
-              setAssignments(persistentAssignments);
-              setConsents({});
-              if (hardwareSeatNo && !persistentAssignments[hardwareSeatNo]) {
-                await persistHardwareSeat(Number(Object.keys(persistentAssignments)[0]) || null);
-              }
-              void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            } catch (error) {
-              console.error("Failed to end session:", error);
-              Alert.alert("Could not end session", "Please try again.");
-            }
-          },
-        },
+        { text: "Keep Here", style: "cancel" },
+        { text: "Open Home", onPress: () => router.replace("/home") },
       ],
     );
   };
@@ -396,9 +359,16 @@ export default function Assign() {
 
     if (profile && hardwareSeatNo === null) {
       await persistHardwareSeat(seatNumber);
-    } else if (!profile && hardwareSeatNo === seatNumber) {
+    } else if (!profile && hardwareSeatNo === seatNumber && !isLockedIn) {
+      // Between rides the first remaining assignment can become the default
+      // hardware seat. During an active ride the physical sensor stays linked
+      // to its real seat even if that passenger has already left.
       const nextSeat = Number(Object.keys(updated)[0]) || null;
       await persistHardwareSeat(nextSeat);
+    }
+
+    if (profile && seatNumber === 1 && profile.isAccountOwner && isLockedIn && !activeSessions[seatNumber]) {
+      await startSeatSessions({ assignments: updated, hardwareSeatNo, consents: nextConsents });
     }
 
     if (profile && !(seatNumber === 1 && profile.isAccountOwner)) {
@@ -426,10 +396,14 @@ export default function Assign() {
       }
     }
 
-    if (isLockedIn) {
+    if (activeSessions[seatNo]) {
       Alert.alert(
-        "Monitoring is active",
-        "End the current session before changing seat assignments.",
+        "Seat session is active",
+        "End this passenger's session from Home before changing the person in this seat.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Open Home", onPress: () => router.replace("/home") },
+        ],
       );
       return;
     }
@@ -492,7 +466,7 @@ export default function Assign() {
                 </Text>
               </View>
             </View>
-            <Text style={styles.pageSubhead}>{isLockedIn ? "Monitoring active" : "Tap a seat to assign."}</Text>
+            <Text style={styles.pageSubhead}>{isLockedIn ? "Monitoring active · Inactive seats can take the next passenger." : "Tap a seat to assign."}</Text>
           </View>
 
           <View
@@ -521,7 +495,7 @@ export default function Assign() {
                   onPress={() => handleCardPress(seat.seatNo)}
                   state={getCardState(seat.seatNo)}
                   seatCode={seat.seatCode}
-                  locked={isLockedIn}
+                  locked={Boolean(activeSessions[seat.seatNo])}
                   hardwareLinked={seat.seatNo === hardwareSeatNo}
                   guideActive={isStep("seats") && seat.seatNo === (guideSeatNo ?? 2)}
                 />
@@ -538,7 +512,7 @@ export default function Assign() {
                   onPress={() => handleCardPress(seat.seatNo)}
                   state={getCardState(seat.seatNo)}
                   seatCode={seat.seatCode}
-                  locked={isLockedIn}
+                  locked={Boolean(activeSessions[seat.seatNo])}
                   hardwareLinked={seat.seatNo === hardwareSeatNo}
                   guideActive={isStep("seats") && seat.seatNo === (guideSeatNo ?? 2)}
                 />
@@ -768,7 +742,7 @@ export default function Assign() {
             </Text>
           </View>
           {isLockedIn ? (
-            <Button label="End Monitoring" onPress={handleEndSession} variant="secondary" fullWidth style={styles.stickyButton} />
+            <Button label="Manage Sessions" onPress={handleEndSession} variant="secondary" fullWidth style={styles.stickyButton} />
           ) : startReadiness === "consent" ? (
             <Button
               label="Passenger Consent"

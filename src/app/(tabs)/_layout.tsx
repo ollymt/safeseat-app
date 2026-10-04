@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { UserPreferencesProvider } from "@/hooks/user-preferences-context";
 import { SafeSeatHubProvider } from "@/hooks/safeseat-hub-context";
 import { SafeSeatCloudSyncProvider } from "@/hooks/safeseat-cloud-sync-context";
+import { SeatSessionProvider } from "@/hooks/seat-session-context";
 import { DriverGuideProvider, useDriverGuide } from "@/hooks/driver-guide-context";
 import DriverGuideOverlay from "@/components/driver-guide-overlay";
 import GuidePulseOverlay from "@/components/guide-pulse-overlay";
@@ -126,11 +127,13 @@ export default function TabLayout() {
   return (
     <UserPreferencesProvider>
       <SafeSeatHubProvider>
-        <SafeSeatCloudSyncProvider>
-          <DriverGuideProvider>
-            <TabsInner />
-          </DriverGuideProvider>
-        </SafeSeatCloudSyncProvider>
+        <SeatSessionProvider>
+          <SafeSeatCloudSyncProvider>
+            <DriverGuideProvider>
+              <TabsInner />
+            </DriverGuideProvider>
+          </SafeSeatCloudSyncProvider>
+        </SeatSessionProvider>
       </SafeSeatHubProvider>
     </UserPreferencesProvider>
   );

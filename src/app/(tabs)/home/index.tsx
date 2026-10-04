@@ -2,14 +2,17 @@ import ThemedHost from "@/components/themed-host";
 import EmergencyModal from "@/components/emergency-modal";
 import { SeatVitals } from "@/components/seat-card";
 import HomeMonitorRow from "@/components/home-monitor-row";
+import LiveSeatDetailModal from "@/components/live-seat-detail-modal";
+import SessionSummaryModal from "@/components/session-summary-modal";
 import GuidePulseOverlay from "@/components/guide-pulse-overlay";
 import { FontSize as fontsize, Spacing as spacing, type ThemePalette } from "@/constants/theme";
 import { UAT_RESEARCHER_LONG_PRESS_MS } from "@/constants/uat";
 import { getSeatDisplayState } from "@/utils/monitoring-presentation";
 import { useTheme } from "@/hooks/use-theme";
 import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
-import { endCurrentCloudSession } from "@/services/admin-cloud-sync";
+import { endCloudSessionForSeat, endCurrentCloudSession } from "@/services/admin-cloud-sync";
 import { useDriverGuide } from "@/hooks/driver-guide-context";
+import { formatSessionDuration, useSeatSessions } from "@/hooks/seat-session-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Host, Icon } from "@expo/ui";
 import * as Haptics from "expo-haptics";
@@ -46,7 +49,8 @@ export type SeatState =
   | "declined"
   | "offline"
   | "ready"
-  | "monitoring";
+  | "monitoring"
+  | "ended";
 
 type ConsentState = "confirmed" | "declined";
 
@@ -142,6 +146,13 @@ export default function Home() {
     acknowledgeEmergencyAlert,
     silenceAlertFeedback,
   } = useSafeSeatHub();
+  const {
+    activeSessions,
+    recentCompleted,
+    endSeatSession,
+    endAllSeatSessions,
+    dismissCompletedSeat,
+  } = useSeatSessions();
 
   const [isLockedIn, setIsLockedIn] = useState(false);
   const [assignments, setAssignments] = useState<Record<number, Profile>>({});
@@ -149,7 +160,12 @@ export default function Home() {
   const [consents, setConsents] = useState<Record<number, ConsentState>>({});
   const [dismissedSeats, setDismissedSeats] = useState<Set<number>>(new Set());
   const [endSessionVisible, setEndSessionVisible] = useState(false);
-  const [endingSession, setEndingSession] = useState(false);
+  const [endingSeatNo, setEndingSeatNo] = useState<number | null>(null);
+  const [endingAllSessions, setEndingAllSessions] = useState(false);
+  const [liveDetailSeatNo, setLiveDetailSeatNo] = useState<number | null>(null);
+  const [summarySeatNo, setSummarySeatNo] = useState<number | null>(null);
+  const [lastTelemetryAt, setLastTelemetryAt] = useState<number | null>(null);
+  const [clockNow, setClockNow] = useState(Date.now());
   const [screenFocused, setScreenFocused] = useState(true);
   const [animationCycle, setAnimationCycle] = useState(0);
   const [uatControlVisible, setUatControlVisible] = useState(false);
@@ -206,6 +222,15 @@ export default function Home() {
   );
 
   useEffect(() => {
+    if (hubStatus) setLastTelemetryAt(Date.now());
+  }, [hubStatus]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setClockNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     if (!screenFocused) {
       ambientPulse.setValue(0);
       return;
@@ -256,13 +281,16 @@ export default function Home() {
   }, [hubConnected, isLockedIn, livePulse, screenFocused]);
 
   const getSeatState = useCallback((seatNo: number): SeatState => {
+    if (recentCompleted[seatNo]) return "ended";
+    const seatActive = Boolean(activeSessions[seatNo]);
+    if (isLockedIn && assignments[seatNo] && !seatActive) return "assigned";
     return getSeatDisplayState({
       assigned: Boolean(assignments[seatNo]),
       ownerDriver: seatNo === 1 && Boolean(assignments[seatNo]?.isAccountOwner),
       consent: consents[seatNo], linked: seatNo === hardwareSeatNo,
-      connected: hubConnected, ready: telemetryReady, active: isLockedIn, liveState: hubSeatState,
+      connected: hubConnected, ready: telemetryReady, active: seatActive, liveState: hubSeatState,
     });
-  }, [assignments, consents, hardwareSeatNo, hubConnected, hubSeatState, isLockedIn, simulationActive, telemetryReady]);
+  }, [activeSessions, assignments, consents, hardwareSeatNo, hubConnected, hubSeatState, isLockedIn, recentCompleted, telemetryReady]);
 
   const getDisplayName = (profile?: Profile): string | undefined => {
     if (!profile) return undefined;
@@ -271,10 +299,10 @@ export default function Home() {
   };
 
   const assignedSeatCount = SEAT_NUMBERS.filter((seatNo) => Boolean(assignments[seatNo])).length;
-  const guestSeatCount = SEAT_NUMBERS.filter((seatNo) => {
-    const profile = assignments[seatNo];
-    return Boolean(profile?.isGuest || profile?.sessionOnly);
-  }).length;
+  const activeSeatNos = SEAT_NUMBERS.filter((seatNo) => Boolean(activeSessions[seatNo]));
+  const activeSeatCount = activeSeatNos.length;
+  const hasRecentCompleted = Object.keys(recentCompleted).length > 0;
+  const showMonitorBoard = isLockedIn || hasRecentCompleted;
 
   const vitalSigns = useMemo<SeatVitals>(() => {
     const c1001 = hubStatus?.sensors?.c1001;
@@ -304,6 +332,40 @@ export default function Home() {
           : "REACQUIRING",
     };
   }, [hubConnected, hubStatus?.sensors?.c1001, telemetryReady]);
+
+  const liveSurfaceTemperatureC = useMemo(() => {
+    const mlx = hubStatus?.sensors?.mlx90614;
+    if (!hubConnected || !mlx?.connected || mlx?.valid === false || typeof mlx?.object_temperature_c !== "number" || !Number.isFinite(mlx.object_temperature_c)) return null;
+    return Math.round(mlx.object_temperature_c * 10) / 10;
+  }, [hubConnected, hubStatus?.sensors?.mlx90614]);
+
+  const liveOccupancyLabel = typeof hubStatus?.sensors?.fsr?.occupied === "boolean"
+    ? (hubStatus.sensors.fsr.occupied ? "Detected" : "Not detected")
+    : "Unavailable";
+  const cameraVerifying = Boolean(hubStatus?.system?.camera_verification_requested || hubStatus?.camera?.verification_requested || hubStatus?.camera?.request_active || hubStatus?.camera?.busy);
+  const liveCameraLabel = !hubConnected || hubStatus?.camera?.available === false || hubStatus?.camera?.connected === false
+    ? "Unavailable"
+    : cameraVerifying ? "Verifying" : "Standby";
+  const rawMotionContext = String(hubStatus?.system?.motion_context ?? "").toLowerCase();
+  const liveMovementLabel = !hubConnected
+    ? "Unavailable"
+    : cameraVerifying
+      ? "Verification active"
+      : (hubStatus?.sensors?.c1001?.motion_artifact_active || hubStatus?.system?.evidence?.motion_artifact_possible || rawMotionContext.includes("motion") || rawMotionContext.includes("moving") || rawMotionContext.includes("movement"))
+        ? "Movement detected"
+        : "Stable";
+  const liveFusionLabel = !telemetryReady
+    ? "ANALYZING"
+    : rawSeatState === "emergency"
+      ? "EMERGENCY"
+      : cameraVerifying
+        ? "VERIFYING"
+        : rawSeatState === "warning"
+          ? "SUSPECTED"
+          : rawSeatState === "safe"
+            ? "NORMAL"
+            : "ANALYZING";
+  const liveUpdatedSeconds = lastTelemetryAt === null ? null : Math.max(0, Math.floor((clockNow - lastTelemetryAt) / 1000));
 
   const overallState = useMemo<OverallState>(() => {
     if (!isLockedIn || assignedSeatCount === 0) return "unknown";
@@ -399,6 +461,19 @@ export default function Home() {
     const profile = assignments[seatNo];
     if (!profile) return;
 
+    if (recentCompleted[seatNo]) {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setSummarySeatNo(seatNo);
+      return;
+    }
+
+    if (activeSessions[seatNo]) {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      if (seatNo === hardwareSeatNo) recordLiveSeatOpened(seatNo);
+      setLiveDetailSeatNo(seatNo);
+      return;
+    }
+
     const state = getSeatState(seatNo);
     const specialCopy: Partial<Record<SeatState, { label: string; headline: string; detail?: string }>> = {
       consent: { label: "CONSENT NEEDED", headline: "Monitoring consent has not been confirmed.", detail: "Open Seats to review consent." },
@@ -407,6 +482,7 @@ export default function Home() {
       ready: { label: "READY", headline: "This seat is ready to be monitored." },
       monitoring: { label: "MONITORING", headline: "Monitoring is active for this seat." },
       assigned: { label: "NOT MONITORED", headline: "A person is assigned here, but no sensor is linked to this seat." },
+      ended: { label: "ENDED", headline: "This seat session has ended and was saved." },
     };
     const stateCopy = state === "safe" || state === "warning" || state === "emergency" || state === "unknown"
       ? STATUS_COPY[state]
@@ -424,58 +500,79 @@ export default function Home() {
     setEndSessionVisible(true);
   };
 
-  const confirmEndSession = async () => {
-    if (endingSession) return;
-    setEndingSession(true);
+  const finishMonitoringIfNoActiveSeats = async (remainingSeatNos: number[]) => {
+    if (remainingSeatNos.length > 0) return;
+    await Promise.all([
+      AsyncStorage.setItem(IS_LOCKED_IN_KEY, JSON.stringify(false)),
+      AsyncStorage.setItem(SEAT_STATUSES_KEY, JSON.stringify({})),
+      AsyncStorage.removeItem(SEAT_CONSENTS_KEY),
+    ]);
+    setIsLockedIn(false);
+    setConsents({});
+    cancelUatWarning();
+    silenceAlertFeedback();
+    resetDecisionLatch();
+    setSimulationState("off");
+  };
 
+  const confirmEndSeatSession = async (seatNo: number) => {
+    if (endingSeatNo !== null || endingAllSessions) return;
+    setEndingSeatNo(seatNo);
     try {
-      const persistentAssignments: Record<number, Profile> = {};
-      (Object.entries(assignments) as Array<[string, Profile]>).forEach(([seatNo, profile]) => {
-        if (!profile.sessionOnly && !profile.isGuest) {
-          persistentAssignments[Number(seatNo)] = profile;
-        }
+      const result = await endSeatSession(seatNo);
+      await endCloudSessionForSeat(seatNo, result.session?.id).catch((error) => {
+        console.warn("SafeSeat cloud seat session will be reconciled later:", error);
       });
-
-      let nextHardwareSeat = hardwareSeatNo;
-      if (nextHardwareSeat && !persistentAssignments[nextHardwareSeat]) {
-        nextHardwareSeat = Number(Object.keys(persistentAssignments)[0]) || null;
-      }
-
-      const writes: Promise<void>[] = [
-        AsyncStorage.setItem(IS_LOCKED_IN_KEY, JSON.stringify(false)),
-        AsyncStorage.setItem(SEAT_ASSIGNMENTS_KEY, JSON.stringify(persistentAssignments)),
-        AsyncStorage.setItem(SEAT_STATUSES_KEY, JSON.stringify({})),
-        AsyncStorage.removeItem(SEAT_CONSENTS_KEY),
-      ];
-
-      if (nextHardwareSeat) {
-        writes.push(AsyncStorage.setItem(HARDWARE_SEAT_KEY, JSON.stringify(nextHardwareSeat)));
-      } else {
-        writes.push(AsyncStorage.removeItem(HARDWARE_SEAT_KEY));
-      }
-
-      await Promise.all(writes);
-      await endCurrentCloudSession().catch((error) => {
-        console.warn("SafeSeat cloud session will be reconciled later:", error);
-      });
-
-      setIsLockedIn(false);
-      cancelUatWarning();
-      silenceAlertFeedback();
-      resetDecisionLatch();
-      setSimulationState("off");
-      setAssignments(persistentAssignments);
-      setConsents({});
-      setHardwareSeatNo(nextHardwareSeat);
+      await finishMonitoringIfNoActiveSeats(result.remainingSeatNos);
       setEndSessionVisible(false);
+      if (result.session) setSummarySeatNo(seatNo);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace("/assign");
     } catch (error) {
-      console.error("Failed to end session from Home:", error);
-      Alert.alert("Could not end session", "SafeSeat could not end monitoring. Please try again.");
+      console.error("Failed to end seat session from Home:", error);
+      Alert.alert("Could not end session", "SafeSeat could not end this passenger session. Please try again.");
     } finally {
-      setEndingSession(false);
+      setEndingSeatNo(null);
     }
+  };
+
+  const confirmEndAllSessions = async () => {
+    if (endingSeatNo !== null || endingAllSessions) return;
+    setEndingAllSessions(true);
+    try {
+      const ended = await endAllSeatSessions();
+      await endCurrentCloudSession().catch((error) => {
+        console.warn("SafeSeat cloud sessions will be reconciled later:", error);
+      });
+      await finishMonitoringIfNoActiveSeats([]);
+      setEndSessionVisible(false);
+      if (ended.length > 0) setSummarySeatNo(ended[0].seatNo);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      console.error("Failed to end all sessions from Home:", error);
+      Alert.alert("Could not end sessions", "SafeSeat could not finish all passenger sessions. Please try again.");
+    } finally {
+      setEndingAllSessions(false);
+    }
+  };
+
+  const dismissCompletedSummary = async (seatNo: number) => {
+    await dismissCompletedSeat(seatNo);
+    setSummarySeatNo(null);
+
+    // Dismiss means the passenger has finished this ride and the physical seat
+    // is available again. Saved profiles stay in Profiles; only the seat
+    // assignment and this ride's consent are cleared. This also lets a new
+    // passenger take the seat while other seat sessions keep running.
+    const nextAssignments = { ...assignments };
+    delete nextAssignments[seatNo];
+    const nextConsents = { ...consents };
+    delete nextConsents[seatNo];
+    setAssignments(nextAssignments);
+    setConsents(nextConsents);
+    if (Object.keys(nextAssignments).length > 0) await AsyncStorage.setItem(SEAT_ASSIGNMENTS_KEY, JSON.stringify(nextAssignments));
+    else await AsyncStorage.removeItem(SEAT_ASSIGNMENTS_KEY);
+    if (Object.keys(nextConsents).length > 0) await AsyncStorage.setItem(SEAT_CONSENTS_KEY, JSON.stringify(nextConsents));
+    else await AsyncStorage.removeItem(SEAT_CONSENTS_KEY);
   };
 
   const openUatControl = () => {
@@ -593,23 +690,23 @@ export default function Home() {
       </View>
 
       <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
-        {isLockedIn ? (
+        {showMonitorBoard ? (
           <View style={styles.activeContainer}>
             <View style={styles.headerRow}>
               <View>
-                <Text style={styles.eyebrow}>SAFESEAT ACTIVE</Text>
+                <Text style={styles.eyebrow}>{activeSeatCount > 0 ? "SAFESEAT ACTIVE" : "SESSION COMPLETE"}</Text>
                 <Text style={styles.pageHeader}>Cabin Monitor</Text>
               </View>
 
-              <View style={[styles.liveBadge, !hubConnected && styles.liveBadgeOffline]}>
+              <View style={[styles.liveBadge, (activeSeatCount === 0 || !hubConnected) && styles.liveBadgeOffline]}>
                 <View style={styles.liveDotWrap}>
-                  {hubConnected ? (
+                  {activeSeatCount > 0 && hubConnected ? (
                     <Animated.View style={[styles.livePulseRing, { opacity: liveRingOpacity, transform: [{ scale: liveRingScale }] }]} />
                   ) : null}
-                  <View style={[styles.liveDot, !hubConnected && styles.liveDotOffline]} />
+                  <View style={[styles.liveDot, (activeSeatCount === 0 || !hubConnected) && styles.liveDotOffline]} />
                 </View>
-                <Text style={[styles.liveText, !hubConnected && styles.liveTextOffline]}>
-                  {simulationActive ? "DEMO" : hubConnected ? (telemetryReady ? "LIVE" : "CONNECTING") : "OFFLINE"}
+                <Text style={[styles.liveText, (activeSeatCount === 0 || !hubConnected) && styles.liveTextOffline]}>
+                  {activeSeatCount === 0 ? "SAVED" : simulationActive ? "DEMO" : hubConnected ? (telemetryReady ? "LIVE" : "CONNECTING") : "OFFLINE"}
                 </Text>
               </View>
             </View>
@@ -624,10 +721,12 @@ export default function Home() {
                     photo={getProfilePhoto(assignments[seatNo])}
                     state={assignments[seatNo] ? getSeatState(seatNo) : "empty"}
                     isHardwareSeat={seatNo === hardwareSeatNo}
-                    vitals={seatNo === hardwareSeatNo ? vitalSigns : undefined}
+                    vitals={seatNo === hardwareSeatNo && activeSessions[seatNo] ? vitalSigns : undefined}
+                    freshnessSeconds={seatNo === hardwareSeatNo && activeSessions[seatNo] ? liveUpdatedSeconds : null}
+                    detailText={recentCompleted[seatNo] ? "Session saved · Tap to review" : (activeSessions[seatNo] && seatNo !== hardwareSeatNo ? "Session active · No sensor" : undefined)}
                     onPress={() => assignments[seatNo] ? showSeatDetails(seatNo) : router.push("/assign")}
-                    onLongPress={seatNo === hardwareSeatNo && assignments[seatNo] ? openUatControl : undefined}
-                    delayLongPress={seatNo === hardwareSeatNo ? UAT_RESEARCHER_LONG_PRESS_MS : undefined}
+                    onLongPress={seatNo === hardwareSeatNo && assignments[seatNo] && activeSessions[seatNo] ? openUatControl : undefined}
+                    delayLongPress={seatNo === hardwareSeatNo && activeSessions[seatNo] ? UAT_RESEARCHER_LONG_PRESS_MS : undefined}
                   />
                   <GuidePulseOverlay
                     active={isStep("alerts") && seatNo === (hardwareSeatNo ?? SEAT_NUMBERS.find((n) => Boolean(assignments[n])) ?? 1)}
@@ -663,15 +762,15 @@ export default function Home() {
 
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="End monitoring session"
-                onPress={openEndSession}
+                accessibilityLabel={activeSeatCount > 0 ? "End a passenger session" : "Open session history"}
+                onPress={activeSeatCount > 0 ? openEndSession : () => router.push("/(tabs)/settings/session-history" as any)}
                 style={({ pressed }) => [styles.sessionControl, styles.endControl, pressed && styles.controlPressed]}
               >
                 <View style={styles.endIconWrap}>
                   <View style={styles.endIconSquare} />
                 </View>
                 <View style={styles.sessionControlCopy}>
-                  <Text style={styles.endControlTitle}>End Session</Text>
+                  <Text style={styles.endControlTitle}>{activeSeatCount > 0 ? "End Session" : "History"}</Text>
                 </View>
               </Pressable>
             </View>
@@ -832,54 +931,97 @@ export default function Home() {
           transparent
           animationType="fade"
           statusBarTranslucent
-          onRequestClose={() => !endingSession && setEndSessionVisible(false)}
+          onRequestClose={() => endingSeatNo === null && !endingAllSessions && setEndSessionVisible(false)}
         >
           <View style={styles.modalBackdrop}>
             <Pressable
               style={StyleSheet.absoluteFill}
-              onPress={() => !endingSession && setEndSessionVisible(false)}
+              onPress={() => endingSeatNo === null && !endingAllSessions && setEndSessionVisible(false)}
               accessibilityLabel="Close end session dialog"
             />
             <View style={styles.endModalCard}>
               <View style={styles.endModalHandle} />
-              <View style={styles.endModalIcon}>
-                <View style={styles.endModalStopSquare} />
-              </View>
-              <Text style={styles.endModalEyebrow}>MONITORING SESSION</Text>
-              <Text style={styles.endModalTitle}>End this session?</Text>
-              <Text style={styles.endModalText}>
-                {guestSeatCount > 0
-                  ? `Monitoring will stop. ${guestSeatCount} guest assignment${guestSeatCount === 1 ? "" : "s"} will also be removed.`
-                  : "Monitoring will stop and SafeSeat will return to the Seats screen. Your saved seat assignments will stay available."}
-              </Text>
+              <Text style={styles.endModalEyebrow}>PASSENGER SESSIONS</Text>
+              <Text style={styles.endModalTitle}>Who is getting off?</Text>
+              <Text style={styles.endModalText}>End only that seat's session. Every other active passenger continues without interruption.</Text>
 
-              <View style={styles.endModalActions}>
+              <View style={styles.endSeatList}>
+                {activeSeatNos.map((seatNo) => {
+                  const session = activeSessions[seatNo];
+                  const busy = endingSeatNo === seatNo;
+                  return (
+                    <View key={seatNo} style={styles.endSeatRow}>
+                      <View style={styles.endSeatCopy}>
+                        <Text style={styles.endSeatRole}>{SEAT_ROLES[seatNo]}</Text>
+                        <Text numberOfLines={1} style={styles.endSeatName}>{session?.occupant.displayName ?? getDisplayName(assignments[seatNo]) ?? "Passenger"}</Text>
+                        <Text style={styles.endSeatDuration}>{session ? formatSessionDuration(session.startedAt) : "Active"}{seatNo === hardwareSeatNo ? " · Sensor linked" : " · No sensor linked"}</Text>
+                      </View>
+                      <Pressable
+                        accessibilityRole="button"
+                        disabled={endingSeatNo !== null || endingAllSessions}
+                        onPress={() => void confirmEndSeatSession(seatNo)}
+                        style={({ pressed }) => [styles.endSeatButton, pressed && styles.modalButtonPressed, (endingSeatNo !== null || endingAllSessions) && styles.disabledButton]}
+                      >
+                        {busy ? <ActivityIndicator size="small" color={themes.warnBttn} /> : <Text style={styles.endSeatButtonText}>End</Text>}
+                      </Pressable>
+                    </View>
+                  );
+                })}
+              </View>
+
+              {activeSeatCount > 1 ? (
                 <Pressable
                   accessibilityRole="button"
-                  disabled={endingSession}
-                  onPress={() => setEndSessionVisible(false)}
-                  style={({ pressed }) => [styles.keepMonitoringButton, pressed && styles.modalButtonPressed]}
+                  disabled={endingSeatNo !== null || endingAllSessions}
+                  onPress={() => void confirmEndAllSessions()}
+                  style={({ pressed }) => [styles.endAllButton, pressed && styles.modalButtonPressed, (endingSeatNo !== null || endingAllSessions) && styles.disabledButton]}
                 >
-                  <Text style={styles.keepMonitoringText}>Keep Monitoring</Text>
+                  {endingAllSessions ? <ActivityIndicator size="small" color={themes.warnBttn} /> : <Text style={styles.endAllButtonText}>End all active sessions</Text>}
                 </Pressable>
+              ) : null}
 
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={endingSession}
-                  onPress={() => void confirmEndSession()}
-                  style={({ pressed }) => [styles.confirmEndButton, pressed && styles.modalButtonPressed, endingSession && styles.disabledButton]}
-                >
-                  {endingSession ? (
-                    <ActivityIndicator size="small" color={themes.warnBttn} />
-                  ) : (
-                    <View style={styles.confirmEndDot} />
-                  )}
-                  <Text style={styles.confirmEndText}>{endingSession ? "Ending..." : "End Session"}</Text>
-                </Pressable>
-              </View>
+              <Pressable
+                accessibilityRole="button"
+                disabled={endingSeatNo !== null || endingAllSessions}
+                onPress={() => setEndSessionVisible(false)}
+                style={({ pressed }) => [styles.keepMonitoringButton, pressed && styles.modalButtonPressed]}
+              >
+                <Text style={styles.keepMonitoringText}>Keep Monitoring</Text>
+              </Pressable>
             </View>
           </View>
         </Modal>
+
+        <LiveSeatDetailModal
+          visible={liveDetailSeatNo !== null}
+          role={liveDetailSeatNo ? SEAT_ROLES[liveDetailSeatNo] : "Seat"}
+          name={liveDetailSeatNo ? (getDisplayName(assignments[liveDetailSeatNo]) ?? "Passenger") : "Passenger"}
+          isHardwareSeat={liveDetailSeatNo === hardwareSeatNo}
+          active={liveDetailSeatNo !== null && Boolean(activeSessions[liveDetailSeatNo])}
+          updatedSeconds={liveDetailSeatNo === hardwareSeatNo ? liveUpdatedSeconds : null}
+          fusionLabel={liveFusionLabel}
+          heartRateBpm={vitalSigns.heartRateBpm}
+          respirationRateBpm={vitalSigns.respirationRateBpm}
+          surfaceTemperatureC={liveSurfaceTemperatureC}
+          occupancyLabel={liveOccupancyLabel}
+          movementLabel={liveMovementLabel}
+          cameraLabel={liveCameraLabel}
+          onClose={() => setLiveDetailSeatNo(null)}
+        />
+
+        <SessionSummaryModal
+          visible={summarySeatNo !== null}
+          session={summarySeatNo ? recentCompleted[summarySeatNo] : undefined}
+          onClose={() => setSummarySeatNo(null)}
+          onDismiss={() => { if (summarySeatNo) void dismissCompletedSummary(summarySeatNo); }}
+          onViewFull={() => {
+            if (!summarySeatNo) return;
+            const session = recentCompleted[summarySeatNo];
+            if (!session) return;
+            setSummarySeatNo(null);
+            router.push({ pathname: "/(tabs)/settings/session-detail" as any, params: { id: session.id } });
+          }}
+        />
 
         {emergencySeatNo !== undefined && emergencyProfile ? (
           <EmergencyModal
@@ -1492,9 +1634,21 @@ const createStyles = (themes: ThemePalette) => StyleSheet.create({
   endModalEyebrow: { color: themes.warnBttn, fontSize: 8.5, letterSpacing: 1.15, fontFamily: "Body-Bold" },
   endModalTitle: { color: themes.text, fontSize: 25, lineHeight: 30, fontFamily: "Body-Bold", marginTop: 5, textAlign: "center" },
   endModalText: { color: themes.textSecondary, fontSize: 14, lineHeight: 20, fontFamily: "Body-Regular", textAlign: "center", marginTop: spacing.one, maxWidth: 315 },
+  endSeatList: { width: "100%", gap: 7, marginTop: 14 },
+  endSeatRow: { minHeight: 60, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 15, borderWidth: 1, borderColor: themes.divider, backgroundColor: themes.backgroundElement },
+  endSeatCopy: { flex: 1, minWidth: 0 },
+  endSeatRole: { color: themes.textMuted, fontSize: 9.5, letterSpacing: 0.55, fontFamily: "Body-Bold" },
+  endSeatName: { color: themes.text, fontSize: 13.5, lineHeight: 18, fontFamily: "Body-Bold", marginTop: 1 },
+  endSeatDuration: { color: themes.textSecondary, fontSize: 10.5, lineHeight: 14, fontFamily: "Body-Regular", marginTop: 2 },
+  endSeatButton: { minWidth: 62, minHeight: 38, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,103,111,0.30)", backgroundColor: "rgba(255,103,111,0.08)" },
+  endSeatButtonText: { color: themes.warnBttn, fontSize: 12, fontFamily: "Body-Bold" },
+  endAllButton: { width: "100%", minHeight: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", marginTop: 9, borderWidth: 1, borderColor: "rgba(255,103,111,0.26)", backgroundColor: "rgba(255,103,111,0.06)" },
+  endAllButtonText: { color: themes.warnBttn, fontSize: 12.5, fontFamily: "Body-Bold" },
   endModalActions: { width: "100%", gap: spacing.one, marginTop: spacing.three },
   keepMonitoringButton: {
-    minHeight: 52,
+    width: "100%",
+    minHeight: 48,
+    marginTop: 9,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 17,

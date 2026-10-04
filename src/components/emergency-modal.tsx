@@ -2,6 +2,7 @@ import type { SeatVitals } from "@/components/seat-card";
 import { FontSize as fontsize, Spacing as spacing, type ThemePalette } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { useUserPreferences } from "@/hooks/user-preferences-context";
+import { useSeatSessions } from "@/hooks/seat-session-context";
 import { sendEmergencySms } from "@/services/sms-escalation";
 import { markCurrentIncidentSmsEscalated } from "@/services/admin-cloud-sync";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -83,6 +84,7 @@ export default function EmergencyModal({
     emergencyEscalation,
     escalationWindowSeconds,
   } = useUserPreferences();
+  const { activeSessions } = useSeatSessions();
 
   const [contactMenuVisible, setContactMenuVisible] = useState(false);
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
@@ -150,7 +152,7 @@ export default function EmergencyModal({
             console.log(`SafeSeat SMS skipped: ${result.skipped}`);
           } else {
             console.log(`SafeSeat SMS sent to ${result.sentTo} (ID: ${result.messageId})`);
-            void markCurrentIncidentSmsEscalated();
+            void markCurrentIncidentSmsEscalated(activeSessions[seat]?.id);
           }
         } else {
           console.warn("SafeSeat SMS failed:", result.error);
@@ -159,7 +161,7 @@ export default function EmergencyModal({
         console.error("SafeSeat SMS escalation error:", error);
       }
     })();
-  }, [visible, windowElapsed, isDriverSeat, emergencyEscalation, isRealEmergency, seat, isAccountOwner, name]);
+  }, [visible, windowElapsed, isDriverSeat, emergencyEscalation, isRealEmergency, seat, isAccountOwner, name, activeSessions]);
 
   // Reset the SMS sent flag when the modal closes
   useEffect(() => {

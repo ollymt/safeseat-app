@@ -50,3 +50,6 @@ example
 # generated native folders
 /ios
 /android
+# Firebase CLI local cache
+.firebase/
+firebase-debug.log

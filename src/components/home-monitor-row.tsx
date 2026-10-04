@@ -14,7 +14,8 @@ export type MonitorSeatState =
   | "declined"
   | "offline"
   | "ready"
-  | "monitoring";
+  | "monitoring"
+  | "ended";
 
 export type MonitorVitals = {
   trusted: boolean;
@@ -34,6 +35,8 @@ type Props = {
   onPress?: () => void;
   onLongPress?: () => void;
   delayLongPress?: number;
+  freshnessSeconds?: number | null;
+  detailText?: string;
 };
 
 type StateMeta = {
@@ -73,13 +76,15 @@ const stateMeta = (
       return { label: "MONITORING", symbol: "●", color: themes.primaryBttn };
     case "assigned":
       return { label: "ASSIGNED", symbol: "✓", color: themes.primaryBttn };
+    case "ended":
+      return { label: "ENDED", hint: "Session saved", symbol: "✓", color: themes.info };
     default:
       return { label: "EMPTY", hint: "Tap to assign", symbol: "+", color: themes.textMuted };
   }
 };
 
 export default function HomeMonitorRow({
-  seatNo, role, name, photo, state, isHardwareSeat = false, vitals, onPress, onLongPress, delayLongPress,
+  seatNo, role, name, photo, state, isHardwareSeat = false, vitals, onPress, onLongPress, delayLongPress, freshnessSeconds, detailText,
 }: Props) {
   const themes = useTheme();
   const { width, height } = useWindowDimensions();
@@ -88,7 +93,11 @@ export default function HomeMonitorRow({
   const meta = stateMeta(themes, state, isHardwareSeat);
   const longPressConsumed = useRef(false);
   const displayName = name || "Unassigned";
-  const showVitals = isHardwareSeat && (state === "warning" || state === "emergency");
+  const showVitals = isHardwareSeat && (state === "safe" || state === "warning" || state === "emergency" || state === "unknown" || state === "monitoring");
+  const freshness = freshnessSeconds === null || freshnessSeconds === undefined ? "" : ` · LIVE ${freshnessSeconds}s`;
+  const liveLine = vitals?.trusted
+    ? `HR ${vitals.heartRateBpm ?? "—"} · RR ${vitals.respirationRateBpm ?? "—"}${freshness}`
+    : `${vitals?.statusLabel === "REACQUIRING" ? "Vitals reacquiring" : "Vitals unavailable"}${freshness}`;
   const roleLabel = seatNo === 1 ? "DRIVER" : role.toUpperCase();
 
   return (
@@ -125,7 +134,8 @@ export default function HomeMonitorRow({
       </View>
       <View style={styles.status}>
         <Text maxFontSizeMultiplier={1.15} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.85} style={[styles.state, { color: meta.color }, compact && { fontSize: 17, lineHeight: 20 }]}>{meta.label}</Text>
-        {showVitals ? <Text maxFontSizeMultiplier={1.1} numberOfLines={1} style={styles.vitals}>{vitals?.trusted ? `HR ${vitals.heartRateBpm ?? "—"}  ·  RR ${vitals.respirationRateBpm ?? "—"}` : "Vitals unavailable"}</Text> : null}
+        {showVitals ? <Text maxFontSizeMultiplier={1.1} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={styles.vitals}>{liveLine}</Text> : null}
+        {!showVitals && detailText ? <Text maxFontSizeMultiplier={1.1} numberOfLines={1} style={styles.vitals}>{detailText}</Text> : null}
       </View>
     </Pressable>
   );

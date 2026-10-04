@@ -305,6 +305,7 @@ test('Seats completely removes the selector when the indicator is off', () => {
       '@/hooks/user-preferences-context': { useUserPreferences: () => ({ prototypeIndicator }) },
       '@/hooks/driver-guide-context': { useDriverGuide: () => ({ isStep: () => false }) },
       '@/hooks/safeseat-hub-context': { useSafeSeatHub: () => ({ connected: false, telemetryReady: false }) },
+      '@/hooks/seat-session-context': { useSeatSessions: () => ({ activeSessions: {}, startSeatSessions: async () => {} }) },
       '@/utils/monitoring-presentation': { getSeatDisplayState: state },
       '@/services/admin-cloud-sync': { endCurrentCloudSession: async () => {} },
       '../../../../assets/images/appImgs/car-cropped.png': 'car.png',

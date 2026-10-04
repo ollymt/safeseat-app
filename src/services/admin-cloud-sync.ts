@@ -33,7 +33,8 @@ export type CloudSeatState = "safe" | "warning" | "emergency" | "unknown";
 export type AdminFusionState = "NORMAL" | "SUSPECTED" | "VERIFYING" | "EMERGENCY" | "CLEARED";
 export type AdminModuleStatus = "operational" | "degraded" | "offline" | "standby";
 
-const ACTIVE_CLOUD_SESSION_KEY = "safeSeatActiveCloudSessionId";
+const ACTIVE_CLOUD_SESSION_KEY = "safeSeatActiveCloudSessionId"; // legacy single-session key
+const ACTIVE_CLOUD_SESSIONS_KEY = "safeSeatActiveCloudSessionsV2";
 
 export const SAFESEAT_CLOUD_VEHICLE = {
   id: (process.env.EXPO_PUBLIC_SAFESEAT_VEHICLE_ID || "SS-CAV-8151").trim(),
@@ -218,23 +219,34 @@ export async function syncHardwareStatus(status: SafeSeatStatusPayload | null, c
   }, { merge: true });
 }
 
-export async function getOrCreateCloudSessionId() {
-  const user = auth.currentUser;
-  if (!user) return null;
-
-  const existing = await AsyncStorage.getItem(ACTIVE_CLOUD_SESSION_KEY);
-  if (existing) return existing;
-
-  const sessionId = `SS-${Date.now()}-${compactUid(user.uid)}`;
-  await AsyncStorage.setItem(ACTIVE_CLOUD_SESSION_KEY, sessionId);
-  return sessionId;
+async function readActiveCloudSessionMap(): Promise<Record<number, string>> {
+  const raw = await AsyncStorage.getItem(ACTIVE_CLOUD_SESSIONS_KEY);
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw) as Record<number, string>;
+  } catch {
+    return {};
+  }
 }
 
-export async function getActiveCloudSessionId() {
+async function writeActiveCloudSessionMap(value: Record<number, string>) {
+  if (Object.keys(value).length === 0) {
+    await AsyncStorage.removeItem(ACTIVE_CLOUD_SESSIONS_KEY);
+    return;
+  }
+  await AsyncStorage.setItem(ACTIVE_CLOUD_SESSIONS_KEY, JSON.stringify(value));
+}
+
+export async function getActiveCloudSessionId(seatNo?: number) {
+  const map = await readActiveCloudSessionMap();
+  if (seatNo && map[seatNo]) return map[seatNo];
+  const first = Object.values(map)[0];
+  if (first) return first;
   return AsyncStorage.getItem(ACTIVE_CLOUD_SESSION_KEY);
 }
 
 export async function syncMonitoringSession(args: {
+  sessionId: string;
   seatNo: number;
   profile: CloudSyncProfile;
   status: SafeSeatStatusPayload | null;
@@ -242,8 +254,7 @@ export async function syncMonitoringSession(args: {
   const user = auth.currentUser;
   if (!user) return null;
 
-  const sessionId = await getOrCreateCloudSessionId();
-  if (!sessionId) return null;
+  const sessionId = args.sessionId;
   const occupant = occupantFields(user.uid, sessionId, args.seatNo, args.profile);
 
   await setDoc(doc(db, "monitoring_sessions", sessionId), {
@@ -258,13 +269,22 @@ export async function syncMonitoringSession(args: {
     updatedAt: serverTimestamp(),
   }, { merge: true });
 
+  const map = await readActiveCloudSessionMap();
+  if (map[args.seatNo] !== sessionId) {
+    map[args.seatNo] = sessionId;
+    await writeActiveCloudSessionMap(map);
+  }
+  // Remove the legacy single-session pointer once V2 seat-scoped sync succeeds.
+  await AsyncStorage.removeItem(ACTIVE_CLOUD_SESSION_KEY);
   return sessionId;
 }
 
-export async function endCurrentCloudSession() {
+export async function endCloudSessionForSeat(seatNo: number, explicitSessionId?: string) {
   const user = auth.currentUser;
-  const sessionId = await AsyncStorage.getItem(ACTIVE_CLOUD_SESSION_KEY);
-  if (!user || !sessionId) return;
+  if (!user) return;
+  const map = await readActiveCloudSessionMap();
+  const sessionId = explicitSessionId || map[seatNo];
+  if (!sessionId) return;
 
   await updateDoc(doc(db, "monitoring_sessions", sessionId), {
     active: false,
@@ -273,7 +293,41 @@ export async function endCurrentCloudSession() {
     lastUpdate: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
-  await AsyncStorage.removeItem(ACTIVE_CLOUD_SESSION_KEY);
+  if (map[seatNo] === sessionId) {
+    delete map[seatNo];
+    await writeActiveCloudSessionMap(map);
+  }
+}
+
+export async function endCurrentCloudSession() {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const map = await readActiveCloudSessionMap();
+  for (const [seatString, sessionId] of Object.entries(map)) {
+    try {
+      await endCloudSessionForSeat(Number(seatString), sessionId);
+    } catch (error) {
+      console.warn("SafeSeat could not close a seat-scoped Admin session:", error);
+    }
+  }
+
+  const legacySessionId = await AsyncStorage.getItem(ACTIVE_CLOUD_SESSION_KEY);
+  if (legacySessionId) {
+    try {
+      await updateDoc(doc(db, "monitoring_sessions", legacySessionId), {
+        active: false,
+        fusionState: "CLEARED",
+        cameraState: "Standby",
+        lastUpdate: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.warn("SafeSeat could not close the legacy Admin session:", error);
+    } finally {
+      await AsyncStorage.removeItem(ACTIVE_CLOUD_SESSION_KEY);
+    }
+  }
 }
 
 export async function createEmergencyIncident(args: {
@@ -376,11 +430,11 @@ export async function completeDiagnosticRequest(
   });
 }
 
-export async function markCurrentIncidentSmsEscalated() {
-  const sessionId = await AsyncStorage.getItem(ACTIVE_CLOUD_SESSION_KEY);
-  if (!sessionId || !auth.currentUser) return;
+export async function markCurrentIncidentSmsEscalated(sessionId?: string) {
+  const resolvedSessionId = sessionId || await getActiveCloudSessionId();
+  if (!resolvedSessionId || !auth.currentUser) return;
   try {
-    await updateDoc(doc(db, "incidents", `${sessionId}-EMERGENCY`), {
+    await updateDoc(doc(db, "incidents", `${resolvedSessionId}-EMERGENCY`), {
       smsEscalated: true,
       updatedAt: serverTimestamp(),
     });

@@ -30,7 +30,7 @@ const SEAT_STATUSES_KEY = "seatStatuses";
 const HARDWARE_SEAT_KEY = "safeSeatHardwareSeatNo";
 const SEAT_CONSENTS_KEY = "seatSessionConsents";
 
-type SectionKey = "account" | "alerts" | "system";
+type SectionKey = "account" | "alerts" | "history" | "system";
 
 export default function Settings() {
   const themes = useTheme();
@@ -38,7 +38,7 @@ export default function Settings() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
-  const sectionY = useRef<Record<SectionKey, number>>({ account: 0, alerts: 0, system: 0 });
+  const sectionY = useRef<Record<SectionKey, number>>({ account: 0, alerts: 0, history: 0, system: 0 });
   const sectionsStartY = useRef(0);
   const stickyHeight = useRef(62);
   const bottomPad = 100 + insets.bottom;
@@ -89,8 +89,10 @@ export default function Settings() {
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const localY = event.nativeEvent.contentOffset.y + stickyHeight.current + 22 - sectionsStartY.current;
     const systemY = sectionY.current.system;
+    const historyY = sectionY.current.history;
     const alertsY = sectionY.current.alerts;
     if (localY >= systemY - 18) setActiveSection("system");
+    else if (localY >= historyY - 18) setActiveSection("history");
     else if (localY >= alertsY - 18) setActiveSection("alerts");
     else setActiveSection("account");
   };
@@ -164,7 +166,7 @@ export default function Settings() {
           <View style={styles.headerBlock}>
             <Text style={styles.eyebrow}>PREFERENCES</Text>
             <Text style={styles.pageHeader}>Settings</Text>
-            <Text style={styles.pageSubhead}>Account, alerts, display, and SafeSeat tools.</Text>
+            <Text style={styles.pageSubhead}>Account, alerts, monitoring history, display, and SafeSeat tools.</Text>
           </View>
         </View>
 
@@ -175,6 +177,7 @@ export default function Settings() {
           <View style={styles.shortcutDock}>
             {shortcut("Account", "account")}
             {shortcut("Alerts", "alerts")}
+            {shortcut("History", "history")}
             {shortcut("System", "system")}
           </View>
         </View>
@@ -204,6 +207,21 @@ export default function Settings() {
             <View style={styles.settingGroup}>
               <SettingPageItem name="Profiles & Emergency Contacts" iconName="people-outline" onPress={() => router.push("/(tabs)/everyone" as any)} showChevron isLast />
             </View>
+          </View>
+
+          <View onLayout={(e) => { sectionY.current.history = e.nativeEvent.layout.y; }} style={styles.section}>
+            <Text style={styles.sectionTitle}>MONITORING & HISTORY</Text>
+            <View style={styles.settingGroup}>
+              <SettingPageItem
+                name="Session History"
+                iconName="time-outline"
+                value="Completed seat sessions"
+                onPress={() => router.push("/(tabs)/settings/session-history" as any)}
+                showChevron
+                isLast
+              />
+            </View>
+            <Text style={styles.note}>Review completed passenger sessions, summaries, trends, and event timelines stored for this account.</Text>
           </View>
 
           <View onLayout={(e) => { sectionY.current.system = e.nativeEvent.layout.y; }} style={styles.section}>
@@ -286,7 +304,7 @@ const createStyles = (themes: ThemePalette) => StyleSheet.create({
   shortcut: {
     flex: 1,
     minHeight: 38,
-    paddingHorizontal: 8,
+    paddingHorizontal: 5,
     borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
@@ -296,7 +314,7 @@ const createStyles = (themes: ThemePalette) => StyleSheet.create({
     borderWidth: 1,
     borderColor: themes.primaryBorder,
   },
-  shortcutText: { color: themes.textSecondary, fontSize: 12.5, lineHeight: 17, textAlign: "center", fontFamily: "Body-Bold" },
+  shortcutText: { color: themes.textSecondary, fontSize: 11.5, lineHeight: 16, textAlign: "center", fontFamily: "Body-Bold" },
   shortcutTextActive: { color: themes.primaryBttn },
   pressed: { opacity: 0.72, transform: [{ scale: 0.985 }] },
 
