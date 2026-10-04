@@ -6,11 +6,13 @@ import visibilityXml from "@expo/material-symbols/visibility.xml";
 import visibilityOffXml from "@expo/material-symbols/visibility_off.xml";
 import { Host, Icon } from "@expo/ui";
 import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { StatusBar } from "expo-status-bar";
 import { sendPasswordResetEmail, signInWithEmailAndPassword } from "firebase/auth";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { saveUserProfile } from "@/services/user-profile";
+import { accountErrorMessage } from "@/utils/account-errors";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -26,33 +28,39 @@ import { auth } from "../../firebase";
 
 export default function Login() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const { email: initialEmail } = useLocalSearchParams<{ email?: string }>();
+  const [email, setEmail] = useState(initialEmail ?? "");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const submittingRef = useRef(false);
 
   const handleLogin = async () => {
+    if (submittingRef.current) return;
     if (!email.trim() || !password) {
       Alert.alert("Missing fields", "Please enter your email and password.");
       return;
     }
 
+    submittingRef.current = true;
     setIsSubmitting(true);
+    let authenticated = false;
     try {
       const cleanEmail = email.toLowerCase().trim();
-      await signInWithEmailAndPassword(auth, cleanEmail, password);
+      const credential = await signInWithEmailAndPassword(auth, cleanEmail, password);
+      authenticated = true;
+      await saveUserProfile(credential.user);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       await SecureStore.setItemAsync("is_logged_in", "true");
       router.replace("/(tabs)/home");
     } catch (error: any) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      let message = "Incorrect email or password combination.";
-      if (error.code === "auth/invalid-email") message = "Please enter a valid email address.";
-      else if (error.code === "auth/user-not-found") message = "No account was found with this email.";
-      else if (error.code === "auth/too-many-requests") message = "Too many failed attempts. Please try again later.";
-      Alert.alert("Authentication failed", message);
-      console.error(error);
+      Alert.alert(authenticated ? "Profile setup incomplete" : "Log-in failed",
+        accountErrorMessage(error, authenticated
+          ? "You are authenticated, but your profile could not be prepared. Please try logging in again."
+          : "We couldn't log you in. Please try again."));
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -109,6 +117,7 @@ export default function Login() {
                       placeholder="name@example.com"
                       type="email"
                       value={email}
+                      enabled={!isSubmitting}
                       onChangeText={setEmail}
                     />
                   </View>
@@ -122,6 +131,7 @@ export default function Login() {
                           placeholder="Enter your password"
                           type={passwordVisible ? "text" : "password"}
                           value={password}
+                          enabled={!isSubmitting}
                           onChangeText={setPassword}
                         />
                       </View>
@@ -169,6 +179,7 @@ export default function Login() {
                 <Text style={styles.switchText}>Don't have an account?</Text>
                 <Pressable
                   accessibilityRole="button"
+                  disabled={isSubmitting}
                   onPress={() => router.replace("/(auth)/signup")}
                   style={({ pressed }) => pressed && styles.pressed}
                 >

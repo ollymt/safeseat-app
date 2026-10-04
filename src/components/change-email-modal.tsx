@@ -4,7 +4,7 @@ import { Spacing as spacing, FontSize as fontsize, type ThemePalette } from "@/c
 import { useTheme } from "@/hooks/use-theme";
 import * as Haptics from "expo-haptics";
 import { Host, Icon } from "@expo/ui";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     Alert,
     Keyboard,
@@ -18,9 +18,9 @@ import {
 } from "react-native";
 
 // 🛠️ Firebase Imports
-import { EmailAuthProvider, reauthenticateWithCredential, updateEmail } from "firebase/auth";
-import { doc, updateDoc } from "firebase/firestore";
-import { auth, db } from "../firebase";
+import { EmailAuthProvider, reauthenticateWithCredential, verifyBeforeUpdateEmail } from "firebase/auth";
+import { auth } from "../firebase";
+import { accountErrorMessage } from "@/utils/account-errors";
 import Button from "./button";
 import TextInput from "./text-input";
 
@@ -42,6 +42,7 @@ export default function ChangeEmailModal({ visible, onClose, onSuccess }: Props)
     const themes = useTheme();
     const styles = createStyles(themes);
     const [isLoading, setIsLoading] = useState(false);
+    const savingRef = useRef(false);
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [passVisible, setPassVisible] = useState(false);
@@ -62,6 +63,7 @@ export default function ChangeEmailModal({ visible, onClose, onSuccess }: Props)
     };
 
     const handleSave = async () => {
+        if (savingRef.current) return;
         const currentUser = auth.currentUser;
 
         if (!currentUser || !currentUser.email) {
@@ -76,6 +78,7 @@ export default function ChangeEmailModal({ visible, onClose, onSuccess }: Props)
             return;
         }
 
+        savingRef.current = true;
         setIsLoading(true);
 
         try {
@@ -83,19 +86,14 @@ export default function ChangeEmailModal({ visible, onClose, onSuccess }: Props)
             const credential = EmailAuthProvider.credential(currentUser.email, password);
             await reauthenticateWithCredential(currentUser, credential);
 
-            // 2. Update the actual Firebase Auth login email first.
-            await updateEmail(currentUser, email.trim());
-
-            // 3. Keep the Firestore user profile in sync with Firebase Auth.
-            const userRef = doc(db, "users", currentUser.uid);
-            await updateDoc(userRef, {
-                email: email.trim(),
-            });
+            // Auth changes the email only after the new address is verified.
+            // The next login/profile load syncs the verified email to Firestore.
+            await verifyBeforeUpdateEmail(currentUser, email.trim().toLowerCase());
 
             handleResetAndClose();
+            Alert.alert("Verify your new email", "Follow the link sent to your new email address, then log in with it. Your current email stays active until verification.");
             if (onSuccess) onSuccess();
         } catch (error: any) {
-            console.error("Error updating email document: ", error);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
 
             let errorMessage = "Failed to update email. Please try again.";
@@ -107,8 +105,9 @@ export default function ChangeEmailModal({ visible, onClose, onSuccess }: Props)
                 errorMessage = "Incorrect password. Please try again.";
             }
 
-            Alert.alert("Update Failed", errorMessage);
+            Alert.alert("Update Failed", accountErrorMessage(error, errorMessage));
         } finally {
+            savingRef.current = false;
             setIsLoading(false);
         }
     };
@@ -145,7 +144,7 @@ export default function ChangeEmailModal({ visible, onClose, onSuccess }: Props)
                                             type={passVisible ? "text" : "password"}
                                             variant="regular"
                                             placeholder="Password"
-                                            enabled={true}
+                                            enabled={!isLoading}
                                             value={password}
                                             onChangeText={setPassword}
                                         />

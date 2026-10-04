@@ -2,6 +2,8 @@ import { Themes as themes } from "@/constants/theme";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
+import { auth } from "@/firebase";
+import { saveUserProfile } from "@/services/user-profile";
 export { ErrorBoundary } from "expo-router";
 
 import { useColorScheme, View } from "react-native";
@@ -49,21 +51,33 @@ export default function RootLayout() {
 	const [hasSession, setHasSession] = useState(false);
 
 
-	// 1. Check local secure storage on boot to see if user has an active session flag
+	// Wait for Firebase persistence before trusting the local completed-login flag.
 	useEffect(() => {
+		let active = true;
 		async function checkAuthSession() {
 			try {
+				await auth.authStateReady();
 				const sessionFlag = await SecureStore.getItemAsync("is_logged_in");
-				setHasSession(sessionFlag === "true");
+				if (active) setHasSession(sessionFlag === "true" && auth.currentUser !== null);
 			} catch (e) {
 				console.error("Failed to read auth token from local device:", e);
-				setHasSession(false);
+				if (active) setHasSession(false);
 			} finally {
-				setAuthLoading(false);
+				if (active) setAuthLoading(false);
 			}
 		}
 		checkAuthSession();
+		return () => { active = false; };
 	}, [segments]); // Check session status when navigation routes shift
+
+	useEffect(() => {
+		if (hasSession && auth.currentUser) {
+			// Older installations can already be logged in without a user document.
+			void saveUserProfile(auth.currentUser).catch((error) => {
+				console.warn("Could not restore the account profile; profile saves can retry:", error);
+			});
+		}
+	}, [hasSession]);
 
 	// 2. Control when the native splash screen hides safely
 	useEffect(() => {

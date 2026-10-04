@@ -10,11 +10,9 @@ import {
 	Image,
 	ImageBackground,
 	Keyboard,
-	Platform,
 	Pressable,
 	StyleSheet,
 	Text,
-	TouchableWithoutFeedback,
 	View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -22,15 +20,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import * as SecureStore from "expo-secure-store";
 import * as Haptics from "expo-haptics";
 import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { saveUserProfile } from "@/services/user-profile";
+import { accountErrorMessage } from "@/utils/account-errors";
 
 import Button from "@/components/button";
 import TextInput from "@/components/text-input";
 import { Dropdown } from "react-native-element-dropdown";
-import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import FormScrollView from "@/components/form-scroll-view";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { auth, db } from "../../../firebase";
 
-import { useNavigation } from "expo-router";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -147,38 +147,7 @@ export default function Profile() {
 	// 4. UI Interaction State
 	const [editMode, setEditMode] = useState(false);
 	const [saving, setSaving] = useState(false);
-
-	const navigation = useNavigation();
-	const unsavedRef = useRef(false);
-
-	useEffect(() => {
-		unsavedRef.current = editMode && hasUnsavedChanges();
-	});
-
-	useEffect(() => {
-		const unsubscribe = navigation.addListener("beforeRemove", (e) => {
-			if (!unsavedRef.current) {
-				return;
-			}
-
-			e.preventDefault();
-
-			Alert.alert(
-				"Discard changes?",
-				"You have unsaved changes. If you leave now, they'll be lost.",
-				[
-					{ text: "Stay", style: "cancel" },
-					{
-						text: "Discard",
-						style: "destructive",
-						onPress: () => navigation.dispatch(e.data.action),
-					},
-				]
-			);
-		});
-
-		return unsubscribe;
-	}, [navigation]);
+	const savingRef = useRef(false);
 
 	const loadAllUserData = useCallback(async () => {
 		try {
@@ -237,11 +206,7 @@ export default function Profile() {
 					cloudData = profileDocSnap.data();
 				}
 			} else {
-				const userDocRef = doc(db, "users", currentUser.uid);
-				const userDocSnap = await getDoc(userDocRef);
-				if (userDocSnap.exists()) {
-					cloudData = userDocSnap.data();
-				}
+				cloudData = await saveUserProfile(currentUser);
 			}
 
 			if (cloudData) {
@@ -308,12 +273,6 @@ export default function Profile() {
 			console.error("Error syncing cache with Firestore:", error);
 		}
 	}, [profileId, cacheKey, isSubProfile]);
-
-	useFocusEffect(
-		useCallback(() => {
-			loadAllUserData();
-		}, [loadAllUserData]),
-	);
 
 	useEffect(() => {
 		if (editMode && !skipNextConversion.current) {
@@ -425,6 +384,8 @@ export default function Profile() {
 		);
 	};
 
+	useUnsavedChangesGuard(editMode && hasUnsavedChanges());
+
 	const handleCancelEdit = () => {
 		if (hasUnsavedChanges()) {
 			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -437,6 +398,7 @@ export default function Profile() {
 						text: "Discard",
 						style: "destructive",
 						onPress: () => {
+							Keyboard.dismiss();
 							loadAllUserData();
 							setEditMode(false);
 						}
@@ -444,17 +406,23 @@ export default function Profile() {
 				]
 			);
 		} else {
+			Keyboard.dismiss();
 			setEditMode(false);
 		}
 	};
 
 	const handleSaveChanges = async () => {
-		if (!isFormValid) return;
+		if (!isFormValid || savingRef.current) return;
+		Keyboard.dismiss();
+		savingRef.current = true;
 
 		try {
 			setSaving(true);
 			const currentUser = auth.currentUser;
-			if (!currentUser) return;
+			if (!currentUser) {
+				Alert.alert("Log in required", "Please log in again before saving your profile.");
+				return;
+			}
 
 			const y = parseInt(birthYear, 10);
 			const m = parseInt(birthMonth, 10);
@@ -482,13 +450,9 @@ export default function Profile() {
 				allergies: normalizedAllergies,
 			};
 
-			await SecureStore.setItemAsync(cacheKey, JSON.stringify(updatedProfile));
-
 			const firestorePayload: any = {
 				name: userName.trim(),
 				icon: userIcon,
-				email: userEmail,
-				phone: userPhone,
 				bloodType: normalizedBloodType || null,
 				allergies: normalizedAllergies || null,
 				birthYear: validBday ? y : null,
@@ -500,17 +464,27 @@ export default function Profile() {
 				weight: validWeightNum !== null ? String(validWeightNum) : null,
 			};
 
-			const profileDocRef = isSubProfile
-				? doc(db, "users", currentUser.uid, "profiles", profileId as string)
-				: doc(db, "users", currentUser.uid);
-
-			await updateDoc(profileDocRef, firestorePayload);
+			if (isSubProfile) {
+				// Do not recreate a passenger profile deleted on another device.
+				await updateDoc(doc(db, "users", currentUser.uid, "profiles", profileId as string), firestorePayload);
+			} else {
+				const saved = await saveUserProfile(currentUser, firestorePayload);
+				updatedProfile.email = saved.email || "Not Set";
+				updatedProfile.phone = saved.phone || "Not Set";
+				setUserEmail(updatedProfile.email);
+				setUserPhone(updatedProfile.phone);
+			}
+			// Only cache confirmed writes. A cache failure must not report a cloud save as failed.
+			await SecureStore.setItemAsync(cacheKey, JSON.stringify(updatedProfile)).catch((error) => {
+				console.warn("Profile saved, but local cache could not be updated:", error);
+			});
+			originalDataRef.current = updatedProfile;
 			setEditMode(false);
 			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 		} catch (error) {
-			Alert.alert("Failed to save changes");
-			console.error("Failed to save changes: ", error);
+			Alert.alert("Failed to save changes", accountErrorMessage(error, "Your changes were not saved. Please try again."));
 		} finally {
+			savingRef.current = false;
 			setSaving(false);
 		}
 	};
@@ -571,25 +545,6 @@ export default function Profile() {
 		return age.toString();
 	};
 
-
-	const [keyboardHeight, setKeyboardHeight] = useState(0);
-
-	useEffect(() => {
-		const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-		const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-
-		const showSub = Keyboard.addListener(showEvent, (e) => {
-			setKeyboardHeight(e.endCoordinates.height);
-		});
-		const hideSub = Keyboard.addListener(hideEvent, () => {
-			setKeyboardHeight(0);
-		});
-
-		return () => {
-			showSub.remove();
-			hideSub.remove();
-		};
-	}, []);
 
 	const insets = useSafeAreaInsets();
 	const bottomPad = 104 + (insets.bottom / 2);
@@ -698,8 +653,7 @@ export default function Profile() {
 			style={{ flex: 1, backgroundColor: themes.background }}
 			edges={["left", "right", "bottom"]}
 		>
-			<TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
-				<KeyboardAwareScrollView contentContainerStyle={[{ flexGrow: 1 }, { marginTop: spacing.one, paddingBottom: bottomPad }]} showsVerticalScrollIndicator={true} bounces={true} extraScrollHeight={spacing.ten}>
+				<FormScrollView contentContainerStyle={[{ flexGrow: 1 }, { marginTop: spacing.one, paddingBottom: bottomPad }]} showsVerticalScrollIndicator={true} bounces={true}>
 					<View style={styles.container}>
 						<View style={styles.profileHero}>
 							<Pressable
@@ -1040,8 +994,7 @@ export default function Profile() {
 						</View>
 
 					</View>
-				</KeyboardAwareScrollView>
-			</TouchableWithoutFeedback>
+				</FormScrollView>
 		</SafeAreaView >
 	);
 }

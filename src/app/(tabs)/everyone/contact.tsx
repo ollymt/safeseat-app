@@ -5,7 +5,7 @@ import { FontSize as fontsize, Spacing as spacing, type ThemePalette } from "@/c
 import { useTheme } from "@/hooks/use-theme";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { deleteDoc, doc, getDoc, updateDoc } from "firebase/firestore";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 import { auth, db } from "../../../firebase";
 import {
     Alert,
@@ -15,7 +15,6 @@ import {
     Pressable,
     StyleSheet,
     Text,
-    TouchableWithoutFeedback,
     View,
     ActivityIndicator
 } from "react-native";
@@ -26,10 +25,10 @@ import * as Haptics from "expo-haptics";
 import Button from "@/components/button";
 import TextInput from "@/components/text-input";
 import { Dropdown } from "react-native-element-dropdown";
-import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import FormScrollView from "@/components/form-scroll-view";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useNavigation } from "expo-router";
 import { Host, Icon } from "@expo/ui";
 
 const { width: screenWidth } = Dimensions.get("window");
@@ -46,7 +45,6 @@ export default function Contact() {
 
   const themes = useTheme();
   const styles = createStyles(themes);    const router = useRouter();
-    const navigation = useNavigation();
     const insets = useSafeAreaInsets();
 
     // grab the id the way Everyone.tsx actually sends it
@@ -71,38 +69,10 @@ export default function Contact() {
         );
     };
 
-    const unsavedRef = useRef(false);
-    useEffect(() => {
-        unsavedRef.current = editMode && hasUnsavedChanges();
-    });
-
-    // Warn the user if they try to navigate away with unsaved edits
-    useEffect(() => {
-        const unsubscribe = navigation.addListener("beforeRemove", (e) => {
-            if (!unsavedRef.current) {
-                return; // nothing unsaved — let it navigate away normally
-            }
-
-            e.preventDefault();
-
-            Alert.alert(
-                "Discard?",
-                "You have unsaved changes. Discard?",
-                [
-                    { text: "Stay", style: "cancel" },
-                    {
-                        text: "Discard",
-                        style: "destructive",
-                        onPress: () => navigation.dispatch(e.data.action),
-                    },
-                ]
-            );
-        });
-
-        return unsubscribe;
-    }, [navigation]);
+    useUnsavedChangesGuard(editMode && hasUnsavedChanges());
 
     const discardChanges = () => {
+        Keyboard.dismiss();
         setUserName(originalData.current.name);
         setUserPhone(originalData.current.phone);
         setUserHierarchy(originalData.current.hierarchy);
@@ -138,6 +108,7 @@ export default function Contact() {
             return;
         }
 
+        Keyboard.dismiss();
         setSaving(true);
         try {
             await updateDoc(doc(db, "users", currentUser.uid, "emergencyContacts", id), {
@@ -255,12 +226,10 @@ export default function Contact() {
             style={{ flex: 1, backgroundColor: themes.background }}
             edges={["left", "right", "bottom"]}
         >
-            <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
-                <KeyboardAwareScrollView
+                <FormScrollView
                     contentContainerStyle={[{ flexGrow: 1 }, { marginTop: spacing.one, paddingBottom: bottomPad }]}
                     showsVerticalScrollIndicator={true}
                     bounces={true}
-                    extraScrollHeight={spacing.ten}
                 >
                     <View style={[styles.container, { marginTop: -spacing.two }]}>
                         <View style={{
@@ -497,8 +466,7 @@ export default function Contact() {
                             </View>
                         </View>
                     </View>
-                </KeyboardAwareScrollView>
-            </TouchableWithoutFeedback>
+                </FormScrollView>
         </SafeAreaView>
     );
 }

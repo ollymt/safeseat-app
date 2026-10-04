@@ -19,6 +19,184 @@ function load(relative, mocks = {}) {
 }
 
 const { getSeatDisplayState: state } = load('src/utils/monitoring-presentation.ts');
+
+test('unsaved-edit guard lets Stay cancel and resumes the exact back action on Discard', () => {
+  let prevention, buttons;
+  const events = [];
+  const { useUnsavedChangesGuard } = load('src/hooks/use-unsaved-changes-guard.ts', {
+    'expo-router': { useNavigation: () => ({ dispatch: action => events.push(action) }) },
+    'expo-router/react-navigation': { usePreventRemove: (enabled, callback) => { prevention = { enabled, callback }; } },
+    'react-native': {
+      Alert: { alert: (_title, _message, actions) => { buttons = actions; } },
+      Keyboard: { dismiss: () => events.push('dismiss-keyboard') },
+    },
+  });
+  useUnsavedChangesGuard(false);
+  assert.equal(prevention.enabled, false);
+  useUnsavedChangesGuard(true);
+  assert.equal(prevention.enabled, true);
+  for (const type of ['GO_BACK', 'POP', 'RESET']) {
+    events.length = 0;
+    const action = { type, source: 'profile', target: 'everyone-stack', payload: { count: 1 } };
+    prevention.callback({ data: { action } });
+    const stay = buttons.find(button => button.text === 'Stay');
+    assert.equal(stay.style, 'cancel');
+    stay.onPress?.();
+    assert.equal(events.length, 0);
+    buttons.find(button => button.text === 'Discard').onPress();
+    assert.equal(events[0], 'dismiss-keyboard');
+    assert.equal(events[1], action);
+    assert.equal(events.length, 2);
+  }
+  useUnsavedChangesGuard(false);
+  assert.equal(prevention.enabled, false);
+});
+
+const accountUser = { uid: 'owner', email: 'owner@example.com', displayName: 'Owner', phoneNumber: null, metadata: { creationTime: '2026-01-01T00:00:00Z' } };
+function profileStore(initial, failure) {
+  let data = initial, writes = 0;
+  const { saveUserProfile } = load('src/services/user-profile.ts', {
+    '../firebase': { db: {} },
+    'firebase/firestore': {
+      doc: (_db, ...parts) => parts.join('/'),
+      runTransaction: async (_db, callback) => {
+        let pending;
+        const result = await callback({
+          get: async ref => {
+            assert.equal(ref, 'users/owner');
+            return { exists: () => data !== undefined, data: () => data };
+          },
+          set: (_ref, patch, options) => {
+            assert.equal(options.merge, true);
+            pending = { ...data, ...patch };
+          },
+        });
+        if (failure) throw failure;
+        if (pending) { data = pending; writes++; }
+        return result;
+      },
+    },
+  });
+  return { saveUserProfile, data: () => data, writes: () => writes };
+}
+
+test('login repairs a missing user document and repeated repair preserves health data', async () => {
+  const store = profileStore();
+  await store.saveUserProfile(accountUser);
+  assert.equal(store.data().name, 'Owner');
+  assert.equal(store.data().email, accountUser.email);
+  assert.equal(store.data().createdAt, '2026-01-01T00:00:00.000Z');
+  await store.saveUserProfile(accountUser, { heightCm: 180, phone: '+639123456789' });
+  await store.saveUserProfile(accountUser);
+  assert.equal(store.data().heightCm, 180);
+  assert.equal(store.data().phone, '+639123456789');
+  assert.equal(store.writes(), 2);
+});
+
+test('phone save creates a missing profile and profile edits preserve existing contact details', async () => {
+  const store = profileStore();
+  await store.saveUserProfile(accountUser, { phone: '+639123456789' });
+  await store.saveUserProfile(accountUser, { name: 'New name', email: 'stale@example.com' });
+  assert.equal(store.data().phone, '+639123456789');
+  assert.equal(store.data().email, accountUser.email);
+  assert.equal(store.data().name, 'New name');
+});
+
+test('profile repair preserves existing fields and syncs the Auth email', async () => {
+  const store = profileStore({ name: 'Saved name', phone: '09123456789', createdAt: 'old', bloodType: 'a+', email: 'old@example.com' });
+  await store.saveUserProfile(accountUser);
+  assert.equal(store.data().name, 'Saved name');
+  assert.equal(store.data().createdAt, 'old');
+  assert.equal(store.data().bloodType, 'a+');
+  assert.equal(store.data().email, accountUser.email);
+});
+
+test('denied profile writes propagate without claiming persistence', async () => {
+  const failure = { code: 'permission-denied' };
+  const store = profileStore(undefined, failure);
+  await assert.rejects(store.saveUserProfile(accountUser, { phone: '09123456789' }), error => error === failure);
+  assert.equal(store.data(), undefined);
+});
+
+function authScreen(screen, firebaseAuth, saveUserProfile) {
+  const h = harness(), alerts = [], routes = [], flags = [];
+  const auth = { currentUser: null };
+  const errors = load('src/utils/account-errors.ts');
+  const mocks = {
+    ...h.mocks,
+    'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
+    'react-native': { StyleSheet: { create: x => x }, Platform: { OS: 'android' }, Alert: { alert: (...args) => alerts.push(args) } },
+    'react-native-safe-area-context': {},
+    'expo-router': { useRouter: () => ({ replace: route => routes.push(route) }), useLocalSearchParams: () => ({}) },
+    'expo-status-bar': {}, 'expo-haptics': { notificationAsync: async () => {}, NotificationFeedbackType: {} },
+    'expo-secure-store': { setItemAsync: async (...args) => flags.push(args) },
+    '@expo/ui': { Icon: { select: value => value.android } }, '@expo/material-symbols/visibility.xml': {}, '@expo/material-symbols/visibility_off.xml': {},
+    '@/constants/theme': { Spacing: {} }, '@/components/auth-background': 'Background',
+    '@/components/button': 'Button', '@/components/text-input': 'TextInput',
+    '../../firebase': { auth }, 'firebase/auth': firebaseAuth(auth),
+    '@/services/user-profile': { saveUserProfile }, '@/utils/account-errors': errors,
+  };
+  const Component = load(`src/app/(auth)/${screen}.tsx`, mocks).default;
+  let tree;
+  const render = () => { tree = h.render(() => ({ value: Component() })); };
+  const find = predicate => {
+    const walk = node => {
+      if (!node || typeof node !== 'object') return;
+      if (predicate(node)) return node;
+      for (const child of [node.props?.children].flat(Infinity)) { const found = walk(child); if (found) return found; }
+    };
+    const node = walk(tree); assert.ok(node, 'Expected screen control'); return node.props;
+  };
+  render();
+  return { auth, alerts, routes, flags, render, find,
+    fill: (placeholder, text) => { find(n => n.props?.placeholder === placeholder).onChangeText(text); render(); },
+    submit: () => find(n => n.type === 'Button' && n.props.loading !== undefined).onPress(),
+    settle: async () => { await new Promise(resolve => setImmediate(resolve)); render(); },
+  };
+}
+
+test('signup retries failed profile setup without recreating Auth; rapid taps submit once', async () => {
+  let creates = 0, saves = 0;
+  const screen = authScreen('signup', auth => ({
+    createUserWithEmailAndPassword: async () => { creates++; auth.currentUser = accountUser; return { user: accountUser }; },
+    updateProfile: async () => {},
+  }), async () => { if (++saves === 1) throw { code: 'unavailable' }; });
+  screen.fill('Full name', 'Owner'); screen.fill('name@example.com', accountUser.email);
+  screen.fill('At least 6 characters', 'password'); screen.fill('Re-enter your password', 'password');
+  screen.submit(); screen.submit(); await screen.settle();
+  assert.equal(creates, 1); assert.equal(saves, 1);
+  assert.equal(screen.flags.length, 0); assert.equal(screen.routes.length, 0);
+  assert.match(screen.alerts[0][0], /setup incomplete/);
+  screen.submit(); await screen.settle();
+  assert.equal(creates, 1); assert.equal(saves, 2);
+  assert.equal(screen.flags[0][1], 'true'); assert.equal(screen.routes[0], '/(tabs)/home');
+});
+
+test('duplicate-email signup offers login and never writes an existing account profile', async () => {
+  let saves = 0;
+  const screen = authScreen('signup', () => ({
+    createUserWithEmailAndPassword: async () => { throw { code: 'auth/email-already-in-use' }; },
+  }), async () => { saves++; });
+  screen.fill('Full name', 'Owner'); screen.fill('name@example.com', accountUser.email);
+  screen.fill('At least 6 characters', 'password'); screen.fill('Re-enter your password', 'password');
+  screen.submit(); await screen.settle();
+  assert.equal(saves, 0); assert.equal(screen.flags.length, 0);
+  assert.equal(screen.alerts[0][0], 'Account already exists');
+  screen.alerts[0][2].find(button => button.text === 'Log in').onPress();
+  assert.equal(screen.routes[0].params.email, accountUser.email);
+});
+
+test('login waits for profile repair before activating the app session', async () => {
+  let fail = true;
+  const screen = authScreen('login', () => ({ signInWithEmailAndPassword: async () => ({ user: accountUser }) }),
+    async () => { if (fail) throw { code: 'permission-denied' }; });
+  screen.fill('name@example.com', accountUser.email); screen.fill('Enter your password', 'password');
+  screen.submit(); await screen.settle();
+  assert.equal(screen.alerts[0][0], 'Profile setup incomplete');
+  assert.equal(screen.flags.length, 0); assert.equal(screen.routes.length, 0);
+  fail = false; screen.submit(); await screen.settle();
+  assert.equal(screen.flags.length, 1); assert.equal(screen.routes[0], '/(tabs)/home');
+});
 const readySeat = { assigned: true, ownerDriver: false, consent: 'confirmed', linked: true, connected: true, ready: true, active: true, liveState: 'safe' };
 
 test('only the physically linked consenting seat can report live states', () => {

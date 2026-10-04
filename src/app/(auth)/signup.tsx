@@ -8,9 +8,11 @@ import { Host, Icon } from "@expo/ui";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
-import { useState } from "react";
+import { createUserWithEmailAndPassword, updateProfile, type User } from "firebase/auth";
+import * as SecureStore from "expo-secure-store";
+import { useRef, useState } from "react";
+import { saveUserProfile } from "@/services/user-profile";
+import { accountErrorMessage } from "@/utils/account-errors";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -22,7 +24,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { auth, db } from "../../firebase";
+import { auth } from "../../firebase";
 
 const hasValidOptionalPhone = (value: string) => {
   const trimmed = value.trim();
@@ -39,11 +41,15 @@ export default function Signup() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+  const createdUserRef = useRef<User | null>(null);
+  const [setupPending, setSetupPending] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
   const router = useRouter();
 
   const handleSignUp = async () => {
+    if (submittingRef.current) return;
     const cleanName = name.trim();
     const cleanEmail = email.toLowerCase().trim();
     const cleanPhone = phone.trim();
@@ -72,31 +78,39 @@ export default function Signup() {
       return;
     }
 
+    submittingRef.current = true;
     setIsSubmitting(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
-      const uid = userCredential.user.uid;
-
-      await setDoc(doc(db, "users", uid), {
+      // A retry after a profile-write failure must not create the Auth account again.
+      if (!createdUserRef.current || auth.currentUser?.uid !== createdUserRef.current.uid) {
+        const credential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+        createdUserRef.current = credential.user;
+        setSetupPending(true);
+      }
+      const user = createdUserRef.current;
+      await updateProfile(user, { displayName: cleanName });
+      await saveUserProfile(user, {
         name: cleanName,
-        email: cleanEmail,
         phone: cleanPhone,
-        createdAt: new Date().toISOString(),
       });
-
+      await SecureStore.setItemAsync("is_logged_in", "true");
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Account created", "Your SafeSeat account is ready. You can log in now.", [
-        { text: "Continue", onPress: () => router.replace("/(auth)/login") },
-      ]);
+      router.replace("/(tabs)/home");
     } catch (error: any) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      let message = "Something went wrong. Please try again.";
-      if (error.code === "auth/email-already-in-use") message = "An account with this email already exists.";
-      else if (error.code === "auth/invalid-email") message = "Please enter a valid email address.";
-      else if (error.code === "auth/weak-password") message = "Password is too weak. Use at least 6 characters.";
-      Alert.alert("Sign-up failed", message);
-      console.error(error);
+      const pending = createdUserRef.current !== null;
+      const message = accountErrorMessage(error, "Please try again.");
+      if (error.code === "auth/email-already-in-use") {
+        Alert.alert("Account already exists", message, [
+          { text: "Cancel", style: "cancel" },
+          { text: "Log in", onPress: () => router.replace({ pathname: "/(auth)/login", params: { email: cleanEmail } }) },
+        ]);
+      } else {
+        Alert.alert(pending ? "Account created — setup incomplete" : "Sign-up failed",
+          pending ? `Your account exists. Tap Finish setup to retry, or log in later. ${message}` : message);
+      }
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -151,6 +165,7 @@ export default function Signup() {
                       placeholder="Full name"
                       type="text"
                       value={name}
+                      enabled={!isSubmitting}
                       onChangeText={setName}
                     />
                   </View>
@@ -162,6 +177,7 @@ export default function Signup() {
                       placeholder="name@example.com"
                       type="email"
                       value={email}
+                      enabled={!isSubmitting && !setupPending}
                       onChangeText={setEmail}
                     />
                   </View>
@@ -176,6 +192,7 @@ export default function Signup() {
                       placeholder="e.g. +63 912 345 6789"
                       type="phone"
                       value={phone}
+                      enabled={!isSubmitting}
                       onChangeText={setPhone}
                     />
                     <Text style={styles.helper}>You can add or change this later in your profile.</Text>
@@ -190,6 +207,7 @@ export default function Signup() {
                           placeholder="At least 6 characters"
                           type={passwordVisible ? "text" : "password"}
                           value={password}
+                          enabled={!isSubmitting && !setupPending}
                           onChangeText={setPassword}
                         />
                       </View>
@@ -210,6 +228,7 @@ export default function Signup() {
                           placeholder="Re-enter your password"
                           type={confirmPasswordVisible ? "text" : "password"}
                           value={confirmPassword}
+                          enabled={!isSubmitting && !setupPending}
                           onChangeText={setConfirmPassword}
                         />
                       </View>
@@ -223,7 +242,7 @@ export default function Signup() {
                 </View>
 
                 <Button
-                  label="Create account"
+                  label={setupPending ? "Finish setup" : "Create account"}
                   onPress={() => {
                     if (!isSubmitting) void handleSignUp();
                   }}
@@ -237,6 +256,7 @@ export default function Signup() {
                 <Text style={styles.switchText}>Already have an account?</Text>
                 <Pressable
                   accessibilityRole="button"
+                  disabled={isSubmitting}
                   onPress={() => router.replace("/(auth)/login")}
                   style={({ pressed }) => pressed && styles.pressed}
                 >

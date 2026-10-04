@@ -3,7 +3,7 @@ import ThemedHost from "@/components/themed-host";
 import { Spacing as spacing, FontSize as fontsize, type ThemePalette } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import * as Haptics from "expo-haptics";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Host, Icon } from "@expo/ui";
 import {
     Alert,
@@ -19,8 +19,9 @@ import {
 
 // 🛠️ Firebase Imports
 import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
-import { doc, updateDoc } from "firebase/firestore";
-import { auth, db } from "../firebase";
+import { auth } from "../firebase";
+import { saveUserProfile } from "@/services/user-profile";
+import { accountErrorMessage } from "@/utils/account-errors";
 import Button from "./button";
 import TextInput from "./text-input";
 
@@ -35,14 +36,16 @@ type Props = {
 
 // Validates international/standard phone numbers (E.164 compliant: 7 to 15 digits)
 const isValidPhoneNumber = (phone: string): boolean => {
+    if (!/^[+()\d\s.-]+$/.test(phone.trim())) return false;
     const cleaned = phone.replace(/\D/g, "");
-    return cleaned.length >= 10 && cleaned.length <= 11;
+    return cleaned.length >= 7 && cleaned.length <= 15;
 };
 
 export default function ChangePhoneModal({ visible, onClose, onSuccess }: Props) {
     const themes = useTheme();
     const styles = createStyles(themes);
     const [isLoading, setIsLoading] = useState(false);
+    const savingRef = useRef(false);
     const [phone, setPhone] = useState("");
     const [password, setPassword] = useState("");
     const [passVisible, setPassVisible] = useState(false);
@@ -63,6 +66,7 @@ export default function ChangePhoneModal({ visible, onClose, onSuccess }: Props)
     };
 
     const handleSave = async () => {
+        if (savingRef.current) return;
         const currentUser = auth.currentUser;
 
         if (!currentUser || !currentUser.email) {
@@ -77,6 +81,7 @@ export default function ChangePhoneModal({ visible, onClose, onSuccess }: Props)
             return;
         }
 
+        savingRef.current = true;
         setIsLoading(true);
 
         try {
@@ -85,14 +90,12 @@ export default function ChangePhoneModal({ visible, onClose, onSuccess }: Props)
             await reauthenticateWithCredential(currentUser, credential);
 
             // 2. Update the phone field directly in the Firestore user document
-            const userRef = doc(db, "users", currentUser.uid);
-            await updateDoc(userRef, {
+            await saveUserProfile(currentUser, {
                 phone: phone.trim(),
             });
             handleResetAndClose();
             if (onSuccess) onSuccess();
         } catch (error: any) {
-            console.error("Error updating phone document: ", error);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
 
             let errorMessage = "Failed to update phone number. Please try again.";
@@ -104,8 +107,9 @@ export default function ChangePhoneModal({ visible, onClose, onSuccess }: Props)
                 errorMessage = "Incorrect password. Please try again.";
             }
 
-            Alert.alert("Update Failed", errorMessage);
+            Alert.alert("Update Failed", accountErrorMessage(error, errorMessage));
         } finally {
+            savingRef.current = false;
             setIsLoading(false);
         }
     };
@@ -142,7 +146,7 @@ export default function ChangePhoneModal({ visible, onClose, onSuccess }: Props)
                                             type={passVisible ? "text" : "password"}
                                             variant="regular"
                                             placeholder="Password"
-                                            enabled={true}
+                                            enabled={!isLoading}
                                             value={password}
                                             onChangeText={setPassword}
                                         />
