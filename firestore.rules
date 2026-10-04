@@ -238,13 +238,11 @@ service cloud.firestore {
     }
 
     match /hardware_status/{vehicleId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
-      allow create: if isActiveMobileUser()
-        && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.vehicleId == vehicleId
-        && safeHardware(request.resource.data);
-      allow update: if isActiveMobileUser()
-        && resource.data.ownerUid == request.auth.uid
+      // Vehicle ownership is authoritative. A stale/legacy hardware_status
+      // document must not permanently block the current owner of the vehicle.
+      allow read: if isAdmin() || (isActiveMobileUser() && ownsVehicle(vehicleId));
+      allow create, update: if isActiveMobileUser()
+        && ownsVehicle(vehicleId)
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.vehicleId == vehicleId
         && safeHardware(request.resource.data);

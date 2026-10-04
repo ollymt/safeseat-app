@@ -203,6 +203,9 @@ export async function syncHardwareStatus(status: SafeSeatStatusPayload | null, c
       ? "degraded"
       : "operational";
 
+  // This document is a complete, privacy-minimized snapshot. Replace it
+  // rather than merging so legacy/experimental fields cannot make the
+  // current write fail safeHardware() validation in Firestore rules.
   await setDoc(doc(db, "hardware_status", SAFESEAT_CLOUD_VEHICLE.id), {
     ownerUid: user.uid,
     vehicleId: SAFESEAT_CLOUD_VEHICLE.id,
@@ -216,7 +219,7 @@ export async function syncHardwareStatus(status: SafeSeatStatusPayload | null, c
     camera,
     lastSeen: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  }, { merge: true });
+  });
 }
 
 async function readActiveCloudSessionMap(): Promise<Record<number, string>> {
