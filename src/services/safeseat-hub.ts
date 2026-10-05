@@ -26,6 +26,11 @@ export type SafeSeatStatusPayload = {
     emergency_active?: boolean;
     camera_verification_requested?: boolean;
     alert_requested?: boolean;
+    warning_candidate_ms?: number;
+    strong_multisensor_candidate?: boolean;
+    strong_multisensor_elapsed_ms?: number;
+    emergency_persistence_required_ms?: number;
+    camera_fusion_role?: string;
     occupancy?: string;
     motion_context?: string;
     vitals_state?: string;
@@ -113,6 +118,9 @@ export type SafeSeatStatusPayload = {
     calibration_target?: number;
     packet_age_ms?: number;
     verification_requested?: boolean;
+    user_verification_state?: "IDLE" | "IN_PROGRESS" | "COMPLETED" | string;
+    user_verification_message?: string;
+    fusion_role?: string;
     request_active?: boolean;
     result_valid?: boolean;
     posture?: string;
@@ -170,6 +178,66 @@ export async function fetchSafeSeatStatus(
   }
 
   return payload;
+}
+
+export type SafeSeatControlledCameraMode = "upright" | "non_upright" | "real";
+
+type SafeSeatUatInjectionStatus = {
+  ok?: boolean;
+  active?: boolean;
+  camera?: {
+    mode?: string;
+  };
+};
+
+async function postFormWithTimeout(
+  url: string,
+  fields: Record<string, string>,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const body = Object.entries(fields)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join("&");
+
+  try {
+    return await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Research/UAT-only camera corroboration control.
+ *
+ * This deliberately refuses to arm UAT by itself. The hidden app tap zones
+ * only work when Controlled UAT Mode is already active on the Main Hub.
+ * Nothing in the passenger UI reveals that the zones exist.
+ */
+export async function setSafeSeatControlledCameraMode(
+  mode: SafeSeatControlledCameraMode,
+  baseUrl = getSafeSeatHubUrl(),
+): Promise<boolean> {
+  const statusResponse = await fetchWithTimeout(`${baseUrl}/api/v1/uat/injection`);
+  if (!statusResponse.ok) return false;
+
+  const uat = (await statusResponse.json()) as SafeSeatUatInjectionStatus;
+  if (!uat?.active) return false;
+
+  const response = await postFormWithTimeout(
+    `${baseUrl}/api/v1/uat/injection/update`,
+    { camera_mode: mode },
+  );
+  return response.ok;
 }
 
 export function fusionStateToSeatState(

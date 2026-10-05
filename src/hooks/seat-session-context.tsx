@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { collection, doc, getDocs, setDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, setDoc } from "firebase/firestore";
 import {
   createContext,
   ReactNode,
@@ -23,6 +23,8 @@ const STORAGE_VERSION = 1;
 const SAMPLE_INTERVAL_MS = 5_000;
 const MAX_SAMPLES_PER_SESSION = 1_200;
 const MAX_HISTORY_ITEMS = 100;
+const HISTORY_RETENTION_DAYS = 30;
+const HISTORY_RETENTION_MS = HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
 const SEAT_LABELS: Record<number, string> = {
   1: "Driver",
@@ -44,7 +46,7 @@ export type SeatSessionProfile = {
 
 export type MovementActivity = "Stable" | "Movement detected" | "Verification active" | "Unavailable";
 export type SessionCameraState = "Standby" | "Verifying" | "Unavailable";
-export type SessionFusionState = "NORMAL" | "SUSPECTED" | "VERIFYING" | "EMERGENCY" | "ANALYZING";
+export type SessionFusionState = "NORMAL" | "SUSPECTED" | "MONITORING" | "VERIFYING" | "EMERGENCY" | "ANALYZING";
 
 export type SeatSessionSample = {
   timestamp: number;
@@ -59,7 +61,7 @@ export type SeatSessionSample = {
 
 export type SeatSessionEvent = {
   timestamp: number;
-  type: "start" | "movement" | "verification" | "warning" | "emergency" | "recovery" | "end" | "system";
+  type: "start" | "movement" | "verification" | "verification_complete" | "warning" | "emergency" | "recovery" | "end" | "system";
   title: string;
   detail?: string;
 };
@@ -120,6 +122,8 @@ type SeatSessionContextValue = {
   endAllSeatSessions: () => Promise<SeatSessionRecord[]>;
   dismissCompletedSeat: (seatNo: number) => Promise<void>;
   clearRecentCompleted: () => Promise<void>;
+  deleteSession: (id: string) => Promise<void>;
+  clearSessionHistory: () => Promise<void>;
   refreshHistoryFromCloud: () => Promise<void>;
   getSessionById: (id: string) => SeatSessionRecord | undefined;
 };
@@ -129,6 +133,17 @@ const SeatSessionContext = createContext<SeatSessionContextValue | null>(null);
 function storageKey(kind: "active" | "history" | "recent") {
   const uid = auth.currentUser?.uid ?? "anonymous";
   return `safeSeatSeatSessions:${STORAGE_VERSION}:${uid}:${kind}`;
+}
+
+
+function historyControlKey(kind: "deletedIds" | "clearAll") {
+  const uid = auth.currentUser?.uid ?? "anonymous";
+  return `safeSeatSeatSessions:${STORAGE_VERSION}:${uid}:${kind}`;
+}
+
+function isExpiredSession(session: SeatSessionRecord, now = Date.now()) {
+  const timestamp = session.endedAt ?? session.startedAt;
+  return timestamp < now - HISTORY_RETENTION_MS;
 }
 
 function occupantType(profile: SeatSessionProfile): "account" | "profile" | "guest" {
@@ -194,27 +209,28 @@ function summarizeSession(session: SeatSessionRecord): SeatSessionSummary {
 function toFusionState(status: SafeSeatStatusPayload | null): SessionFusionState {
   if (!status?.telemetry_ready || !status.system?.fusion_valid) return "ANALYZING";
   const raw = String(status.system?.fusion_state ?? "").trim().toUpperCase();
-  const verifying = Boolean(
-    status.system?.camera_verification_requested ||
-    status.camera?.verification_requested ||
-    status.camera?.request_active,
-  );
   if (raw === "EMERGENCY" || raw.includes("EMERG")) return "EMERGENCY";
-  if (verifying) return "VERIFYING";
-  if (raw === "WARNING" || raw === "WATCH" || raw === "SUSPECTED" || raw.includes("WARN")) return "SUSPECTED";
+  if (raw === "WARNING" || raw === "SUSPECTED" || raw.includes("WARN")) return "SUSPECTED";
+  if (raw === "WATCH") return "MONITORING";
   if (raw === "SAFE" || raw === "NORMAL" || raw === "CLEAR" || raw === "CLEARED") return "NORMAL";
   return "ANALYZING";
 }
 
 function toCameraState(status: SafeSeatStatusPayload | null, connected: boolean): SessionCameraState {
-  if (!connected || !status?.camera || status.camera.available === false || status.camera.connected === false) return "Unavailable";
-  if (status.system?.camera_verification_requested || status.camera.verification_requested || status.camera.request_active || status.camera.busy) return "Verifying";
+  // Camera availability never changes Fusion severity. Passenger history only
+  // records whether a visual-confirmation cycle was requested/in progress.
+  if (!connected || !status) return "Standby";
+  if (
+    status.system?.camera_verification_requested ||
+    status.camera?.verification_requested ||
+    status.camera?.request_active ||
+    String(status.camera?.user_verification_state ?? "").toUpperCase() === "IN_PROGRESS"
+  ) return "Verifying";
   return "Standby";
 }
 
 function toMovementActivity(status: SafeSeatStatusPayload | null, connected: boolean): MovementActivity {
   if (!connected || !status) return "Unavailable";
-  if (toCameraState(status, connected) === "Verifying") return "Verification active";
   const rawMotion = String(status.system?.motion_context ?? "").trim().toLowerCase();
   const movement = Boolean(
     status.sensors?.c1001?.motion_artifact_active ||
@@ -267,14 +283,20 @@ function transitionEvents(previous: SeatSessionSample | undefined, next: SeatSes
     events.push({ timestamp: next.timestamp, type: "movement", title: "Movement detected", detail: "SafeSeat observed a change in movement activity." });
   }
   if (previous.cameraVerification !== "Verifying" && next.cameraVerification === "Verifying") {
-    events.push({ timestamp: next.timestamp, type: "verification", title: "Verification started", detail: "Event-based camera verification was requested. No image is stored in session history." });
+    events.push({ timestamp: next.timestamp, type: "verification", title: "Visual confirmation requested", detail: "Event-triggered visual confirmation started. No image or video is stored in session history." });
   }
+  if (previous.cameraVerification === "Verifying" && next.cameraVerification !== "Verifying") {
+    events.push({ timestamp: next.timestamp, type: "verification_complete", title: "Visual confirmation completed", detail: "The visual-confirmation cycle ended. Detailed posture results remain researcher/report evidence only." });
+  }
+
   if (previous.fusionState !== next.fusionState) {
     if (next.fusionState === "SUSPECTED") {
-      events.push({ timestamp: next.timestamp, type: "warning", title: "Unusual pattern detected", detail: "SafeSeat entered a suspected state and continued checking." });
+      events.push({ timestamp: next.timestamp, type: "warning", title: "Unusual pattern detected", detail: "SafeSeat entered a warning state and continued monitoring." });
     } else if (next.fusionState === "EMERGENCY") {
-      events.push({ timestamp: next.timestamp, type: "emergency", title: "Emergency state", detail: "SafeSeat reached an emergency fusion state." });
-    } else if (next.fusionState === "NORMAL" && (previous.fusionState === "SUSPECTED" || previous.fusionState === "VERIFYING" || previous.fusionState === "EMERGENCY")) {
+      events.push({ timestamp: next.timestamp, type: "emergency", title: "Emergency state", detail: "Persistent multisensor evidence reached the emergency state." });
+    } else if (next.fusionState === "MONITORING" && (previous.fusionState === "SUSPECTED" || previous.fusionState === "EMERGENCY")) {
+      events.push({ timestamp: next.timestamp, type: "recovery", title: "Recovery monitoring", detail: "Alert evidence cleared and SafeSeat continued checking before returning to normal." });
+    } else if (next.fusionState === "NORMAL" && (previous.fusionState === "SUSPECTED" || previous.fusionState === "MONITORING" || previous.fusionState === "VERIFYING" || previous.fusionState === "EMERGENCY")) {
       events.push({ timestamp: next.timestamp, type: "recovery", title: "Normal monitoring restored", detail: "The monitored state returned to normal." });
     }
   }
@@ -321,6 +343,8 @@ export function SeatSessionProvider({ children }: { children: ReactNode }) {
   const activeRef = useRef<Record<number, SeatSessionRecord>>({});
   const historyRef = useRef<SeatSessionRecord[]>([]);
   const recentRef = useRef<Record<number, SeatSessionRecord>>({});
+  const deletedHistoryIdsRef = useRef<Set<string>>(new Set());
+  const pendingClearAllRef = useRef(false);
   const lastSampleAtRef = useRef<Record<number, number>>({});
   const lastSampleSignatureRef = useRef<Record<number, string>>({});
 
@@ -331,10 +355,29 @@ export function SeatSessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const persistHistory = useCallback(async (value: SeatSessionRecord[]) => {
-    const limited = value.slice(0, MAX_HISTORY_ITEMS);
+    const limited = value
+      .filter((session) => !isExpiredSession(session))
+      .slice(0, MAX_HISTORY_ITEMS);
     historyRef.current = limited;
     setHistory(limited);
     await AsyncStorage.setItem(storageKey("history"), JSON.stringify(limited));
+  }, []);
+
+  const persistDeletedHistoryIds = useCallback(async () => {
+    const ids = Array.from(deletedHistoryIdsRef.current);
+    if (ids.length > 0) {
+      await AsyncStorage.setItem(historyControlKey("deletedIds"), JSON.stringify(ids));
+    } else {
+      await AsyncStorage.removeItem(historyControlKey("deletedIds"));
+    }
+  }, []);
+
+  const persistPendingClearAll = useCallback(async () => {
+    if (pendingClearAllRef.current) {
+      await AsyncStorage.setItem(historyControlKey("clearAll"), JSON.stringify(true));
+    } else {
+      await AsyncStorage.removeItem(historyControlKey("clearAll"));
+    }
   }, []);
 
   const persistRecent = useCallback(async (value: Record<number, SeatSessionRecord>) => {
@@ -346,30 +389,79 @@ export function SeatSessionProvider({ children }: { children: ReactNode }) {
   const refreshHistoryFromCloud = useCallback(async () => {
     const user = auth.currentUser;
     if (!user) return;
+
     try {
       const snapshot = await getDocs(collection(db, "users", user.uid, "tripHistory"));
+
+      if (pendingClearAllRef.current) {
+        await Promise.all(snapshot.docs.map((item) => deleteDoc(item.ref)));
+        pendingClearAllRef.current = false;
+        deletedHistoryIdsRef.current.clear();
+        await Promise.all([
+          persistHistory([]),
+          persistRecent({}),
+          persistDeletedHistoryIds(),
+          persistPendingClearAll(),
+        ]);
+        return;
+      }
+
+      const now = Date.now();
+      const expiredIds = new Set<string>();
+      snapshot.docs.forEach((item) => {
+        const normalized = normalizeSession(item.data());
+        if (normalized && isExpiredSession(normalized, now)) expiredIds.add(item.id);
+      });
+
+      expiredIds.forEach((id) => deletedHistoryIdsRef.current.add(id));
+      const suppressedIds = new Set(deletedHistoryIdsRef.current);
+
+      const deleteTargets = snapshot.docs.filter(
+        (item) => suppressedIds.has(item.id),
+      );
+
+      if (deleteTargets.length > 0) {
+        try {
+          await Promise.all(deleteTargets.map((item) => deleteDoc(item.ref)));
+          deleteTargets.forEach((item) => deletedHistoryIdsRef.current.delete(item.id));
+          await persistDeletedHistoryIds();
+        } catch (error) {
+          // Keep the tombstones locally so a cloud record never reappears in
+          // the UI while deletion is waiting for connectivity.
+          await persistDeletedHistoryIds();
+          console.warn("SafeSeat private history deletion will retry:", error);
+        }
+      }
+
       const cloud = snapshot.docs
+        .filter((item) => !suppressedIds.has(item.id) && !expiredIds.has(item.id))
         .map((item) => normalizeSession(item.data()))
-        .filter((item): item is SeatSessionRecord => Boolean(item?.endedAt));
-      if (cloud.length === 0) return;
+        .filter((item): item is SeatSessionRecord => Boolean(item?.endedAt) && !isExpiredSession(item));
+
       const merged = new Map<string, SeatSessionRecord>();
-      historyRef.current.forEach((item) => merged.set(item.id, item));
+      historyRef.current
+        .filter((item) => !deletedHistoryIdsRef.current.has(item.id) && !isExpiredSession(item))
+        .forEach((item) => merged.set(item.id, item));
       cloud.forEach((item) => merged.set(item.id, item));
-      const next = Array.from(merged.values()).sort((a, b) => (b.endedAt ?? b.startedAt) - (a.endedAt ?? a.startedAt));
+
+      const next = Array.from(merged.values())
+        .sort((a, b) => (b.endedAt ?? b.startedAt) - (a.endedAt ?? a.startedAt));
       await persistHistory(next);
     } catch (error) {
       console.warn("SafeSeat private session history refresh deferred:", error);
     }
-  }, [persistHistory]);
+  }, [persistDeletedHistoryIds, persistHistory, persistPendingClearAll, persistRecent]);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const [rawActive, rawHistory, rawRecent, rawLocked, rawAssignments, rawHardwareSeat, rawConsents] = await Promise.all([
+        const [rawActive, rawHistory, rawRecent, rawDeletedIds, rawClearAll, rawLocked, rawAssignments, rawHardwareSeat, rawConsents] = await Promise.all([
           AsyncStorage.getItem(storageKey("active")),
           AsyncStorage.getItem(storageKey("history")),
           AsyncStorage.getItem(storageKey("recent")),
+          AsyncStorage.getItem(historyControlKey("deletedIds")),
+          AsyncStorage.getItem(historyControlKey("clearAll")),
           AsyncStorage.getItem(IS_LOCKED_IN_KEY),
           AsyncStorage.getItem(SEAT_ASSIGNMENTS_KEY),
           AsyncStorage.getItem(HARDWARE_SEAT_KEY),
@@ -378,8 +470,24 @@ export function SeatSessionProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
 
         let active: Record<number, SeatSessionRecord> = rawActive ? JSON.parse(rawActive) : {};
-        const savedHistory: SeatSessionRecord[] = rawHistory ? JSON.parse(rawHistory) : [];
-        const savedRecent: Record<number, SeatSessionRecord> = rawRecent ? JSON.parse(rawRecent) : {};
+        const deletedIds = new Set<string>(rawDeletedIds ? JSON.parse(rawDeletedIds) : []);
+        const pendingClearAll = rawClearAll ? Boolean(JSON.parse(rawClearAll)) : false;
+        deletedHistoryIdsRef.current = deletedIds;
+        pendingClearAllRef.current = pendingClearAll;
+
+        const savedHistory: SeatSessionRecord[] = pendingClearAll
+          ? []
+          : (rawHistory ? JSON.parse(rawHistory) : [])
+              .filter((item: SeatSessionRecord) => !deletedIds.has(item.id) && !isExpiredSession(item));
+        const savedRecent: Record<number, SeatSessionRecord> = pendingClearAll
+          ? {}
+          : Object.fromEntries(
+              Object.entries(rawRecent ? JSON.parse(rawRecent) : {})
+                .filter(([, item]) => {
+                  const session = item as SeatSessionRecord;
+                  return !deletedIds.has(session.id) && !isExpiredSession(session);
+                }),
+            ) as Record<number, SeatSessionRecord>;
 
         // Migration path from builds that only had the global isLockedIn flag.
         const locked = rawLocked ? Boolean(JSON.parse(rawLocked)) : false;
@@ -419,6 +527,14 @@ export function SeatSessionProvider({ children }: { children: ReactNode }) {
         setActiveSessions(active);
         setHistory(savedHistory);
         setRecentCompleted(savedRecent);
+
+        // Physically rewrite the filtered local stores so expired/deleted
+        // completed sessions are not merely hidden from the UI.
+        await Promise.all([
+          AsyncStorage.setItem(storageKey("history"), JSON.stringify(savedHistory)),
+          AsyncStorage.setItem(storageKey("recent"), JSON.stringify(savedRecent)),
+        ]);
+
         setLoaded(true);
         void refreshHistoryFromCloud();
       } catch (error) {
@@ -508,6 +624,62 @@ export function SeatSessionProvider({ children }: { children: ReactNode }) {
     await persistRecent({});
   }, [persistRecent]);
 
+
+  const deleteSession = useCallback(async (id: string) => {
+    const user = auth.currentUser;
+    deletedHistoryIdsRef.current.add(id);
+
+    const nextHistory = historyRef.current.filter((item) => item.id !== id);
+    const nextRecent = Object.fromEntries(
+      Object.entries(recentRef.current).filter(([, item]) => item.id !== id),
+    ) as Record<number, SeatSessionRecord>;
+
+    await Promise.all([
+      persistHistory(nextHistory),
+      persistRecent(nextRecent),
+      persistDeletedHistoryIds(),
+    ]);
+
+    if (!user) return;
+    try {
+      await deleteDoc(doc(db, "users", user.uid, "tripHistory", id));
+      deletedHistoryIdsRef.current.delete(id);
+      await persistDeletedHistoryIds();
+    } catch (error) {
+      console.warn("SafeSeat session deletion will retry when cloud access returns:", error);
+    }
+  }, [persistDeletedHistoryIds, persistHistory, persistRecent]);
+
+  const clearSessionHistory = useCallback(async () => {
+    const user = auth.currentUser;
+    pendingClearAllRef.current = true;
+
+    historyRef.current.forEach((item) => deletedHistoryIdsRef.current.add(item.id));
+    Object.values(recentRef.current).forEach((item) => deletedHistoryIdsRef.current.add(item.id));
+
+    await Promise.all([
+      persistHistory([]),
+      persistRecent({}),
+      persistDeletedHistoryIds(),
+      persistPendingClearAll(),
+    ]);
+
+    if (!user) return;
+
+    try {
+      const snapshot = await getDocs(collection(db, "users", user.uid, "tripHistory"));
+      await Promise.all(snapshot.docs.map((item) => deleteDoc(item.ref)));
+      pendingClearAllRef.current = false;
+      deletedHistoryIdsRef.current.clear();
+      await Promise.all([
+        persistDeletedHistoryIds(),
+        persistPendingClearAll(),
+      ]);
+    } catch (error) {
+      console.warn("SafeSeat clear-history cloud deletion will retry:", error);
+    }
+  }, [persistDeletedHistoryIds, persistHistory, persistPendingClearAll, persistRecent]);
+
   useEffect(() => {
     if (!loaded || !status) return;
     const linkedEntry = Object.values(activeRef.current).find((session) => session.hardwareLinked);
@@ -551,11 +723,15 @@ export function SeatSessionProvider({ children }: { children: ReactNode }) {
     endAllSeatSessions,
     dismissCompletedSeat,
     clearRecentCompleted,
+    deleteSession,
+    clearSessionHistory,
     refreshHistoryFromCloud,
     getSessionById,
   }), [
     activeSessions,
     clearRecentCompleted,
+    clearSessionHistory,
+    deleteSession,
     dismissCompletedSeat,
     endAllSeatSessions,
     endSeatSession,

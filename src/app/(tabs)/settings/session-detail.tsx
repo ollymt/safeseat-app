@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { format } from "date-fns";
-import { useLocalSearchParams } from "expo-router";
-import { useMemo } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useMemo, useState } from "react";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { type ThemePalette } from "@/constants/theme";
@@ -47,8 +47,10 @@ export default function SessionDetailScreen() {
   const themes = useTheme();
   const styles = createStyles(themes);
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { getSessionById } = useSeatSessions();
+  const { getSessionById, deleteSession } = useSeatSessions();
+  const [deleting, setDeleting] = useState(false);
   const session = typeof id === "string" ? getSessionById(id) : undefined;
 
   if (!session) {
@@ -60,6 +62,30 @@ export default function SessionDetailScreen() {
   const rrValues = numericSamples(session.samples, "respirationRateBpm");
   const tempValues = numericSamples(session.samples, "surfaceTemperatureC");
   const endedAt = session.endedAt ?? Date.now();
+
+  const confirmDeleteSession = () => {
+    if (deleting) return;
+    Alert.alert(
+      "Delete this session?",
+      "This removes the completed session from this device and your private SafeSeat cloud history. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            setDeleting(true);
+            void deleteSession(session.id)
+              .then(() => router.back())
+              .catch(() => {
+                setDeleting(false);
+                Alert.alert("Could not finish deletion", "The local copy was removed. SafeSeat will retry any pending cloud deletion when connectivity returns.");
+              });
+          },
+        },
+      ],
+    );
+  };
 
   return (
     <SafeAreaView style={styles.screen} edges={["left", "right", "bottom"]}>
@@ -101,8 +127,18 @@ export default function SessionDetailScreen() {
 
         <View style={styles.privacyCard}>
           <Ionicons name="eye-off-outline" size={22} color={themes.primaryBttn} />
-          <View style={{ flex: 1 }}><Text style={styles.privacyTitle}>Camera privacy</Text><Text style={styles.privacyText}>SafeSeat may record that an event-based verification occurred, but this history does not store or display camera frames, photos, or video.</Text></View>
+          <View style={{ flex: 1 }}><Text style={styles.privacyTitle}>Camera privacy</Text><Text style={styles.privacyText}>SafeSeat may record that visual confirmation was requested or completed, but this history does not store or display camera frames, photos, or video.</Text></View>
         </View>
+
+        <Pressable
+          accessibilityRole="button"
+          disabled={deleting}
+          onPress={confirmDeleteSession}
+          style={({ pressed }) => [styles.deleteButton, deleting && styles.deleteButtonDisabled, pressed && !deleting && { opacity: 0.78 }]}
+        >
+          {deleting ? <ActivityIndicator size="small" color={themes.warnBttn} /> : <Ionicons name="trash-outline" size={18} color={themes.warnBttn} />}
+          <Text style={styles.deleteButtonText}>Delete Session</Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -146,6 +182,9 @@ const createStyles = (themes: ThemePalette) => StyleSheet.create({
   privacyCard: { flexDirection: "row", gap: 12, padding: 14, borderRadius: 18, backgroundColor: themes.primarySoft, borderWidth: 1, borderColor: themes.primaryBorder },
   privacyTitle: { color: themes.text, fontSize: 13, fontFamily: "Body-Bold" },
   privacyText: { color: themes.textSecondary, fontSize: 11.5, lineHeight: 17, fontFamily: "Body-Regular", marginTop: 3 },
+  deleteButton: { minHeight: 48, borderRadius: 15, borderWidth: 1, borderColor: `${themes.warnBttn}55`, backgroundColor: themes.backgroundElement, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 14 },
+  deleteButtonDisabled: { opacity: 0.5 },
+  deleteButtonText: { color: themes.warnBttn, fontSize: 13, fontFamily: "Body-Bold" },
   missing: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 8 },
   missingTitle: { color: themes.text, fontSize: 17, fontFamily: "Body-Bold" },
   missingText: { color: themes.textSecondary, fontSize: 12.5, textAlign: "center", fontFamily: "Body-Regular" },

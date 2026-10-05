@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { format, isToday, isYesterday } from "date-fns";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useMemo } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { type ThemePalette } from "@/constants/theme";
@@ -28,11 +28,43 @@ export default function SessionHistoryScreen() {
   const styles = createStyles(themes);
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { history, refreshHistoryFromCloud } = useSeatSessions();
+  const { history, refreshHistoryFromCloud, clearSessionHistory } = useSeatSessions();
+  const navigationLockedRef = useRef(false);
+  const [clearing, setClearing] = useState(false);
 
   useFocusEffect(useCallback(() => {
+    navigationLockedRef.current = false;
     void refreshHistoryFromCloud();
   }, [refreshHistoryFromCloud]));
+
+  const openSession = useCallback((sessionId: string) => {
+    if (navigationLockedRef.current) return;
+    navigationLockedRef.current = true;
+    router.push({ pathname: "/(tabs)/settings/session-detail" as any, params: { id: sessionId } });
+  }, [router]);
+
+  const confirmClearHistory = useCallback(() => {
+    if (clearing || history.length === 0) return;
+    Alert.alert(
+      "Clear session history?",
+      "This removes all completed session history from this device and your private SafeSeat cloud history. Active monitoring is not affected.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear history",
+          style: "destructive",
+          onPress: () => {
+            setClearing(true);
+            void clearSessionHistory()
+              .catch(() => {
+                Alert.alert("Could not finish clearing history", "The local history was cleared. SafeSeat will retry any pending cloud deletion when connectivity returns.");
+              })
+              .finally(() => setClearing(false));
+          },
+        },
+      ],
+    );
+  }, [clearSessionHistory, clearing, history.length]);
 
   const groups = useMemo(() => {
     const grouped: Array<{ label: string; items: SeatSessionRecord[] }> = [];
@@ -68,7 +100,7 @@ export default function SessionHistoryScreen() {
                 <Pressable
                   key={session.id}
                   accessibilityRole="button"
-                  onPress={() => router.push({ pathname: "/(tabs)/settings/session-detail" as any, params: { id: session.id } })}
+                  onPress={() => openSession(session.id)}
                   style={({ pressed }) => [styles.row, index < group.items.length - 1 && styles.rowDivider, pressed && styles.rowPressed]}
                 >
                   <View style={[styles.iconWrap, !session.hardwareLinked && styles.iconWrapMuted]}>
@@ -90,9 +122,23 @@ export default function SessionHistoryScreen() {
           <Ionicons name="shield-checkmark-outline" size={21} color={themes.primaryBttn} />
           <View style={{ flex: 1 }}>
             <Text style={styles.privacyTitle}>Privacy boundary</Text>
-            <Text style={styles.privacyText}>Session history can include HR, RR, surface-temperature trends, movement activity, and event metadata. Camera images and video are not stored. The Admin module continues to receive only privacy-minimized derived states.</Text>
+            <Text style={styles.privacyText}>Detailed passenger session history older than 30 days is removed from this device and deleted from the private cloud during sync. You can delete it sooner at any time. Camera images and video are never stored here.</Text>
           </View>
         </View>
+
+        <Pressable
+          accessibilityRole="button"
+          disabled={clearing || history.length === 0}
+          onPress={confirmClearHistory}
+          style={({ pressed }) => [
+            styles.clearButton,
+            (clearing || history.length === 0) && styles.clearButtonDisabled,
+            pressed && !clearing && history.length > 0 && { opacity: 0.78 },
+          ]}
+        >
+          {clearing ? <ActivityIndicator size="small" color={themes.warnBttn} /> : <Ionicons name="trash-outline" size={18} color={themes.warnBttn} />}
+          <Text style={styles.clearButtonText}>Clear Session History</Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -123,4 +169,7 @@ const createStyles = (themes: ThemePalette) => StyleSheet.create({
   privacyCard: { flexDirection: "row", gap: 12, padding: 14, borderRadius: 18, backgroundColor: themes.primarySoft, borderWidth: 1, borderColor: themes.primaryBorder },
   privacyTitle: { color: themes.text, fontSize: 13, fontFamily: "Body-Bold" },
   privacyText: { color: themes.textSecondary, fontSize: 11.5, lineHeight: 17, fontFamily: "Body-Regular", marginTop: 3 },
+  clearButton: { minHeight: 48, borderRadius: 15, borderWidth: 1, borderColor: `${themes.warnBttn}55`, backgroundColor: themes.backgroundElement, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 14 },
+  clearButtonDisabled: { opacity: 0.45 },
+  clearButtonText: { color: themes.warnBttn, fontSize: 13, fontFamily: "Body-Bold" },
 });

@@ -23,8 +23,8 @@ import {
   useState,
 } from "react";
 
-export type SafeSeatSeatState = "safe" | "warning" | "emergency" | "unknown";
-export type SafeSeatDecisiveState = Exclude<SafeSeatSeatState, "unknown">;
+export type SafeSeatSeatState = "safe" | "warning" | "emergency" | "monitoring" | "unknown";
+export type SafeSeatDecisiveState = "safe" | "warning" | "emergency";
 export type SafeSeatSimulationState = "off" | SafeSeatSeatState;
 
 type SafeSeatHubContextValue = {
@@ -38,9 +38,9 @@ type SafeSeatHubContextValue = {
   // to "unknown" here.
   rawSeatState: SafeSeatSeatState;
 
-  // seatState is the driver-facing state. Once a decisive state has been seen
-  // during a session, a temporary WATCH/unknown does not erase it. Monitoring
-  // continues in the background until a new decisive result arrives.
+  // seatState is the driver-facing state.
+  // Routine WATCH while otherwise SAFE stays visually SAFE. After a real
+  // WARNING/EMERGENCY, WATCH is surfaced as MONITORING until Fusion returns SAFE.
   seatState: SafeSeatSeatState;
   lastDecisiveSeatState: SafeSeatDecisiveState | null;
   resetDecisionLatch: () => void;
@@ -87,6 +87,7 @@ export function SafeSeatHubProvider({ children }: { children: ReactNode }) {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
   const [lastDecisiveSeatState, setLastDecisiveSeatState] = useState<SafeSeatDecisiveState | null>(null);
+  const [recoveringAfterAlert, setRecoveringAfterAlert] = useState(false);
   const [simulationState, setSimulationStateValue] = useState<SafeSeatSimulationState>("off");
   const [emergencyAlertAcknowledged, setEmergencyAlertAcknowledged] = useState(false);
 
@@ -248,11 +249,16 @@ export function SafeSeatHubProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    // Only real Main Hub decisive results update the latch. Local simulation is
-    // intentionally excluded so returning to LIVE can restore the last real
-    // trusted state.
-    if (rawSeatState === "safe" || rawSeatState === "warning" || rawSeatState === "emergency") {
+    // Only real Main Hub decisive results update the remembered state.
+    // Routine WATCH remains visually SAFE. Once an actual alert has happened,
+    // WATCH becomes a short MONITORING/RECOVERY phase instead of latching the
+    // previous WARNING/EMERGENCY on screen.
+    if (rawSeatState === "safe") {
+      setLastDecisiveSeatState("safe");
+      setRecoveringAfterAlert(false);
+    } else if (rawSeatState === "warning" || rawSeatState === "emergency") {
       setLastDecisiveSeatState(rawSeatState);
+      setRecoveringAfterAlert(true);
     }
   }, [rawSeatState]);
 
@@ -299,6 +305,7 @@ export function SafeSeatHubProvider({ children }: { children: ReactNode }) {
 
   const resetDecisionLatch = useCallback(() => {
     setLastDecisiveSeatState(null);
+    setRecoveringAfterAlert(false);
   }, []);
 
   const setSimulationState = useCallback((next: SafeSeatSimulationState) => {
@@ -308,12 +315,22 @@ export function SafeSeatHubProvider({ children }: { children: ReactNode }) {
   const simulationActive = simulationState !== "off";
 
   const driverFacingSeatState = useMemo<SafeSeatSeatState>(() => {
-    // Hidden UAT Warning must never mask a real Main Hub EMERGENCY.
-    if (rawSeatState === "emergency" || lastDecisiveSeatState === "emergency") return "emergency";
+    // Hidden UAT simulation must never mask a real Main Hub EMERGENCY.
+    if (rawSeatState === "emergency") return "emergency";
     if (simulationState !== "off") return simulationState;
-    if (rawSeatState !== "unknown") return rawSeatState;
-    return lastDecisiveSeatState ?? "unknown";
-  }, [lastDecisiveSeatState, rawSeatState, simulationState]);
+
+    if (rawSeatState === "safe" || rawSeatState === "warning") {
+      return rawSeatState;
+    }
+
+    // Fusion WATCH/insufficient-evidence is represented as raw "unknown".
+    // Before any alert, keep the calm SAFE presentation. After a genuine
+    // WARNING/EMERGENCY, show a temporary MONITORING recovery state instead of
+    // pinning the old alert until SAFE finally returns.
+    if (recoveringAfterAlert) return "monitoring";
+    if (lastDecisiveSeatState === "safe") return "safe";
+    return "unknown";
+  }, [lastDecisiveSeatState, rawSeatState, recoveringAfterAlert, simulationState]);
 
   useEffect(() => {
     let cancelled = false;

@@ -1,8 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { type ThemePalette } from "@/constants/theme";
+import { useSafeSeatHub } from "@/hooks/safeseat-hub-context";
 import { useTheme } from "@/hooks/use-theme";
+import {
+  setSafeSeatControlledCameraMode,
+  type SafeSeatControlledCameraMode,
+} from "@/services/safeseat-hub";
 
 type Props = {
   visible: boolean;
@@ -27,6 +33,50 @@ function Reading({ label, value }: { label: string; value: string }) {
   return <View style={styles.reading}><Text style={styles.readingLabel}>{label}</Text><Text style={styles.readingValue}>{value}</Text></View>;
 }
 
+
+function CameraReading({
+  value,
+  onHiddenMode,
+}: {
+  value: string;
+  onHiddenMode: (mode: SafeSeatControlledCameraMode) => void;
+}) {
+  const themes = useTheme();
+  const styles = createStyles(themes);
+
+  return (
+    <View style={styles.reading}>
+      <Text style={styles.readingLabel}>Camera verification</Text>
+      <Text style={styles.readingValue}>{value}</Text>
+
+      {/* Research/UAT fallback: intentionally invisible.
+          Left third = UPRIGHT, middle third = REAL CAMERA, right third =
+          NON-UPRIGHT. The handler itself refuses to act unless Controlled UAT
+          is already active on the Main Hub. */}
+      <View style={styles.hiddenCameraZones} pointerEvents="box-none">
+        <Pressable
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+          style={styles.hiddenCameraZone}
+          onPress={() => onHiddenMode("upright")}
+        />
+        <Pressable
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+          style={styles.hiddenCameraZone}
+          onPress={() => onHiddenMode("real")}
+        />
+        <Pressable
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+          style={styles.hiddenCameraZone}
+          onPress={() => onHiddenMode("non_upright")}
+        />
+      </View>
+    </View>
+  );
+}
+
 export default function LiveSeatDetailModal({
   visible,
   role,
@@ -45,7 +95,24 @@ export default function LiveSeatDetailModal({
 }: Props) {
   const themes = useTheme();
   const styles = createStyles(themes);
+  const { refresh } = useSafeSeatHub();
   const freshness = updatedSeconds === null ? "No live update" : `Updated ${updatedSeconds}s ago`;
+
+  const triggerHiddenCameraMode = (mode: SafeSeatControlledCameraMode) => {
+    // No menu, badge, toast, or visible UAT indicator is shown. A single tap
+    // on the hidden zone sends the selected result to the Main Hub only when
+    // Controlled UAT is already active.
+    void (async () => {
+      try {
+        const applied = await setSafeSeatControlledCameraMode(mode);
+        if (!applied) return;
+        void Haptics.selectionAsync().catch(() => undefined);
+        await refresh();
+      } catch (error) {
+        console.warn("SafeSeat hidden camera control was not applied:", error);
+      }
+    })();
+  };
 
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
@@ -74,7 +141,7 @@ export default function LiveSeatDetailModal({
                 <Reading label="Surface temperature" value={surfaceTemperatureC === null ? "—" : `${surfaceTemperatureC.toFixed(1)} °C`} />
                 <Reading label="Seat occupancy" value={occupancyLabel} />
                 <Reading label="Movement activity" value={movementLabel} />
-                <Reading label="Camera verification" value={cameraLabel} />
+                <CameraReading value={cameraLabel} onHiddenMode={triggerHiddenCameraMode} />
               </View>
               <View style={styles.fusionRow}>
                 <Text style={styles.fusionLabel}>SafeSeat state</Text>
@@ -120,6 +187,8 @@ const createStyles = (themes: ThemePalette) => StyleSheet.create({
   reading: { width: "48.5%", minHeight: 62, padding: 11, borderRadius: 14, borderWidth: 1, borderColor: themes.divider, backgroundColor: themes.backgroundElement, justifyContent: "center", gap: 4 },
   readingLabel: { color: themes.textMuted, fontSize: 10.5, lineHeight: 14, fontFamily: "Body-Medium" },
   readingValue: { color: themes.text, fontSize: 15, lineHeight: 19, fontFamily: "Body-Bold" },
+  hiddenCameraZones: { ...StyleSheet.absoluteFillObject, flexDirection: "row" },
+  hiddenCameraZone: { flex: 1, backgroundColor: "transparent" },
   fusionRow: { minHeight: 48, borderRadius: 14, backgroundColor: themes.primarySoft, borderWidth: 1, borderColor: themes.primaryBorder, paddingHorizontal: 13, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   fusionLabel: { color: themes.textSecondary, fontSize: 12, fontFamily: "Body-Medium" },
   fusionValue: { color: themes.primaryBttn, fontSize: 13, fontFamily: "Body-Bold" },

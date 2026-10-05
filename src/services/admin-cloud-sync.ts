@@ -76,10 +76,10 @@ function cameraModuleState(status: SafeSeatStatusPayload | null, connected: bool
 
 export function toAdminFusionState(status: SafeSeatStatusPayload | null): AdminFusionState {
   const raw = String(status?.system?.fusion_state || "").trim().toUpperCase();
-  if (!raw && !(status?.system?.camera_verification_requested || status?.camera?.verification_requested || status?.camera?.request_active)) return "NORMAL";
+  if (!raw) return "NORMAL";
   if (raw === "SAFE" || raw === "NORMAL" || raw === "CLEAR" || raw === "CLEARED") return "NORMAL";
   if (raw === "EMERGENCY" || raw.includes("EMERG")) return "EMERGENCY";
-  if (status?.system?.camera_verification_requested || status?.camera?.verification_requested || status?.camera?.request_active) return "VERIFYING";
+  // Camera verification is corroboration only and never replaces Fusion.
   if (raw === "WARNING" || raw === "WATCH" || raw === "SUSPECTED" || raw.includes("WARN")) return "SUSPECTED";
   return "SUSPECTED";
 }

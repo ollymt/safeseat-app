@@ -307,7 +307,7 @@ export default function Diagnostics() {
         <View style={styles.noticeCard}>
           <Text style={styles.noticeTitle}>Integration rule</Text>
           <Text style={styles.noticeText}>
-            Live mode follows the Main Hub&apos;s authoritative Fusion result. After the first decisive state, a temporary WATCH keeps the last confirmed SAFE/WARNING/EMERGENCY on screen while analysis continues.
+            Live mode follows the Main Hub&apos;s authoritative Fusion result. Routine WATCH checks stay quietly SAFE. After a real WARNING or EMERGENCY, WATCH is shown as a short MONITORING recovery phase until Fusion returns SAFE.
           </Text>
           {lastUpdatedAt && (
             <Text style={styles.lastUpdatedText}>Last hub update: {new Date(lastUpdatedAt).toLocaleTimeString()}</Text>

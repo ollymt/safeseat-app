@@ -216,12 +216,12 @@ export default function Settings() {
                 name="Session History"
                 iconName="time-outline"
                 value="Completed seat sessions"
-                onPress={() => router.push("/(tabs)/settings/session-history" as any)}
+                onPress={() => router.navigate("/(tabs)/settings/session-history" as any)}
                 showChevron
                 isLast
               />
             </View>
-            <Text style={styles.note}>Review completed passenger sessions, summaries, trends, and event timelines stored for this account.</Text>
+            <Text style={styles.note}>Review completed passenger sessions, summaries, trends, and event timelines. Detailed history older than 30 days is removed during sync.</Text>
           </View>
 
           <View onLayout={(e) => { sectionY.current.system = e.nativeEvent.layout.y; }} style={styles.section}>

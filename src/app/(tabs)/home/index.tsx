@@ -93,6 +93,12 @@ const buildStatusCopy = (themes: ThemePalette) => ({
     detail: "Check on the person in this seat.",
     color: themes.lightOrange,
   },
+  monitoring: {
+    label: "MONITORING",
+    headline: "Readings are returning to normal",
+    detail: "SafeSeat is confirming recovery.",
+    color: themes.info,
+  },
   emergency: {
     label: "EMERGENCY",
     headline: "This person may need immediate help",
@@ -107,7 +113,7 @@ const buildStatusCopy = (themes: ThemePalette) => ({
   },
 } as const);
 
-type OverallState = "safe" | "warning" | "emergency" | "unknown";
+type OverallState = "safe" | "warning" | "emergency" | "monitoring" | "unknown";
 
 const getHeroColors = (themes: ThemePalette, state: OverallState): [string, string, string] => {
   if (themes.mode === "light") {
@@ -166,6 +172,8 @@ export default function Home() {
   const [summarySeatNo, setSummarySeatNo] = useState<number | null>(null);
   const [lastTelemetryAt, setLastTelemetryAt] = useState<number | null>(null);
   const [clockNow, setClockNow] = useState(Date.now());
+  const [visualConfirmationCompleted, setVisualConfirmationCompleted] = useState(false);
+  const cameraVerificationWasActiveRef = useRef(false);
   const [screenFocused, setScreenFocused] = useState(true);
   const [animationCycle, setAnimationCycle] = useState(0);
   const [uatControlVisible, setUatControlVisible] = useState(false);
@@ -342,29 +350,66 @@ export default function Home() {
   const liveOccupancyLabel = typeof hubStatus?.sensors?.fsr?.occupied === "boolean"
     ? (hubStatus.sensors.fsr.occupied ? "Detected" : "Not detected")
     : "Unavailable";
-  const cameraVerifying = Boolean(hubStatus?.system?.camera_verification_requested || hubStatus?.camera?.verification_requested || hubStatus?.camera?.request_active || hubStatus?.camera?.busy);
-  const liveCameraLabel = !hubConnected || hubStatus?.camera?.available === false || hubStatus?.camera?.connected === false
-    ? "Unavailable"
-    : cameraVerifying ? "Verifying" : "Standby";
+  const cameraVerifying = Boolean(
+    hubStatus?.system?.camera_verification_requested ||
+    hubStatus?.camera?.verification_requested ||
+    hubStatus?.camera?.request_active ||
+    String(hubStatus?.camera?.user_verification_state ?? "").toUpperCase() === "IN_PROGRESS"
+  );
+
+  const cameraCannotClassifyForUserFlow = cameraVerifying && (
+    !hubConnected ||
+    hubStatus?.camera?.available === false ||
+    hubStatus?.camera?.connected === false ||
+    hubStatus?.camera?.camera_ready === false ||
+    hubStatus?.camera?.baseline_ready === false
+  );
+
+  const liveCameraLabel = cameraVerifying && !cameraCannotClassifyForUserFlow
+    ? "Visual confirmation in progress"
+    : cameraCannotClassifyForUserFlow ||
+      visualConfirmationCompleted ||
+      String(hubStatus?.camera?.user_verification_state ?? "").toUpperCase() === "COMPLETED"
+      ? "Visual confirmation completed"
+      : "Standby";
+
   const rawMotionContext = String(hubStatus?.system?.motion_context ?? "").toLowerCase();
   const liveMovementLabel = !hubConnected
     ? "Unavailable"
-    : cameraVerifying
-      ? "Verification active"
-      : (hubStatus?.sensors?.c1001?.motion_artifact_active || hubStatus?.system?.evidence?.motion_artifact_possible || rawMotionContext.includes("motion") || rawMotionContext.includes("moving") || rawMotionContext.includes("movement"))
-        ? "Movement detected"
-        : "Stable";
+    : (hubStatus?.sensors?.c1001?.motion_artifact_active || hubStatus?.system?.evidence?.motion_artifact_possible || rawMotionContext.includes("motion") || rawMotionContext.includes("moving") || rawMotionContext.includes("movement"))
+      ? "Movement detected"
+      : "Stable";
+
   const liveFusionLabel = !telemetryReady
     ? "ANALYZING"
-    : rawSeatState === "emergency"
+    : hubSeatState === "emergency"
       ? "EMERGENCY"
-      : cameraVerifying
-        ? "VERIFYING"
-        : rawSeatState === "warning"
-          ? "SUSPECTED"
-          : rawSeatState === "safe"
+      : hubSeatState === "warning"
+        ? "WARNING"
+        : hubSeatState === "monitoring"
+          ? "MONITORING"
+          : hubSeatState === "safe"
             ? "NORMAL"
             : "ANALYZING";
+  useEffect(() => {
+    if (cameraVerifying) {
+      cameraVerificationWasActiveRef.current = true;
+      setVisualConfirmationCompleted(false);
+      return;
+    }
+
+    if (cameraVerificationWasActiveRef.current) {
+      cameraVerificationWasActiveRef.current = false;
+      setVisualConfirmationCompleted(true);
+    }
+  }, [cameraVerifying]);
+
+  const linkedSessionId = hardwareSeatNo ? activeSessions[hardwareSeatNo]?.id : undefined;
+  useEffect(() => {
+    cameraVerificationWasActiveRef.current = false;
+    setVisualConfirmationCompleted(false);
+  }, [linkedSessionId]);
+
   const liveUpdatedSeconds = lastTelemetryAt === null ? null : Math.max(0, Math.floor((clockNow - lastTelemetryAt) / 1000));
 
   const overallState = useMemo<OverallState>(() => {
@@ -375,6 +420,7 @@ export default function Home() {
 
     if (activeStates.includes("emergency")) return "emergency";
     if (activeStates.includes("warning")) return "warning";
+    if (activeStates.includes("monitoring")) return "monitoring";
     if (activeStates.includes("safe")) return "safe";
     return "unknown";
   }, [assignedSeatCount, assignments, getSeatState, isLockedIn]);
@@ -402,7 +448,7 @@ export default function Home() {
 
     if (overallState === "unknown") return;
 
-    const duration = overallState === "safe" ? 1500 : overallState === "warning" ? 700 : 520;
+    const duration = overallState === "safe" ? 1500 : overallState === "monitoring" ? 1200 : overallState === "warning" ? 700 : 520;
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(stateMotion, {
