@@ -13,6 +13,7 @@ import {
 
 import { auth, db } from "../firebase";
 import type { SafeSeatStatusPayload } from "../services/safeseat-hub";
+import { ensureEmergencyLocationPermission } from "../services/emergency-location";
 import { useSafeSeatHub } from "./safeseat-hub-context";
 
 const IS_LOCKED_IN_KEY = "isLockedIn";
@@ -436,7 +437,7 @@ export function SeatSessionProvider({ children }: { children: ReactNode }) {
       const cloud = snapshot.docs
         .filter((item) => !suppressedIds.has(item.id) && !expiredIds.has(item.id))
         .map((item) => normalizeSession(item.data()))
-        .filter((item): item is SeatSessionRecord => Boolean(item?.endedAt) && !isExpiredSession(item));
+        .filter((item): item is SeatSessionRecord => item !== null && Boolean(item.endedAt) && !isExpiredSession(item));
 
       const merged = new Map<string, SeatSessionRecord>();
       historyRef.current
@@ -546,6 +547,12 @@ export function SeatSessionProvider({ children }: { children: ReactNode }) {
   }, [refreshHistoryFromCloud]);
 
   const startSeatSessions = useCallback(async ({ assignments, hardwareSeatNo, consents }: StartSessionInput) => {
+    // Ask for foreground GPS permission as monitoring begins, not during an
+    // emergency. Denial/failure never blocks the monitoring session.
+    if (assignments[1]?.isAccountOwner) {
+      await ensureEmergencyLocationPermission().catch(() => false);
+    }
+
     const now = Date.now();
     const next: Record<number, SeatSessionRecord> = { ...activeRef.current };
     const nextRecent = { ...recentRef.current };
@@ -584,7 +591,7 @@ export function SeatSessionProvider({ children }: { children: ReactNode }) {
     const ended: SeatSessionRecord = {
       ...current,
       endedAt,
-      events: [...current.events, { timestamp: endedAt, type: "end", title: "Session ended", detail: "This seat's session was saved while other active seats can continue monitoring." }].slice(-100),
+      events: [...current.events, { timestamp: endedAt, type: "end" as const, title: "Session ended", detail: "This seat's session was saved while other active seats can continue monitoring." }].slice(-100),
     };
     ended.summary = summarizeSession(ended);
 
